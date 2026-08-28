@@ -69,6 +69,31 @@ def test_run_hello_world_on_mock(tmp_path: Path) -> None:
     assert len(run_dirs) == 1 and (run_dirs[0] / "transcript.jsonl").exists()
 
 
+def test_missing_extra_hint_survives_rich_markup(tmp_path: Path, monkeypatch) -> None:
+    from quackd.agent.providers import factory
+    from quackd.agent.providers.base import ProviderNotInstalled
+
+    def missing(name: str, **_: object) -> None:
+        raise ProviderNotInstalled(name, "anthropic")
+
+    monkeypatch.setattr(factory, "make_provider", missing)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "anthropic",
+            "--transport",
+            "mock",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "quackd[anthropic]" in result.output  # Rich must not eat the [anthropic] "tag"
+
+
 def test_run_unknown_provider_is_a_clean_error(tmp_path: Path) -> None:
     result = runner.invoke(
         app,

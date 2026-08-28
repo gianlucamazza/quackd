@@ -14,6 +14,7 @@ from typing import Any
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from quackd import __version__
@@ -53,7 +54,8 @@ def _expand(patterns: list[str]) -> list[str]:
 
 
 def _fail(msg: str, code: int = 1) -> None:
-    err_console.print(f"[red]error:[/red] {msg}")
+    # escape: messages contain things like quackd[anthropic], which Rich would eat as markup
+    err_console.print(f"[red]error:[/red] {escape(msg)}")
     raise typer.Exit(code=code)
 
 

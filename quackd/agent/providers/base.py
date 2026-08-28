@@ -79,8 +79,9 @@ class ProviderError(RuntimeError):
 class ProviderNotInstalled(ProviderError):
     def __init__(self, provider: str, extra: str) -> None:
         super().__init__(
-            f"provider {provider!r} needs the optional extra: uv pip install 'quackd[{extra}]' "
-            f"(or uvx --with 'quackd[{extra}]' quackd ...)"
+            f"provider {provider!r} needs the optional extra quackd[{extra}] — "
+            f'run: uvx --from "quackd[{extra}]" quackd ...  '
+            f'or: uv pip install "quackd[{extra}]"'
         )
 
 
