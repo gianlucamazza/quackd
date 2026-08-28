@@ -117,10 +117,17 @@ class FakeProvider:
         self.calls = 0
 
     @classmethod
-    def for_duck(cls, duck_name: str) -> FakeProvider:
-        return cls(
-            strategy=STRATEGIES.get(duck_name, generic_strategy), model=f"scripted:{duck_name}"
-        )
+    def for_duck(cls, duck_name: str, goal: str | None = None) -> FakeProvider:
+        """Pick a scripted strategy by duck name, or by keywords in a plain-language goal."""
+        strategy = STRATEGIES.get(duck_name)
+        label = duck_name
+        if strategy is None and goal:
+            text = goal.lower()
+            if "kick" in text or "ball" in text:
+                strategy, label = find_and_kick_strategy, "goal:find-and-kick"
+            elif "patrol" in text or "person" in text or "someone" in text:
+                strategy, label = patrol_strategy, "goal:patrol"
+        return cls(strategy=strategy or generic_strategy, model=f"scripted:{label}")
 
     async def step(
         self, system: str, history: list[Exchange], tools: list[dict[str, Any]]

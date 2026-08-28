@@ -180,7 +180,7 @@ def _run_impl(
         _fail(str(e))
         return
     try:
-        llm = make_provider(provider, model=model, duck_name=duck.name)
+        llm = make_provider(provider, model=model, duck_name=duck.name, goal=goal)
         duck_transport = make_transport(transport, seed=seed, address=address, live=live)
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))

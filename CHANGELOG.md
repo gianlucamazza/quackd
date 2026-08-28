@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The scripted `fake` pilot picks a strategy from keywords in `--goal` (ball/kick, patrol),
+  so the keyless demo really searches, walks and kicks instead of declaring success.
+
 - `quackd run --goal "…"`: a plain-language goal instead of a `.duck` file (ad-hoc contract:
   every `safe` verb, default budgets, standard abort rules).
 - `--gif-size` on `run`/`record`; the hero GIF is now recorded at 320 px panes.

@@ -117,6 +117,28 @@ def test_run_goal_builds_an_ad_hoc_duck(tmp_path: Path) -> None:
     assert "SUCCESS" in result.output
 
 
+def test_goal_picks_a_matching_scripted_strategy(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--goal",
+            "find the ball and kick it",
+            "--provider",
+            "fake",
+            "--seed",
+            "4",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "scripted:goal:find-and-kick" in result.output
+    transcript = next(tmp_path.rglob("transcript.jsonl")).read_text(encoding="utf-8")
+    assert '"name": "kick"' in transcript  # it really kicked, not just "nothing more to do"
+
+
 def test_run_needs_exactly_one_of_duck_or_goal(tmp_path: Path) -> None:
     both = runner.invoke(
         app,

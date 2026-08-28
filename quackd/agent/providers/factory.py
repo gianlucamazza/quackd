@@ -36,13 +36,13 @@ def default_model(provider: str) -> str | None:
 
 
 def make_provider(
-    name: str, *, model: str | None = None, duck_name: str | None = None
+    name: str, *, model: str | None = None, duck_name: str | None = None, goal: str | None = None
 ) -> LLMProvider:
     name = name.lower()
     if name == "fake":
         from quackd.agent.providers.fake import FakeProvider
 
-        return FakeProvider.for_duck(duck_name or "")
+        return FakeProvider.for_duck(duck_name or "", goal=goal)
     model = model or default_model(name)
     if name == "anthropic":
         from quackd.agent.providers.anthropic import AnthropicProvider
