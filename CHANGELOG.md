@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `quackd run --goal "…"`: a plain-language goal instead of a `.duck` file (ad-hoc contract:
   every `safe` verb, default budgets, standard abort rules).
 - `--gif-size` on `run`/`record`; the hero GIF is now recorded at 320 px panes.
-- Logo (`docs/assets/logo.svg`) and a social-preview card.
+- Logo (`docs/assets/logo.svg`, a Microduck-like biped in the Lavender colourway) and a
+  social-preview card.
 
 ### Changed
 

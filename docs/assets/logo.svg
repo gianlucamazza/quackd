@@ -1,15 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="420" height="120" role="img" aria-label="quackd">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 150" width="470" height="150" role="img" aria-label="quackd">
   <title>quackd</title>
-  <!-- duck mark: body, head, beak, eye, and a small "brain" spark -->
-  <g transform="translate(10,10)">
-    <ellipse cx="46" cy="66" rx="40" ry="26" fill="#F5C518"/>
-    <circle cx="70" cy="34" r="22" fill="#F5C518"/>
-    <polygon points="90,30 118,38 90,46" fill="#F08A24"/>
-    <circle cx="76" cy="29" r="3.5" fill="#222"/>
-    <path d="M52 12 q8 -14 18 -4 q10 -12 16 2" fill="none" stroke="#E0578A" stroke-width="3.5" stroke-linecap="round"/>
-    <path d="M14 78 q-12 6 -10 16" fill="none" stroke="#F08A24" stroke-width="4" stroke-linecap="round"/>
-    <path d="M52 92 v14 M40 106 h24" fill="none" stroke="#F08A24" stroke-width="4" stroke-linecap="round"/>
+  <!-- a Microduck-like biped in the Lavender colourway: hooded head shell with one big side eye,
+       a wide flat bill, a thin articulated neck, a rounded body shell, two jointed legs, big feet -->
+  <g transform="translate(8,6)">
+    <!-- legs (behind the body) -->
+    <g fill="none" stroke="#2B2B30" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="58,96 50,116 62,130"/>
+      <polyline points="84,96 78,116 92,130"/>
+    </g>
+    <circle cx="50" cy="116" r="5.5" fill="#55555C"/>
+    <circle cx="78" cy="116" r="5.5" fill="#55555C"/>
+    <!-- feet -->
+    <rect x="46" y="126" width="34" height="13" rx="6.5" fill="#F5C518"/>
+    <rect x="78" y="126" width="34" height="13" rx="6.5" fill="#F5C518"/>
+    <circle cx="74" cy="132.5" r="3" fill="#2B2B30"/>
+    <circle cx="106" cy="132.5" r="3" fill="#2B2B30"/>
+    <!-- body shell -->
+    <rect x="34" y="60" width="66" height="40" rx="16" fill="#B7A6DF"/>
+    <rect x="42" y="66" width="18" height="10" rx="5" fill="#2B2B30" opacity="0.35"/>
+    <!-- neck -->
+    <rect x="70" y="34" width="11" height="32" rx="4" fill="#2B2B30"/>
+    <circle cx="75.5" cy="46" r="4" fill="#55555C"/>
+    <circle cx="75.5" cy="58" r="4" fill="#55555C"/>
+    <!-- head: lavender hood shell over a dark face plate, tilted forward -->
+    <g transform="rotate(-10 92 26)">
+      <rect x="54" y="2" width="78" height="48" rx="24" fill="#B7A6DF"/>
+      <rect x="66" y="16" width="70" height="34" rx="17" fill="#2B2B30"/>
+      <!-- big side eye -->
+      <circle cx="104" cy="31" r="12.5" fill="#FFFFFF"/>
+      <circle cx="104" cy="31" r="8.5" fill="#F5C518"/>
+      <circle cx="104" cy="31" r="4" fill="#1A1A1E"/>
+      <circle cx="106.5" cy="28.5" r="1.6" fill="#FFFFFF"/>
+      <!-- bill -->
+      <path d="M112 46 L152 44 Q156 50 150 56 L112 58 Z" fill="#F5C518"/>
+      <path d="M112 50 L150 50" stroke="#D9A50E" stroke-width="2" stroke-linecap="round"/>
+    </g>
   </g>
   <!-- wordmark -->
-  <text x="150" y="80" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="58" font-weight="800" fill="#F5C518" letter-spacing="-1">quack<tspan fill="#E0578A">d</tspan></text>
+  <text x="190" y="98" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="66" font-weight="800" fill="#F5C518" letter-spacing="-1.5">quack<tspan fill="#9C86D6">d</tspan></text>
 </svg>

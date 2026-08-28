@@ -137,7 +137,7 @@ async def kick(ctx: VerbContext, p: KickParams) -> VerbResult:
     moved = state.extras.get("last_kick_ball_moved_m")
     if moved is not None:
         return VerbResult.success(
-            f"kicked with {p.leg} leg; ball moved {moved:.2f} m", ball_moved_m=moved
+            f"kicked with {p.leg} leg, ball moved {moved:.2f} m", ball_moved_m=moved
         )
     return VerbResult.success(f"kicked with {p.leg} leg", ball_moved_m=None)
 

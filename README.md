@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/logo.svg" alt="quackd" width="340">
+  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/logo.svg" alt="quackd" width="360">
 </p>
 
-<p align="center"><strong>Give a small robot a brain.</strong> Tell it what you want in plain language; an AI uses the robot's existing skills to do it.</p>
+<p align="center"><strong>Give a small robot a brain.</strong> Tell it what you want in plain language. An AI uses the robot's existing skills to do it.</p>
 
 <p align="center">
   <a href="https://github.com/rokbenko/quackd/actions/workflows/ci.yml"><img src="https://github.com/rokbenko/quackd/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://pypi.org/project/quackd/"><img src="https://img.shields.io/pypi/v/quackd?color=f5c518" alt="PyPI"></a>
   <a href="https://pypi.org/project/quackd/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
   <a href="docs/mcp.md"><img src="https://img.shields.io/badge/MCP-ready-8A2BE2" alt="MCP ready"></a>
   <a href="https://github.com/pollen-robotics/microduck#readme"><img src="https://img.shields.io/badge/community-Pollen%20Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
@@ -16,79 +16,75 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/hero.gif" alt="A simulated duck robot searches for a ball, walks to it and kicks it. Left: the world from above. Right: what the duck's camera sees." width="760">
   <br>
-  <sub>"Find the ball and kick it." — in the built-in simulator, driven by the <em>scripted</em> pilot (no API key). Same verbs, same safety layer, same perception as a real model run; see <a href="docs/assets/README.md">docs/assets</a>.</sub>
+  <sub>"Find the ball and kick it", in the bundled simulator, driven by the <em>scripted</em> pilot (no API key). Same verbs, same safety layer, same perception as a real model run. See <a href="docs/assets/README.md">docs/assets</a>.</sub>
 </p>
 
-**quackd** connects a small, two-legged robot — the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics — to a large language model (Claude, GPT, Gemini or Grok). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
+**quackd** connects a small robot with two legs, the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, to a large language model (Claude, GPT, Gemini or Grok). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
 
-You do not need a robot to try it: a built-in simulator runs on any laptop in seconds. Goals that work today, in that simulator:
+You do not need a robot to try it. A bundled simulator runs on any laptop in seconds. Goals that work today, in that simulator:
 
-> **"Find the ball and kick it."** · **"Patrol, and quack twice if you see someone."** · **"Follow the person."** · **"Fetch the ball"** *(experimental — the scoop is unreliable, on purpose)*
+> **"Find the ball and kick it."** · **"Patrol, and quack twice if you see someone."** · **"Follow the person."** · **"Fetch the ball"** *(experimental, because the scoop is unreliable on purpose)*
 
-Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet — the robot ships at Christmas 2026 and nothing here has run on real hardware. The honest label for today is *LLM-driven, goal-directed control of a simulated robot*: an early, working step toward a small robot you can simply talk to.
+Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet. The robot ships at Christmas 2026 and nothing here has run on real hardware. The honest label for today is *LLM driven, goal directed control of a simulated robot*: an early, working step toward a small robot you can simply talk to.
+
+<br>
 
 ## Why?
 
-A modern small robot is not short of skills. The Microduck's onboard controllers already balance it, walk, kick, sit, stand up after a fall and scoop with its beak — each a trained policy that works without any help from an AI model. What the robot lacks is any idea of **what those skills are for**.
+A modern small robot is not short of skills. The Microduck's onboard controllers already balance it, walk, kick, sit, stand up after a fall and scoop with its beak. Each is a trained policy that works without any help from an AI model. What the robot lacks is any idea of **what those skills are for**.
 
 ```
-Traditional control:   walk forward → turn left → walk → look down → scoop → …   (you plan every step)
-This project:          "Pick up the ball."                                      (you state the goal)
+Traditional control:   walk forward, turn left, walk, look down, scoop, ...   (you plan every step)
+This project:          "Pick up the ball."                                    (you state the goal)
 ```
 
-Low-level skills and high-level goals are different layers. The robot knows the words; it cannot hold a conversation. quackd is an open-source attempt to connect the two layers — with an LLM doing the planning and the robot's own controllers doing the moving.
+Low level skills and high level goals are different layers. The robot knows the words, but it cannot hold a conversation. quackd is an open source attempt to connect the two layers, with an LLM doing the planning and the robot's own controllers doing the moving.
+
+<br>
 
 ## What is this?
 
-**The robot.** The Microduck is a 25 cm, 800 g, two-legged duck-shaped biped: fifteen small servos, a camera in its head, a depth sensor, a speaker, an onboard computer, and a set of learned behaviours (walk, kick, sit ↔ stand, ground pick, roll, roller-skate with clip-on wheels) that run at 50 Hz on the robot itself. It is open source, costs about $399, and is deliberately small and friendly — the opposite of an intimidating humanoid. The bigger bet behind projects like this one is that *useful* robots at home or in an office will be small ones people actually enjoy having around.
+**The robot.** The Microduck is a 25 cm, 800 g biped shaped like a duck: fifteen small servos, a camera in its head, a depth sensor, a speaker, an onboard computer, and a set of learned behaviours (walk, kick, sit and stand, ground pick, roll, roller skate with clip on wheels) that run at 50 Hz on the robot itself. It is open source, costs about $399, and is deliberately small and friendly, the opposite of an intimidating humanoid. The bigger bet behind projects like this one is that *useful* robots at home or in an office will be small ones people actually enjoy having around.
 
-**This project.** quackd (pronounced "quacked", named after the robot's daemons `robotd`, `mediad`, `padd`…) is an independent, unofficial brain for it: a Python program that
+**This project.** quackd (pronounced "quacked", named after the robot's daemons `robotd`, `mediad`, `padd` and friends) is an independent, unofficial brain for it. It is a Python program that
 
-- takes a goal in plain language — from a chat, a command line, or a `.duck` task file;
-- asks an LLM, one step at a time, which of the robot's skills to use next;
-- runs that skill on the robot (or the simulator), looks at the camera, and asks again;
+- takes a goal in plain language, from a chat, a command line, or a `.duck` task file,
+- asks an LLM, one step at a time, which of the robot's skills to use next,
+- runs that skill on the robot (or the simulator), looks at the camera, and asks again,
 - enforces a contract the model cannot talk its way out of: which skills are allowed, how many steps, when a human must say yes, when to abort.
 
 It ships with a cartoon simulator so all of this can be developed and demoed before the hardware exists, and with an [MCP](https://modelcontextprotocol.io) server so Claude Code or Claude Desktop can drive the duck interactively.
 
+<br>
+
 ## How it works (the simple version)
 
-```
-  You: "find the ball and kick it"
-   │
-   ▼
-  LLM  looks at: the camera (as an image and as "ball at bearing 18° left, ~0.6 m"),
-       the robot's state, and the result of the last action
-   │
-   ▼  picks ONE skill — a "verb" — and its parameters
-  quackd  checks the rules (allowed? budget left? needs confirmation?), then runs it
-   │
-   ▼
-  robot / simulator  executes the skill with its own controllers (walking is not the LLM's job)
-   │
-   ▼
-  quackd  observes the result → back to the LLM for the next verb … until "done" or "can't"
+```mermaid
+flowchart TD
+    YOU["You<br/>“find the ball and kick it”"]
+    LLM["LLM<br/>looks at the camera, the robot's state and the last result<br/>picks ONE skill (a verb) and its parameters"]
+    Q["quackd<br/>checks the rules: allowed? budget left? needs confirmation?<br/>then runs the verb"]
+    R["Robot or simulator<br/>executes the skill with its own controllers<br/>(walking is not the LLM's job)"]
+    O["quackd observes the result<br/>new camera frame, new state"]
+    YOU --> LLM --> Q --> R --> O
+    O -- "next verb, until done or impossible" --> LLM
 ```
 
-The verbs the model can pick from are real, existing capabilities — nothing more:
-
-```text
-walk(vx, vy, wz, duration)   sit()   stand()   stand_up()   stop()
-kick(leg)   grab()   gaze(direction)   quack(text)   get_frame()
-search_scan(target)   walk_to(target, stop_distance)   approach_and(target, then)
-```
+The verbs the model can pick from are real, existing capabilities and nothing more:
 
 | Kind | Verbs | What they are |
 |---|---|---|
-| Built-in | `walk` `sit` `stand` `stand_up` `stop` `kick` `grab` `gaze` `quack` `get_frame` | one each per behaviour the robot ships with; each is an *intent* the robot's own controllers execute |
-| Composite | `search_scan` `walk_to` `approach_and` | plain Python over built-ins + the camera; the steering loop |
-| Learned | *(none yet)* | v2: policies trained from LLM-written rewards, registered like any other verb |
+| Built in | `walk` `sit` `stand` `stand_up` `stop` `kick` `grab` `gaze` `quack` `get_frame` | one each per behaviour the robot ships with, each an *intent* the robot's own controllers execute |
+| Composite | `search_scan` `walk_to` `approach_and` | plain Python over built in verbs and the camera, the steering loop |
+| Learned | *(none yet)* | v2: policies trained from LLM written rewards, registered like any other verb |
 
-`walk_to` deserves a mention: it is a small closed loop written in plain Python that steers toward whatever the camera sees, ten times a second, without asking the model. The LLM says *"go to the ball"*; it never has to say *"turn 4° left"*.
+`walk_to` deserves a mention. It is a small closed loop written in plain Python that steers toward whatever the camera sees, ten times a second, without asking the model. The LLM says *"go to the ball"*. It never has to say *"turn 4° left"*.
+
+<br>
 
 ## Example
 
-The hero run above, from its transcript (`runs/<timestamp>/transcript.jsonl`; this one is the scripted pilot, so `model` says so):
+The hero run above, from its transcript (`runs/<timestamp>/transcript.jsonl`). This one is the scripted pilot, so `model` says so.
 
 ```jsonc
 {"kind": "llm",  "step": 0, "tool_calls": [{"name": "search_scan", "arguments": {"target": "ball"}}], "usage": {"input_tokens": 689, "output_tokens": 16}}
@@ -96,7 +92,7 @@ The hero run above, from its transcript (`runs/<timestamp>/transcript.jsonl`; th
 {"kind": "llm",  "step": 1, "tool_calls": [{"name": "walk_to", "arguments": {"target": "ball", "stop_distance": 0.22}}]}
 {"kind": "verb", "step": 2, "name": "walk_to", "ok": true, "summary": "reached the ball: ~0.22 m away, bearing +0°", "data": {"distance_m": 0.217, "ticks": 27}}
 {"kind": "llm",  "step": 2, "tool_calls": [{"name": "kick", "arguments": {"leg": "right"}}]}
-{"kind": "verb", "step": 3, "name": "kick", "ok": true, "summary": "kicked with right leg; ball moved 0.53 m"}
+{"kind": "verb", "step": 3, "name": "kick", "ok": true, "summary": "kicked with right leg, ball moved 0.53 m"}
 {"kind": "llm",  "step": 3, "tool_calls": [{"name": "quack", "arguments": {"text": "yay, got it!"}}]}
 {"kind": "llm",  "step": 4, "tool_calls": [{"name": "declare_success", "arguments": {"reason": "ball displaced by the kick"}}]}
 ```
@@ -104,119 +100,130 @@ The hero run above, from its transcript (`runs/<timestamp>/transcript.jsonl`; th
 The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 
 > **You:** List the duck's verbs, then find the ball and kick it.
-> **Claude:** *(calls `duck_list_verbs`, `duck_get_frame`, `duck_run_verb("search_scan")`, `duck_run_verb("walk_to")`, `duck_run_verb("kick")`, `duck_quack`)* Done — the ball moved about half a metre.
+> **Claude:** *(calls `duck_list_verbs`, `duck_get_frame`, `duck_run_verb("search_scan")`, `duck_run_verb("walk_to")`, `duck_run_verb("kick")`, `duck_quack`)* Done. The ball moved about half a metre.
 
-## What it can do today · where it is going
+<br>
+
+## What it can do today, and where it is going
 
 **Today (v0.1, simulator):**
 
-- Run a goal end-to-end in the built-in 2D simulator with any of five providers; `find-and-kick` succeeds on 10/10 seeds with the scripted pilot, ~2 s of wall-clock per run, a GIF and a full transcript every time.
-- Thirteen verbs (ten built-in, three composite), a strict `.duck` task-file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
-- Drive the duck interactively from Claude Code / Claude Desktop over MCP, under the same rules.
-- Real-model code paths for Claude, GPT, Gemini and Grok are implemented and tested offline; the hero GIF is the scripted pilot because this repo was built without an API key.
+- Run a goal end to end in the bundled 2D simulator with any of five providers. `find-and-kick` succeeds on 10 of 10 seeds with the scripted pilot, in about 2 s of wall clock per run, with a GIF and a full transcript every time.
+- Thirteen verbs (ten built in, three composite), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
+- Drive the duck interactively from Claude Code or Claude Desktop over MCP, under the same rules.
+- Real model code paths for Claude, GPT, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
 
-**Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships; upstream's WebSocket agent surface; and *learned verbs* — new skills trained from LLM-written rewards that register as one more verb. Eventually: a small robot in a real room that you can ask to find, fetch, follow and check on things.
+**Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships, upstream's WebSocket agent surface, and *learned verbs*, new skills trained from LLM written rewards that register as one more verb. Eventually, a small robot in a real room that you can ask to find, fetch, follow and check on things.
 
 | Piece | Status |
 |---|---|
-| `sim2d` built-in simulator (default) | ✅ 10/10 seeds on `find-and-kick`, GIF + transcript per run |
-| MCP server (`quackd serve-mcp`) | ✅ Claude Code / Claude Desktop, verified config |
-| Providers: anthropic · openai · gemini · grok · fake | ✅ implemented, tested offline; real-model hero recording pending an API key |
-| Real robot over JSON-RPC (`--transport jsonrpc`) | 🧪 experimental — method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
+| `sim2d` bundled simulator (default) | ✅ 10 of 10 seeds on `find-and-kick`, GIF and transcript per run |
+| MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, verified config |
+| Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
+| Real robot over JSON RPC (`--transport jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
 | WebSocket agent gateway (`--transport websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
-| Learned verbs | 🗺️ v2 — interface + docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
+| Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
 Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
 
+<br>
+
 ## Architecture
 
-Three loops, three rates, three owners. The LLM decides **what**; the steering loop decides **how to get there**; the robot's own policies keep it **upright**.
+Three loops, three rates, three owners. The LLM decides **what**. The steering loop decides **how to get there**. The robot's own policies keep it **upright**.
 
 | Loop | Rate | Where | Who |
 |---|---|---|---|
-| Reflexes | 50 Hz | onboard `robotd` | RL policies (ONNX): balance, gait, stand-up. quackd never touches this. |
-| Steering | 5–20 Hz | quackd process | perception + composite verbs (`walk_to` closes the approach loop from detections) |
-| Deliberation | ~0.2–1 Hz | LLM | reads a frame + state, picks the next **verb**, judges the success criteria |
-
-```
-             Human ── goal in plain language ──► LLM (Claude · GPT · Gemini · Grok · fake)
-                                                   │  exactly one tool call per turn
-                                                   ▼
-   ┌───────────────────────────── quackd ─────────────────────────────────────────┐
-   │  agent loop      observe → think → enforce → act                            │
-   │  safety executor allowlist · confirm gates · budgets · abort_when · heartbeat│
-   │  verb registry   built-in ─ composite ─ learned (v2)                         │
-   │  perception      frame → detections → "ball at bearing 18° left, ~0.6 m"    │
-   └───────────────┬───────────────────────────────────────▲──────────────────────┘
-                   │ intents (velocity, skill, gaze, sound)│ frame + state
-                   ▼                                       │
-             transport:  sim2d ✅ · mock ✅ · jsonrpc 🧪 · websocket ⏳
-                   │                                       │
-        ┌──────────┴──────────┐                            │
-        ▼                     ▼                            │
-   sim2d cartoon world     Microduck robotd @ 50 Hz ───────┘
-   (top-down + duck-cam)   RL policies · joint/thermal clamps · fall detection · deadman
-```
-
-<details>
-<summary>Mermaid version (renders on GitHub)</summary>
+| Reflexes | 50 Hz | onboard `robotd` | RL policies (ONNX): balance, gait, stand up. quackd never touches this. |
+| Steering | 5 to 20 Hz | quackd process | perception and composite verbs (`walk_to` closes the approach loop from detections) |
+| Deliberation | 0.2 to 1 Hz | LLM | reads a frame and the state, picks the next **verb**, judges the success criteria |
 
 ```mermaid
 flowchart LR
-    LLM["LLM<br/>(Claude · GPT · Gemini · Grok · fake)"]
+    HUMAN["Human<br/>goal in plain language"]
+    LLM["LLM<br/>Claude · GPT · Gemini · Grok · fake"]
     subgraph quackd
         LOOP["agent loop<br/>observe → think → enforce → act"]
-        EXEC["safety executor<br/>allowlist · confirm · budgets · heartbeat"]
-        VERBS["verb registry<br/>built-in · composite · learned (v2)"]
-        PERC["perception<br/>features, not frames"]
+        EXEC["safety executor<br/>allowlist · confirm gates · budgets · abort rules · heartbeat"]
+        VERBS["verb registry<br/>built in · composite · learned (v2)"]
+        PERC["perception<br/>frame → detections → “ball at bearing 18° left, ~0.6 m”"]
     end
     TRANSPORT["transport<br/>sim2d ✅ · mock ✅ · jsonrpc 🧪 · websocket ⏳"]
-    ROBOT["Microduck<br/>robotd @ 50 Hz (RL policies, deadman)"]
-    SIM["sim2d<br/>cartoon world + duck-cam"]
-    LLM -- "one tool call / turn" --> LOOP
+    ROBOT["Microduck<br/>robotd at 50 Hz: RL policies, joint and thermal clamps, fall detection, deadman"]
+    SIM["sim2d<br/>cartoon world and duck cam"]
+    HUMAN --> LLM
+    LLM -- "exactly one tool call per turn" --> LOOP
     LOOP --> EXEC --> VERBS --> TRANSPORT
-    TRANSPORT --> ROBOT
+    TRANSPORT -- "intents: velocity, skill, gaze, sound" --> ROBOT
     TRANSPORT --> SIM
-    TRANSPORT -- "frame + state" --> PERC --> LOOP
-    LOOP -- "observation: text + image" --> LLM
+    TRANSPORT -- "frame and state" --> PERC --> LOOP
+    LOOP -- "observation: text and image" --> LLM
 ```
 
-</details>
+**One turn, concretely.**
 
-**Why predefined skills matter.** The LLM never generates motor commands. Every built-in verb is an *intent* the robot already understands — a velocity, a named skill (`kick_left`, `ground_pick`, `sit_toggle`), a gaze target, a sound — and the robot's onboard policies (trained in [microduck_rl](https://github.com/pollen-robotics/microduck_rl), exported to ONNX, `obs[61] → act[14]` at 50 Hz) do the physical part. A slow or confused model degrades the *task*, never the *balance*; the robot's own deadman stops it if commands stall.
+```mermaid
+sequenceDiagram
+    participant L as LLM
+    participant A as agent loop
+    participant E as safety executor
+    participant V as verb
+    participant T as transport
+    participant P as perception
+    A->>T: get_state, get_frame
+    T-->>P: frame
+    P-->>A: detections ("ball at bearing 12° left, ~0.8 m")
+    A->>L: observation (text and image) plus the tool list
+    L-->>A: exactly one tool call, e.g. walk_to
+    A->>E: run_verb("walk_to", params)
+    E->>E: allowlist, confirm, budget, abort rules, preconditions, dry run
+    E->>V: execute(ctx, params) with a timeout
+    loop 10 Hz steering
+        V->>T: get_frame, detect, send_intent(move)
+    end
+    V-->>E: VerbResult(ok, summary, data)
+    E-->>A: result (written to the transcript)
+    A->>L: next observation
+```
 
-**One turn, concretely.** `transport.get_state()` and `get_frame()` → the detector turns the frame into `[Detection(label, bearing_deg, est_distance_m)]` → the model gets a short observation (state summary, detection summary, last result) plus the image for vision models → it must return exactly one tool call (`tool_choice=any` + no parallel calls on Claude; `tool_choice=required` on OpenAI-compatible APIs; `mode=ANY` on Gemini) → `Executor.run_verb` applies the contract in order: abort flag → allowlist → parameter validation (errors go back to the model as feedback) → confirm gate → budgets → machine-enforced `abort_when` → preconditions (not fallen, not sitting) → dry-run → execute with a timeout → the result is written to the transcript and becomes the next observation.
+**Why predefined skills matter.** The LLM never generates motor commands. Every built in verb is an *intent* the robot already understands: a velocity, a named skill (`kick_left`, `ground_pick`, `sit_toggle`), a gaze target, a sound. The robot's onboard policies (trained in [microduck_rl](https://github.com/pollen-robotics/microduck_rl), exported to ONNX, `obs[61] → act[14]` at 50 Hz) do the physical part. A slow or confused model degrades the *task*, never the *balance*, and the robot's own deadman stops it if commands stall.
 
-**Prompts.** The system prompt is the contract in prose (allowed verbs, budgets, confirm list, success criteria, the enforced and advisory abort conditions, the persona) followed by the `.duck` body verbatim. Tools are JSON-schema definitions generated from each verb's parameter model, plus `declare_success(reason)` / `declare_failure(reason)`. Only the last two observations keep their images. Everything is in [`quackd/agent/prompts.py`](quackd/agent/prompts.py).
+**Enforcement order.** `Executor.run_verb` applies the contract in this order: abort flag, allowlist, parameter validation (errors go back to the model as feedback), confirm gate, budgets, machine enforced `abort_when`, preconditions (not fallen, not sitting), dry run, then execution with a timeout. Every result is written to the transcript and becomes the next observation.
 
-**Perception — features, not frames.** The default detector is an HSV colour threshold (~1 ms per frame, no model download). Bearing comes from horizontal position through the camera's focal length; distance from apparent size. The simulator draws the ball in a known orange, so it works out of the box; for a real ball you tune one HSV range ([FAQ](docs/faq.md)). A YOLO detector is an optional extra. Composite verbs steer on these detections at 10 Hz and never wait for the model.
+**Prompts.** The system prompt is the contract in prose (allowed verbs, budgets, confirm list, success criteria, the enforced and advisory abort conditions, the persona) followed by the `.duck` body verbatim. Tools are JSON schema definitions generated from each verb's parameter model, plus `declare_success(reason)` and `declare_failure(reason)`. The model must return exactly one tool call (`tool_choice=any` with parallel calls disabled on Claude, `tool_choice=required` on OpenAI compatible APIs, `mode=ANY` on Gemini). Only the last two observations keep their images. Everything is in [`quackd/agent/prompts.py`](quackd/agent/prompts.py).
 
-**Talking to the robot.** `robotd` speaks JSON-RPC 2.0, one object per line, over a unix socket. quackd sends `robot.move` as a *notification* every 100 ms while walking (the robot zeroes velocity if these stop — its deadman, kept on purpose), `robot.do{skill}`, `robot.look`, `robot.sound{tag}`, and polls `robot.health` every 500 ms as its heartbeat. Every upstream name lives in one file, tagged VERIFIED (read from upstream source) or UNVERIFIED, and a test proves the unverified ones are only reachable from the experimental transports.
+**Perception: features, not frames.** The default detector is an HSV colour threshold, about 1 ms per frame, no model download. Bearing comes from horizontal position through the camera's focal length. Distance comes from apparent size. The simulator draws the ball in a known orange, so it works out of the box. For a real ball you tune one HSV range ([FAQ](docs/faq.md)). A YOLO detector is an optional extra. Composite verbs steer on these detections at 10 Hz and never wait for the model.
 
-**Safety layer.** Heartbeat failure → `stop` + abort. Ctrl-C or `q` → `stop` + abort. Verb timeout or exception → `stop` + a failed result. `--dry-run` sends nothing. The gamepad keeps authority on hardware. Details: [docs/safety.md](docs/safety.md).
+**Talking to the robot.** `robotd` speaks JSON RPC 2.0, one object per line, over a unix socket. quackd sends `robot.move` as a *notification* every 100 ms while walking (the robot zeroes velocity if these stop, its deadman, kept on purpose), `robot.do{skill}`, `robot.look`, `robot.sound{tag}`, and polls `robot.health` every 500 ms as its heartbeat. Every upstream name lives in one file, tagged VERIFIED (read from upstream source) or UNVERIFIED, and a test proves the unverified ones are only reachable from the experimental transports.
 
-The full map, with module-by-module "why it exists": [docs/architecture.md](docs/architecture.md). Decisions and their reasons: [docs/adr/](docs/adr/).
+**Safety layer.** Heartbeat failure means `stop` plus abort. Ctrl+C or `q` means `stop` plus abort. A verb timeout or exception means `stop` plus a failed result. `--dry-run` sends nothing. The gamepad keeps authority on hardware. Details: [docs/safety.md](docs/safety.md).
+
+The full map, with a "why it exists" line per module: [docs/architecture.md](docs/architecture.md). Decisions and their reasons: [docs/adr/](docs/adr/).
+
+<br>
 
 ## Installation
 
-Requirements: Python ≥ 3.11 and [`uv`](https://docs.astral.sh/uv/). Windows, macOS and Linux. No GPU. The default install is about 250 MB (OpenCV is most of it); provider SDKs are optional extras so `uvx` stays fast.
+Requirements: Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/). Windows, macOS and Linux. No GPU. The default install is about 250 MB (OpenCV is most of it). Provider SDKs are optional extras so `uvx` stays fast.
 
 ```bash
-uvx quackd --version                                   # nothing to install: uvx fetches it
-uv pip install "quackd[anthropic]"                     # or: openai · gemini · grok · all · yolo · live
+uvx quackd --version                                   # nothing to install, uvx fetches it
+uv pip install "quackd[anthropic]"                     # or: openai, gemini, grok, all, yolo, live
 git clone https://github.com/rokbenko/quackd && cd quackd && uv sync --extra dev   # contributors
 ```
+
+<br>
 
 ## Usage
 
 ```bash
-# a goal in plain language (built-in simulator, scripted pilot, no key needed)
+# a goal in plain language (bundled simulator, scripted pilot, no key needed)
 uvx quackd run --goal "find the ball and kick it" --provider fake
 
 # the same goal with Claude
 uvx --from "quackd[anthropic]" quackd run --goal "find the ball and kick it" --provider anthropic
 
-# a task file (five ship with the package: hello-world · find-and-kick · patrol-and-quack · follow-me · fetch)
+# a task file (five ship with the package: hello-world, find-and-kick, patrol-and-quack, follow-me, fetch)
 uvx quackd run find-and-kick --provider fake --seed 3
 ```
 
@@ -224,8 +231,8 @@ Every run writes `runs/<timestamp>/` with `transcript.jsonl` (every prompt, tool
 
 | Command | What it does |
 |---|---|
-| `quackd run <duck> \| --goal "…"` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size` |
-| `quackd validate ducks/*.duck` | Check task files against the spec and the verb registry; exits 1 with field-level errors |
+| `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size` |
+| `quackd validate ducks/*.duck` | Check task files against the spec and the verb registry. Exits 1 with field level errors |
 | `quackd serve-mcp` | Expose the duck as MCP tools over stdio |
 | `quackd doctor` | Keys, extras, transports, and every upstream assumption on this machine |
 | `quackd list-verbs` | The vocabulary with parameters and safety classes |
@@ -233,7 +240,7 @@ Every run writes `runs/<timestamp>/` with `transcript.jsonl` (every prompt, tool
 
 ### The `.duck` file
 
-A task file is a contract plus instructions, deliberately shaped like a SKILL.md: the YAML frontmatter is **enforced by quackd**, the Markdown body is **read by the model**.
+A task file is a contract plus instructions, deliberately shaped like a SKILL.md. The YAML frontmatter is **enforced by quackd**. The Markdown body is **read by the model**.
 
 ```markdown
 ---
@@ -252,16 +259,16 @@ persona: Determined and cheerful. Quack once when you succeed.
 # Task
 Find the ball and kick it.
 ## Strategy
-1. `search_scan`. 2. `walk_to` the ball, stop ~0.25 m away. 3. `kick`. 4. Verify; retry if it did not move.
+1. `search_scan`. 2. `walk_to` the ball, stop ~0.25 m away. 3. `kick`. 4. Verify, and retry if it did not move.
 ```
 
 | Starter | Goal | Notes |
 |---|---|---|
 | `hello-world` | quack, one step forward, quack | the smoke test |
-| `find-and-kick` | find the ball and kick it | the flagship; ground truth checked in tests |
-| `patrol-and-quack` | wander; quack twice on a person or pet | |
+| `find-and-kick` | find the ball and kick it | the flagship, ground truth checked in tests |
+| `patrol-and-quack` | wander, quack twice on a person or pet | |
 | `follow-me` | keep a person in view and follow at 0.5 m | |
-| `fetch` | scoop the ball up and bring it back | **experimental** — the scoop is open-loop and fails ~40 % of the time in sim, by design |
+| `fetch` | scoop the ball up and bring it back | **experimental**, the scoop is open loop and fails about 40 % of the time in sim, by design |
 
 Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks/).
 
@@ -271,57 +278,73 @@ Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks
 claude mcp add quackd -- uvx quackd serve-mcp --transport sim2d
 ```
 
-Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Config for both clients, the eight `duck_*` tools, and a two-minute script: [docs/mcp.md](docs/mcp.md).
+Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Config for both clients, the eight `duck_*` tools, and a two minute script: [docs/mcp.md](docs/mcp.md).
+
+<br>
 
 ## Configuration
 
 | What | How |
 |---|---|
 | API keys | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` in the environment or a `.env` file (see [`.env.example`](.env.example)) |
-| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4` — the non-Anthropic IDs are unverified, override if yours differ |
-| Claude reasoning effort | `QUACKD_EFFORT` (`low` … `max`, default `medium`); `QUACKD_ANTHROPIC_FALLBACKS=0` disables server-side refusal fallbacks |
+| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4`. The GPT, Gemini and Grok IDs are unverified, override them if yours differ |
+| Claude reasoning effort | `QUACKD_EFFORT` (`low` to `max`, default `medium`). `QUACKD_ANTHROPIC_FALLBACKS=0` disables server side refusal fallbacks |
 | Determinism | `--seed N` makes a simulator run repeatable |
-| Budgets | in the `.duck`; `--max-steps` overrides for one run |
-| Human in the loop | `verbs.confirm` in the `.duck` prompts y/N; `--yes` auto-accepts; MCP refuses gated verbs unless started with `--yes` |
+| Budgets | in the `.duck`. `--max-steps` overrides for one run |
+| Human in the loop | `verbs.confirm` in the `.duck` prompts y/N. `--yes` auto accepts. MCP refuses gated verbs unless started with `--yes` |
 | Dry run | `--dry-run` logs every intent and sends nothing |
 | Real robot | `--transport jsonrpc --address unix:///run/robotd.sock` on the robot, or `tcp://127.0.0.1:9870` after `ssh -L 9870:/run/robotd.sock <robot>` |
 
+<br>
+
 ## Performance
 
-Measured on the simulator with the scripted pilot (no model latency): `find-and-kick` takes 3–8 decisions and 1–2 s of wall-clock per run across seeds 0–9; simulated time runs as fast as the CPU allows. With a real model, each decision is one API call — the system prompt is roughly 3–4 k tokens, the per-turn observation a few hundred, plus one 256-px PNG for vision models — so a run is a handful of calls and the transcript records exact usage per turn. Model latency does not affect control: the steering loop runs at 10 Hz and the robot's own policies at 50 Hz regardless of how long the model thinks. The default install is ~250 MB, needs no GPU, and the simulator renders at 256 px (`--gif-size` for prettier GIFs).
+Measured on the simulator with the scripted pilot (no model latency): `find-and-kick` takes 3 to 8 decisions and 1 to 2 s of wall clock per run across seeds 0 to 9, and simulated time runs as fast as the CPU allows. With a real model, each decision is one API call. The system prompt is roughly 3 to 4 k tokens, the per turn observation a few hundred, plus one 256 px PNG for vision models, so a run is a handful of calls and the transcript records exact usage per turn. Model latency does not affect control: the steering loop runs at 10 Hz and the robot's own policies at 50 Hz regardless of how long the model thinks. The default install is about 250 MB, needs no GPU, and the simulator renders at 256 px (`--gif-size` for prettier GIFs).
+
+<br>
 
 ## Limitations
 
-- The simulator is a cartoon on purpose: it tests the agent loop, not physics. It will not tell you whether a gait works.
-- Nothing has run on a real Microduck. The `jsonrpc` transport uses verified method names but is unverified end to end; posture is inferred from the policy name (an assumption); there is no camera snapshot over the socket yet.
-- The hero GIF is the scripted pilot, not an LLM, because this repository was built without an API key. The real-model code paths are tested against stubbed SDK clients.
-- Success is the model's own claim (`declare_success`); in the simulator, tests also check ground truth. On hardware, the `.duck` bodies insist on verifying with a fresh frame.
-- The robot has seven duck sounds and no text-to-speech; `quack("hello")` picks a tone.
-- `grab` is open-loop upstream and unreliable here on purpose; `fetch` says so in its file.
+- The simulator is a cartoon on purpose. It tests the agent loop, not physics, and will not tell you whether a gait works.
+- Nothing has run on a real Microduck. The `jsonrpc` transport uses verified method names but is unverified end to end, posture is inferred from the policy name (an assumption), and there is no camera snapshot over the socket yet.
+- The hero GIF is the scripted pilot, not an LLM, because this repository was built without an API key. The real model code paths are tested against stubbed SDK clients.
+- Success is the model's own claim (`declare_success`). In the simulator, tests also check ground truth. On hardware, the `.duck` bodies insist on verifying with a fresh frame.
+- The robot has seven duck sounds and no text to speech. `quack("hello")` picks a tone.
+- `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
 - Default model IDs for GPT, Gemini and Grok were not verified at release.
+
+<br>
 
 ## Roadmap
 
-- **v0.2** — validated hardware transport when Microducks ship (Christmas 2026): run `jsonrpc` against a real `robotd`, flip rows from 🧪 to ✅, adopt upstream's WebSocket surface when it lands.
-- **v1** — the five starter tasks on a real duck, on video.
-- **v2 — learned verbs.** LLM-written rewards ([Eureka](https://eureka-research.github.io/) / [DrEureka](https://eureka-research.github.io/dr-eureka/)-style) train new policies in `microduck_rl` that register as one more verb. The registry hook exists today; the training loop does not.
+- **v0.2:** validated hardware transport when Microducks ship (Christmas 2026). Run `jsonrpc` against a real `robotd`, flip rows from 🧪 to ✅, adopt upstream's WebSocket surface when it lands.
+- **v1:** the five starter tasks on a real duck, on video.
+- **v2, learned verbs.** LLM written rewards ([Eureka](https://eureka-research.github.io/) and [DrEureka](https://eureka-research.github.io/dr-eureka/) style) train new policies in `microduck_rl` that register as one more verb. The registry hook exists today. The training loop does not.
 
-**Help wanted:** a real-model `find-and-kick` recording (one command, needs a key — [docs/assets](docs/assets/README.md)); a `jsonrpc` run against real hardware; verified default model IDs; and new `.duck` files.
+**Help wanted:** a real model `find-and-kick` recording (one command, needs a key, see [docs/assets](docs/assets/README.md)), a `jsonrpc` run against real hardware, verified default model IDs, and new `.duck` files.
+
+<br>
 
 ## Contributing
 
-**Add your `.duck` to [`ducks/`](ducks/) — PRs welcome.** That is the community funnel and the number we actually care about. Adding a verb is one function plus a registration line. Both are described in [CONTRIBUTING.md](CONTRIBUTING.md); design decisions are in [docs/adr/](docs/adr/). Tests run with no network and no keys: `uv sync --extra dev && uv run pytest`.
+**Add your `.duck` to [`ducks/`](ducks/). PRs welcome.** That is the community funnel and the number we actually care about. Adding a verb is one function plus a registration line. Both are described in [CONTRIBUTING.md](CONTRIBUTING.md), and design decisions live in [docs/adr/](docs/adr/). Tests run with no network and no keys: `uv sync --extra dev && uv run pytest`.
+
+<br>
 
 ## Safety
 
-Run on the floor, not a table. Keep pets and kids clear of `kick`. On hardware the gamepad preempts remote control and `robotd` is the safety authority; quackd adds a heartbeat, a kill switch (Ctrl-C or `q`), allowlists, confirmation gates and budgets on top — [docs/safety.md](docs/safety.md). You are responsible for your robot.
+Run on the floor, not a table. Keep pets and kids clear of `kick`. On hardware the gamepad preempts remote control and `robotd` is the safety authority. quackd adds a heartbeat, a kill switch (Ctrl+C or `q`), allowlists, confirmation gates and budgets on top, see [docs/safety.md](docs/safety.md). You are responsible for your robot.
 
-## License
-
-[Apache-2.0](LICENSE), like the upstream projects. Third-party and asset licenses (including why the robot's CC BY-NC-SA meshes are never vendored) are in [docs/licenses.md](docs/licenses.md) and [NOTICE](NOTICE).
+<br>
 
 ## Acknowledgements
 
-They built the duck; quackd is the brain. Thanks to Pollen Robotics for [microduck](https://github.com/pollen-robotics/microduck) (the onboard daemon stack and its JSON-RPC contract) and [microduck_rl](https://github.com/pollen-robotics/microduck_rl) (the training stack behind the policies the robot runs), to the [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk), and to the authors of [DrEureka](https://eureka-research.github.io/dr-eureka/) for the idea behind learned verbs. Community: the Pollen Robotics Discord linked from the [upstream README](https://github.com/pollen-robotics/microduck#readme).
+They built the duck. quackd is the brain. Thanks to Pollen Robotics for [microduck](https://github.com/pollen-robotics/microduck) (the onboard daemon stack and its JSON RPC contract) and [microduck_rl](https://github.com/pollen-robotics/microduck_rl) (the training stack behind the policies the robot runs), to the [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk), and to the authors of [DrEureka](https://eureka-research.github.io/dr-eureka/) for the idea behind learned verbs. Community: the Pollen Robotics Discord linked from the [upstream README](https://github.com/pollen-robotics/microduck#readme).
 
 quackd is an independent community project, not affiliated with or endorsed by Pollen Robotics or Hugging Face. "Microduck" is used nominatively to describe compatibility. No Pollen Robotics assets are distributed here.
+
+<br>
+
+## License
+
+[Apache 2.0](LICENSE), like the upstream projects. Third party and asset licenses (including why the robot's CC BY NC SA meshes are never vendored) are in [docs/licenses.md](docs/licenses.md) and [NOTICE](NOTICE).

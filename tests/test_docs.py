@@ -35,6 +35,25 @@ def test_readme_promises() -> None:
         assert hype not in README.lower(), hype
 
 
+def test_readme_punctuation_style() -> None:
+    """House style: no semicolons and no dashes used as punctuation (em/en dash, ' - ').
+
+    Fenced code blocks are exempt (YAML lists, shell comments, JSON are what they are)."""
+    prose = re.sub(r"```.*?```", "", README, flags=re.S)
+    for i, line in enumerate(prose.splitlines(), 1):
+        assert ";" not in line, f"README:{i}: semicolon"
+        for dash in ("—", "–", " - "):  # noqa: RUF001  (em dash, en dash, spaced hyphen)
+            assert dash not in line, f"README:{i}: dash punctuation {dash!r}"
+
+
+def test_readme_ends_with_license_section() -> None:
+    prose = re.sub(r"```.*?```", "", README, flags=re.S)  # ignore headings inside code blocks
+    headings = re.findall(r"^## (.+)$", prose, flags=re.M)
+    assert headings[-1] == "License", headings
+    # a blank line (<br>) before every section, for breathing room on GitHub
+    assert prose.count("<br>\n\n## ") == len(headings), "every H2 needs a <br> before it"
+
+
 def test_readme_images_are_absolute_and_exist() -> None:
     srcs = re.findall(r'<img[^>]+src="([^"]+)"', README) + re.findall(
         r"!\[[^\]]*\]\(([^)\s]+)", README
