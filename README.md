@@ -2,7 +2,10 @@
   <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/logo.svg" alt="quackd" width="360">
 </p>
 
-<p align="center"><strong>Give a small robot a brain.</strong> Tell it what you want in plain language. An AI uses the robot's existing skills to do it.</p>
+<p align="center"><strong>Give your Microduck a brain. Any LLM, one <code>.duck</code> file.</strong> 🦆🧠<br>
+<sub>quackd, pronounced “quacked”. The brain daemon Microduck was missing, named like its siblings <code>robotd</code>, <code>mediad</code>, <code>padd</code> and <code>tofd</code>.</sub></p>
+
+<p align="center">Tell a small robot what you want in plain language. An AI uses the robot's existing skills to do it.</p>
 
 <p align="center">
   <a href="https://github.com/rokbenko/quackd/actions/workflows/ci.yml"><img src="https://github.com/rokbenko/quackd/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -26,6 +29,18 @@ You do not need a robot to try it. A bundled simulator runs on any laptop in sec
 > **"Find the ball and kick it."** · **"Patrol, and quack twice if you see someone."** · **"Follow the person."** · **"Fetch the ball"** *(experimental, because the scoop is unreliable on purpose)*
 
 Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet. The robot ships at Christmas 2026 and nothing here has run on real hardware. The honest label for today is *LLM driven, goal directed control of a simulated robot*: an early, working step toward a small robot you can simply talk to.
+
+<br>
+
+## Try it in 60 seconds
+
+```bash
+uvx quackd run find-and-kick --provider fake                                        # no key: the scripted pilot
+uvx --from "quackd[anthropic]" quackd run find-and-kick --provider anthropic --transport sim2d   # needs ANTHROPIC_API_KEY
+open runs/*/run.gif                                                                 # every run leaves a GIF and a transcript
+```
+
+Put keys in the environment or in a `.env` file (copy [`.env.example`](.env.example)). `quackd doctor` tells you what is missing. Needs Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/), nothing else.
 
 <br>
 
@@ -229,6 +244,16 @@ uvx quackd run find-and-kick --provider fake --seed 3
 
 Every run writes `runs/<timestamp>/` with `transcript.jsonl` (every prompt, tool call, result and token count), the frames the model saw, `summary.json`, and `run.gif` on the simulator.
 
+| Provider | Extra | Key | Run |
+|---|---|---|---|
+| Claude | `quackd[anthropic]` | `ANTHROPIC_API_KEY` | `uvx --from "quackd[anthropic]" quackd run find-and-kick --provider anthropic` |
+| OpenAI | `quackd[openai]` | `OPENAI_API_KEY` | `uvx --from "quackd[openai]" quackd run find-and-kick --provider openai` |
+| Gemini | `quackd[gemini]` | `GEMINI_API_KEY` | `uvx --from "quackd[gemini]" quackd run find-and-kick --provider gemini` |
+| Grok | `quackd[grok]` | `XAI_API_KEY` | `uvx --from "quackd[grok]" quackd run find-and-kick --provider grok` |
+| fake (scripted) | none | none | `uvx quackd run find-and-kick --provider fake` |
+
+All four real providers see the camera frame as an image. The scripted pilot only reads the detection summary.
+
 | Command | What it does |
 |---|---|
 | `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size` |
@@ -312,6 +337,8 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - The robot has seven duck sounds and no text to speech. `quack("hello")` picks a tone.
 - `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
 - Default model IDs for OpenAI, Gemini and Grok were not verified at release.
+
+**Non goals for v0.1, on purpose:** no RL training or reward generation (that is v2, and only the registry hook exists), no features that require hardware (the real robot transport ships experimental), and no copying of Pollen Robotics assets, ever (no logos, no 3D meshes, no videos).
 
 <br>
 

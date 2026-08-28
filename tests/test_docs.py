@@ -28,6 +28,12 @@ def test_readme_promises() -> None:
         "--goal",
         "--provider fake",
         "biped",
+        "pronounced",
+        "Any LLM, one <code>.duck</code> file",
+        "Non goals for v0.1",
+        "--provider openai",
+        "--provider gemini",
+        "--provider grok",
     ):
         assert needle in README, needle
     assert "quadruped" not in README.lower()
