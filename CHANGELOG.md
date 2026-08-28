@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Providers: `anthropic` (Claude, adaptive thinking, one tool call per turn, refusal
+  handling), `openai`, `grok` (xAI OpenAI-compatible), `gemini` — all optional extras with
+  lazy imports; `QUACKD_MODEL` / `QUACKD_EFFORT` overrides. (M3)
+- README hero GIF and example transcript under `docs/assets/` (scripted pilot, labelled). (M3)
 - `sim2d`: built-in 2D simulator (deterministic under `--seed`, deadman, kick cone,
   open-loop scoop), top-down + first-person duck-cam renders, GIF recorder, optional
   `--live` pygame window. (M2)

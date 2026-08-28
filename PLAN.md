@@ -37,13 +37,14 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ Acceptance: find-and-kick succeeds on **10/10** seeds 0–9 (ground truth checked), ~1–2 s wall-clock each; `run.gif` in `runs/`
 - ✅ ADR-0007, ADR-0008; 83 tests
 
-## M3 — The brain ⬜
+## M3 — The brain ✅
 
-- ⬜ Providers: anthropic (first), openai, gemini, grok; one-tool-call-per-turn; vision blocks
-- ⬜ Prompts; confirm gates; budgets; `--dry-run`
-- ⬜ Offline provider tests (stubbed clients)
-- ⬜ Hero GIF in `docs/assets/` — ADR-0013: fake-provider recording committed and labeled;
-  real-provider recording ⏸ blocked on an API key (`quackd record ducks/find-and-kick.duck --provider anthropic`)
+- ✅ Providers: anthropic (Messages API, adaptive thinking default, one tool call via `tool_choice any + disable_parallel_tool_use`, thinking blocks replayed, refusal handling, server-side fallbacks with SDK-age fallback), openai, grok (xAI endpoint), gemini; lazy imports, clear missing-extra / missing-key errors
+- ✅ Prompts carry the contract; confirm gates (`typer.confirm`, `--yes`), budgets, `--dry-run` live in the CLI
+- ✅ Offline provider tests against stubbed clients (request mapping, response parsing, refusal, error chain); 98 tests
+- ✅ Hero GIF `docs/assets/hero.gif` + `transcript-example.jsonl` — ADR-0013: **scripted-pilot recording, labelled**
+- ⏸ Real-provider hero recording — blocked on an API key. Unblock: `quackd record find-and-kick --provider anthropic --seed 3`, copy `run.gif` + `transcript.jsonl` into `docs/assets/`, drop the label
+- ⏸ Verify non-Anthropic default model IDs (`gpt-5`, `grok-4`, `gemini-2.5-pro`) against vendor docs; all overridable via `QUACKD_MODEL`
 
 ## M4 — The socket ⬜
 

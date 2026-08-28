@@ -51,6 +51,10 @@ class Decision(BaseModel):
 
     tool_call: ToolCall
     text: str | None = None
+    raw: Any = Field(
+        default=None,
+        description="Provider-specific replay payload (Anthropic content blocks incl. thinking).",
+    )
 
 
 class Exchange(BaseModel):

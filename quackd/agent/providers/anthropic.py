@@ -1,0 +1,209 @@
+"""Claude as the duck's brain, via the official `anthropic` SDK (optional extra).
+
+Written against `anthropic` 1.x: adaptive thinking is the model's default on Claude Opus 5
+(so we do not send `thinking`), `tool_choice={"type": "any", "disable_parallel_tool_use":
+True}` guarantees exactly one tool call per turn, images ride as base64 PNG blocks, and
+the assistant's raw content blocks (including thinking) are replayed verbatim on the next
+turn. Server-side refusal fallbacks are on by default and drop out automatically if the
+installed SDK predates them.
+"""
+
+from __future__ import annotations
+
+import base64
+import os
+from typing import Any
+
+from quackd.agent.providers.base import (
+    Exchange,
+    ProviderError,
+    ProviderNotInstalled,
+    ProviderTurn,
+    ToolCall,
+    Usage,
+)
+
+DEFAULT_MODEL = "claude-opus-5"
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+
+def _image_block(png: bytes) -> dict[str, Any]:
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": base64.standard_b64encode(png).decode("ascii"),
+        },
+    }
+
+
+def render_messages(history: list[Exchange]) -> list[dict[str, Any]]:
+    """quackd's vendor-neutral history → Messages API `messages`."""
+    messages: list[dict[str, Any]] = []
+    for ex in history:
+        obs = ex.observation
+        if obs.tool_call_id:
+            inner: list[dict[str, Any]] = [{"type": "text", "text": obs.text}]
+            if obs.image_png:
+                inner.append(_image_block(obs.image_png))
+            content: list[dict[str, Any]] = [
+                {"type": "tool_result", "tool_use_id": obs.tool_call_id, "content": inner}
+            ]
+        else:
+            content = []
+            if obs.image_png:
+                content.append(_image_block(obs.image_png))
+            content.append({"type": "text", "text": obs.text})
+        messages.append({"role": "user", "content": content})
+        if ex.decision is not None:
+            if isinstance(ex.decision.raw, list) and ex.decision.raw:
+                blocks = ex.decision.raw  # replay thinking + tool_use blocks unchanged
+            else:
+                tc = ex.decision.tool_call
+                blocks = []
+                if ex.decision.text:
+                    blocks.append({"type": "text", "text": ex.decision.text})
+                blocks.append(
+                    {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.arguments}
+                )
+            messages.append({"role": "assistant", "content": blocks})
+    return messages
+
+
+def render_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {"name": t["name"], "description": t["description"], "input_schema": t["input_schema"]}
+        for t in tools
+    ]
+
+
+def _block_to_dict(block: Any) -> dict[str, Any]:
+    if isinstance(block, dict):
+        return block
+    for attr in ("model_dump", "to_dict"):
+        fn = getattr(block, attr, None)
+        if callable(fn):
+            out = fn()
+            if isinstance(out, dict):
+                return {k: v for k, v in out.items() if v is not None}
+    return {"type": getattr(block, "type", "text"), "text": str(block)}
+
+
+def parse_response(response: Any) -> ProviderTurn:
+    tool_calls: list[ToolCall] = []
+    texts: list[str] = []
+    for block in response.content:
+        kind = getattr(block, "type", None)
+        if kind == "tool_use":
+            args = block.input if isinstance(block.input, dict) else dict(block.input)
+            tool_calls.append(ToolCall(id=str(block.id), name=str(block.name), arguments=args))
+        elif kind == "text":
+            texts.append(block.text)
+    stop_reason = getattr(response, "stop_reason", None)
+    if stop_reason == "refusal":
+        details = getattr(response, "stop_details", None)
+        explanation = getattr(details, "explanation", None) or "the model refused"
+        texts.append(f"[refusal] {explanation}")
+        tool_calls = []
+    usage = getattr(response, "usage", None)
+    return ProviderTurn(
+        tool_calls=tool_calls,
+        text="\n".join(texts) or None,
+        usage=Usage(
+            input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+            output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+        ),
+        stop_reason=stop_reason,
+        raw=[_block_to_dict(b) for b in response.content],
+    )
+
+
+class AnthropicProvider:
+    name = "anthropic"
+    supports_vision = True
+
+    def __init__(
+        self,
+        model: str = DEFAULT_MODEL,
+        *,
+        client: Any = None,
+        max_tokens: int | None = None,
+        effort: str | None = None,
+        fallbacks: bool | None = None,
+    ) -> None:
+        self.model = model
+        self.max_tokens = max_tokens or int(os.environ.get("QUACKD_MAX_TOKENS", "16000"))
+        self.effort = effort or os.environ.get("QUACKD_EFFORT", "medium")
+        env_fb = os.environ.get("QUACKD_ANTHROPIC_FALLBACKS", "1") not in ("0", "false", "no")
+        self.fallbacks = env_fb if fallbacks is None else fallbacks
+        self.calls = 0
+        if client is None:
+            try:
+                import anthropic
+            except ImportError as e:
+                raise ProviderNotInstalled("anthropic", "anthropic") from e
+            client = anthropic.AsyncAnthropic()  # resolves the key / `ant auth` profile itself
+        self.client = client
+
+    def _params(
+        self, system: str, history: list[Exchange], tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "system": system,
+            "messages": render_messages(history),
+            "tools": render_tools(tools),
+            "tool_choice": {"type": "any", "disable_parallel_tool_use": True},
+        }
+        if self.effort:
+            params["output_config"] = {"effort": self.effort}
+        return params
+
+    async def step(
+        self, system: str, history: list[Exchange], tools: list[dict[str, Any]]
+    ) -> ProviderTurn:
+        params = self._params(system, history, tools)
+        self.calls += 1
+        try:
+            if self.fallbacks:
+                try:
+                    response = await self.client.beta.messages.create(
+                        **params, betas=[FALLBACK_BETA], fallbacks="default"
+                    )
+                except TypeError:
+                    # SDK predates server-side fallbacks: use the plain endpoint from now on
+                    self.fallbacks = False
+                    response = await self.client.messages.create(**params)
+            else:
+                response = await self.client.messages.create(**params)
+        except ProviderError:
+            raise
+        except Exception as e:
+            raise _classify(e) from e
+        return parse_response(response)
+
+
+def _classify(e: Exception) -> ProviderError:
+    """Map SDK exceptions (most specific first) to one ProviderError with a useful message."""
+    name = type(e).__name__
+    status = getattr(e, "status_code", None)
+    if name == "AuthenticationError":
+        return ProviderError(
+            "anthropic: invalid or missing API key (ANTHROPIC_API_KEY, or `ant auth login`)"
+        )
+    if name == "PermissionDeniedError":
+        return ProviderError("anthropic: this key lacks permission for the requested model")
+    if name == "NotFoundError":
+        return ProviderError("anthropic: model not found — check --model / QUACKD_MODEL")
+    if name == "RateLimitError":
+        retry = getattr(getattr(e, "response", None), "headers", {}).get("retry-after", "?")
+        return ProviderError(f"anthropic: rate limited (retry-after {retry}s)")
+    if name == "BadRequestError":
+        return ProviderError(f"anthropic: bad request — {getattr(e, 'message', e)}")
+    if name == "APIStatusError" or (status is not None and int(status) >= 500):
+        return ProviderError(f"anthropic: API error {status}: {getattr(e, 'message', e)}")
+    if name in ("APIConnectionError", "APITimeoutError"):
+        return ProviderError(f"anthropic: network error — {e}")
+    return ProviderError(f"anthropic: {name}: {e}")

@@ -257,7 +257,7 @@ class AgentLoop:
                         action="first_only",
                     )
                 call: ToolCall = turn.tool_calls[0]
-                self.history[-1].decision = Decision(tool_call=call, text=turn.text)
+                self.history[-1].decision = Decision(tool_call=call, text=turn.text, raw=turn.raw)
 
                 if call.name in META_TOOL_NAMES:
                     outcome = "success" if call.name == "declare_success" else "failure"
