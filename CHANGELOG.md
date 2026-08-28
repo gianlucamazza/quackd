@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `quackd run --goal "…"`: a plain-language goal instead of a `.duck` file (ad-hoc contract:
+  every `safe` verb, default budgets, standard abort rules).
+- `--gif-size` on `run`/`record`; the hero GIF is now recorded at 320 px panes.
+- Logo (`docs/assets/logo.svg`) and a social-preview card.
+
+### Changed
+
+- README rewritten for people who know nothing about robots or LLMs first, developers
+  second: what it does today vs. where it is going, an ASCII architecture diagram, usage,
+  configuration, performance and limitations sections. Images use absolute URLs so the
+  PyPI page renders them.
+
 ## [0.1.0] — 2026-08-28
 
 First release: sim-first, honest about hardware.

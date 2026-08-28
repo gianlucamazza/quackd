@@ -69,5 +69,6 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ Real-model hero recording (needs an API key) — `quackd record find-and-kick --provider anthropic --seed 3`
 - ⏸ Verify `gpt-5` / `grok-4` / `gemini-2.5-pro` default IDs against vendor docs
 - ⏸ Run `--transport jsonrpc` against a real Microduck (Christmas 2026) and flip rows in `docs/transport-status.md`
-- ⏸ Publish to PyPI (`uv build && uv publish`) — the name is free; not done from this session
-- ⏸ Push `main` + `v0.1.0` to `github.com/rokbenko/quackd` (left to the maintainer)
+- ⏸ Publish to PyPI (`uv build && uv publish`) — needs `UV_PUBLISH_TOKEN`
+- ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
+- ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)

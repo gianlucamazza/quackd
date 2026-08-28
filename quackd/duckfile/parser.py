@@ -105,3 +105,30 @@ def load_duck(name_or_path: str) -> DuckFile:
 def list_bundled_ducks() -> list[Path]:
     bundled = bundled_ducks_dir()
     return sorted(bundled.glob("*.duck")) if bundled else []
+
+
+def duck_from_goal(goal: str, allow: list[str]) -> DuckFile:
+    """An ad-hoc duck for `quackd run --goal "..."`: the goal is the body, the contract is
+    permissive-but-safe (the given allowlist, default budgets, the standard abort rules)."""
+    goal = goal.strip()
+    if not goal:
+        raise DuckParseError("--goal must not be empty", "<goal>")
+    if "stop" not in allow:
+        allow = [*allow, "stop"]
+    frontmatter = DuckFrontmatter(
+        duck=0,
+        name="goal",
+        description=goal[:80],
+        verbs={"allow": allow, "confirm": []},  # type: ignore[arg-type]
+        success=[
+            "The goal as stated is achieved, as best you can verify from the camera and state."
+        ],
+        abort_when=["Battery below 15%", "Same verb fails 3 times in a row"],
+        persona="Practical and honest: say so when you cannot do something.",
+    )
+    body = (
+        f"# Task\n{goal}\n\n## Strategy\n"
+        "Use the available verbs. Look before you act (`get_frame` or `search_scan`), prefer "
+        "composite verbs like `walk_to`, and verify with a fresh frame before declaring success."
+    )
+    return DuckFile(frontmatter=frontmatter, body=body, path="<goal>")

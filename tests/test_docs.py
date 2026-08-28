@@ -10,6 +10,7 @@ from quackd.transport import upstream_api as up
 from quackd.verbs.registry import default_registry
 
 REPO = Path(__file__).resolve().parents[1]
+README = (REPO / "README.md").read_text(encoding="utf-8")
 
 
 def test_transport_status_lists_every_upstream_ref() -> None:
@@ -18,23 +19,37 @@ def test_transport_status_lists_every_upstream_ref() -> None:
     assert not missing, f"docs/transport-status.md is missing: {missing}"
 
 
-def test_readme_status_and_disclaimer() -> None:
-    readme = (REPO / "README.md").read_text(encoding="utf-8")
+def test_readme_promises() -> None:
     for needle in (
         "not affiliated with or endorsed by Pollen Robotics",
-        "docs/assets/hero.gif",
-        "--provider fake",
         "claude mcp add quackd",
         "dr-eureka",
         "github.com/pollen-robotics/microduck_rl",
+        "--goal",
+        "--provider fake",
+        "biped",
     ):
-        assert needle in readme, needle
+        assert needle in README, needle
+    assert "quadruped" not in README.lower()
+    for hype in ("revolutionary", "world's first", "fully autonomous"):
+        assert hype not in README.lower(), hype
+
+
+def test_readme_images_are_absolute_and_exist() -> None:
+    srcs = re.findall(r'<img[^>]+src="([^"]+)"', README) + re.findall(
+        r"!\[[^\]]*\]\(([^)\s]+)", README
+    )
+    assert srcs, "README has no images"
+    raw = "https://raw.githubusercontent.com/rokbenko/quackd/main/"
+    for src in srcs:
+        assert src.startswith("https://"), f"relative image breaks on PyPI: {src}"
+        if src.startswith(raw):
+            assert (REPO / src[len(raw) :]).exists(), f"missing asset {src}"
 
 
 def test_readme_verbs_match_registry() -> None:
-    readme = (REPO / "README.md").read_text(encoding="utf-8")
     for name in default_registry().names():
-        assert f"`{name}`" in readme, f"README does not mention verb {name}"
+        assert f"`{name}`" in README, f"README does not mention verb {name}"
 
 
 def test_mcp_json_is_a_stdio_server() -> None:

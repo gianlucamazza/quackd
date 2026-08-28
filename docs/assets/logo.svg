@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="420" height="120" role="img" aria-label="quackd">
+  <title>quackd</title>
+  <!-- duck mark: body, head, beak, eye, and a small "brain" spark -->
+  <g transform="translate(10,10)">
+    <ellipse cx="46" cy="66" rx="40" ry="26" fill="#F5C518"/>
+    <circle cx="70" cy="34" r="22" fill="#F5C518"/>
+    <polygon points="90,30 118,38 90,46" fill="#F08A24"/>
+    <circle cx="76" cy="29" r="3.5" fill="#222"/>
+    <path d="M52 12 q8 -14 18 -4 q10 -12 16 2" fill="none" stroke="#E0578A" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M14 78 q-12 6 -10 16" fill="none" stroke="#F08A24" stroke-width="4" stroke-linecap="round"/>
+    <path d="M52 92 v14 M40 106 h24" fill="none" stroke="#F08A24" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <!-- wordmark -->
+  <text x="150" y="80" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="58" font-weight="800" fill="#F5C518" letter-spacing="-1">quack<tspan fill="#E0578A">d</tspan></text>
+</svg>

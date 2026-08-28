@@ -94,6 +94,39 @@ def test_missing_extra_hint_survives_rich_markup(tmp_path: Path, monkeypatch) ->
     assert "quackd[anthropic]" in result.output  # Rich must not eat the [anthropic] "tag"
 
 
+def test_run_goal_builds_an_ad_hoc_duck(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--goal",
+            "say hello and stop",
+            "--provider",
+            "fake",
+            "--transport",
+            "mock",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "goal" in result.output
+    transcript = next(tmp_path.rglob("transcript.jsonl")).read_text(encoding="utf-8")
+    assert "say hello and stop" in transcript  # the goal is the task body
+    assert '"kick"' in transcript  # safe verbs are allowed
+    assert "SUCCESS" in result.output
+
+
+def test_run_needs_exactly_one_of_duck_or_goal(tmp_path: Path) -> None:
+    both = runner.invoke(
+        app,
+        ["run", "hello-world", "--goal", "x", "--transport", "mock", "--runs-dir", str(tmp_path)],
+    )
+    neither = runner.invoke(app, ["run", "--transport", "mock", "--runs-dir", str(tmp_path)])
+    assert both.exit_code == 1 and neither.exit_code == 1
+    assert "either" in both.output and "either" in neither.output
+
+
 def test_run_unknown_provider_is_a_clean_error(tmp_path: Path) -> None:
     result = runner.invoke(
         app,

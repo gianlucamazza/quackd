@@ -142,7 +142,8 @@ def _confirm_prompt(name: str, params: dict[str, Any]) -> bool:
 
 
 def _run_impl(
-    duckfile: str,
+    duckfile: str | None,
+    goal: str | None,
     provider: str,
     transport: str,
     model: str | None,
@@ -154,18 +155,27 @@ def _run_impl(
     live: bool,
     address: str | None,
     gif: bool,
+    gif_size: int,
     verbose: bool,
 ) -> None:
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
     from quackd.agent.providers.factory import make_provider
-    from quackd.duckfile.parser import DuckParseError, load_duck
+    from quackd.duckfile.parser import DuckParseError, duck_from_goal, load_duck
     from quackd.safety import KillSwitch, allow_all
     from quackd.transport.base import TransportError
     from quackd.transport.factory import make_transport
+    from quackd.verbs.registry import default_registry
 
+    if (duckfile is None) == (goal is None):
+        _fail('give either a .duck file (or bundled name) or --goal "...", not both')
+        return
     try:
-        duck = load_duck(duckfile)
+        if goal is not None:
+            safe = [v.name for v in default_registry().verbs() if v.safety_class == "safe"]
+            duck = duck_from_goal(goal, safe)
+        else:
+            duck = load_duck(duckfile or "")
     except DuckParseError as e:
         _fail(str(e))
         return
@@ -185,7 +195,7 @@ def _run_impl(
         if gif:
             from quackd.sim2d.recorder import FrameRecorder
 
-            recorder = FrameRecorder(duck_transport)
+            recorder = FrameRecorder(duck_transport, size=gif_size)
 
     def log(msg: str) -> None:
         if verbose:
@@ -248,8 +258,15 @@ def _run_impl(
 
 
 _DUCK_ARG = typer.Argument(
-    ..., help="Path to a .duck file, or a bundled name (hello-world, find-and-kick, ...)."
+    None, help="Path to a .duck file, or a bundled name (hello-world, find-and-kick, ...)."
 )
+_GOAL = typer.Option(
+    None,
+    "--goal",
+    "-g",
+    help='A plain-language goal instead of a .duck file, e.g. --goal "find the ball and kick it".',
+)
+_GIFSIZE = typer.Option(256, "--gif-size", help="sim2d: pixel size of each GIF pane.")
 _PROVIDER = typer.Option(
     "fake", "--provider", "-p", help="fake · anthropic · openai · gemini · grok"
 )
@@ -269,7 +286,8 @@ _VERBOSE = typer.Option(False, "--verbose", "-v", help="Log every intent to stde
 
 @app.command()
 def run(
-    duckfile: str = _DUCK_ARG,
+    duckfile: str | None = _DUCK_ARG,
+    goal: str | None = _GOAL,
     provider: str = _PROVIDER,
     transport: str = _TRANSPORT,
     model: str | None = _MODEL,
@@ -281,11 +299,13 @@ def run(
     live: bool = _LIVE,
     address: str | None = _ADDR,
     gif: bool = typer.Option(True, "--gif/--no-gif", help="sim2d: write run.gif into the run dir."),
+    gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
 ) -> None:
-    """Run a .duck file: the LLM picks verbs, quackd enforces the contract."""
+    """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
         duckfile,
+        goal,
         provider,
         transport,
         model,
@@ -297,23 +317,27 @@ def run(
         live,
         address,
         gif,
+        gif_size,
         verbose,
     )
 
 
 @app.command()
 def record(
-    duckfile: str = _DUCK_ARG,
+    duckfile: str | None = _DUCK_ARG,
+    goal: str | None = _GOAL,
     provider: str = _PROVIDER,
     model: str | None = _MODEL,
     seed: int | None = typer.Option(0, "--seed"),
     max_steps: int | None = _MAXSTEPS,
     runs_dir: str = _RUNS,
+    gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
 ) -> None:
     """Like `run` on sim2d, but always writes a GIF (for READMEs and launches)."""
     _run_impl(
         duckfile,
+        goal,
         provider,
         "sim2d",
         model,
@@ -325,6 +349,7 @@ def record(
         False,
         None,
         True,
+        gif_size,
         verbose,
     )
 
