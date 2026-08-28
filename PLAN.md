@@ -55,10 +55,19 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ `docs/mcp.md` with verified Claude Code (`claude mcp add`, `.mcp.json`) and Claude Desktop config; 2-minute script; Windows note
 - ✅ In-process MCP client tests over memory streams (tool list, image content, contract enforcement, budgets, dry-run, confirm gate)
 
-## M5 — The launch surface ⬜
+## M5 — The launch surface ✅
 
-- ⬜ README per brief §7; LAUNCH.md per §8; CONTRIBUTING.md
-- ⬜ docs: architecture, duck-spec, transport-status, safety, learned-verbs, licenses, faq
-- ⬜ CHANGELOG 0.1.0; tag `v0.1.0`
-- ⬜ Definition of done: stranger with `uv` reaches the north-star demo from README alone;
-  no UNVERIFIED upstream call reachable without `--transport jsonrpc|websocket`
+- ✅ README per brief §7 (hero GIF, quickstart, three loops + Mermaid, provider matrix, `.duck` in 20 lines, status table, roadmap, credits, safety, disclaimer)
+- ✅ LAUNCH.md per §8; CONTRIBUTING.md (add a verb / submit a duck); project `.mcp.json`
+- ✅ docs: architecture, duck-spec, transport-status, safety, learned-verbs, licenses, faq, mcp
+- ✅ `tests/test_docs.py` keeps transport-status.md and README in sync with the code
+- ✅ CHANGELOG 0.1.0; tag `v0.1.0`
+- ✅ Definition of done: `uvx quackd run find-and-kick --provider fake` from README alone; `tests/test_upstream_api.py` proves no UNVERIFIED ref is reachable outside `jsonrpc`/`websocket`/`doctor`
+
+## Open after v0.1.0
+
+- ⏸ Real-model hero recording (needs an API key) — `quackd record find-and-kick --provider anthropic --seed 3`
+- ⏸ Verify `gpt-5` / `grok-4` / `gemini-2.5-pro` default IDs against vendor docs
+- ⏸ Run `--transport jsonrpc` against a real Microduck (Christmas 2026) and flip rows in `docs/transport-status.md`
+- ⏸ Publish to PyPI (`uv build && uv publish`) — the name is free; not done from this session
+- ⏸ Push `main` + `v0.1.0` to `github.com/rokbenko/quackd` (left to the maintainer)

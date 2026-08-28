@@ -7,31 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-28
+
+First release: sim-first, honest about hardware.
+
 ### Added
 
-- `quackd serve-mcp`: the duck as MCP tools over stdio (Claude Code / Claude Desktop),
-  behind the same safety executor; `docs/mcp.md` with verified client config. (M4)
-- `quackd doctor`; experimental `jsonrpc` transport for the real robot (verified method
-  names, fake-robotd tests); `websocket` stub tracking upstream's draft. (M4)
-- Providers: `anthropic` (Claude, adaptive thinking, one tool call per turn, refusal
-  handling), `openai`, `grok` (xAI OpenAI-compatible), `gemini` — all optional extras with
-  lazy imports; `QUACKD_MODEL` / `QUACKD_EFFORT` overrides. (M3)
-- README hero GIF and example transcript under `docs/assets/` (scripted pilot, labelled). (M3)
-- `sim2d`: built-in 2D simulator (deterministic under `--seed`, deadman, kick cone,
-  open-loop scoop), top-down + first-person duck-cam renders, GIF recorder, optional
-  `--live` pygame window. (M2)
-- Perception: `ColorBlobDetector` (HSV, bearing + distance from apparent size) and a lazy
-  `YoloDetector` extra; composite verbs `search_scan`, `walk_to`, `approach_and`. (M2)
-- `quackd record` and `quackd list-verbs`. (M2)
-- `.duck` spec v0: strict pydantic frontmatter, generated `schema.json`, `quackd validate`
-  with fail-fast field-level errors; five starter ducks bundled in the wheel. (M1)
-- Verb registry with built-ins (`walk`, `sit`, `stand`, `kick`, `grab`, `stand_up`, `stop`,
-  `quack`, `gaze`, `get_frame`), composite stubs, and the reserved learned-verb interface. (M1)
-- Safety executor: allowlist, confirm gates, budgets, dry-run, machine-enforced
-  `abort_when`, heartbeat, kill switch. (M1)
-- Agent loop with transcript/summary per run, scripted `fake` provider, mock transport,
-  and `upstream_api.py` with VERIFIED/UNVERIFIED upstream constants. (M1)
-- Project scaffold: package, CLI skeleton, CI (ruff + mypy + pytest on 3.11/3.12,
-  ubuntu + macos), pre-commit, licenses, community files. (M0)
+- **`.duck` spec v0**: strict pydantic frontmatter, generated `schema.json`,
+  `quackd validate` with fail-fast field-level errors; five starter ducks
+  (`hello-world`, `find-and-kick`, `patrol-and-quack`, `follow-me`, `fetch`) bundled in the
+  wheel and resolvable by name.
+- **Verb registry**: built-ins mapping 1:1 to shipped robot behaviours (`walk`, `sit`,
+  `stand`, `kick`, `grab`, `stand_up`, `stop`, `quack`, `gaze`, `get_frame`), composites
+  (`search_scan`, `walk_to`, `approach_and`), and the reserved learned-verb interface.
+- **Safety executor**: allowlist, confirm gates, budgets, dry-run, machine-enforced
+  `abort_when` (battery, consecutive failures), heartbeat, kill switch (Windows-safe).
+- **Agent loop** with one tool call per turn, `runs/<ts>/transcript.jsonl`, frames,
+  `summary.json`, and `run.gif` on the simulator.
+- **`sim2d`**: built-in 2D simulator (deterministic under `--seed`, deadman, kick cone,
+  unreliable open-loop scoop), top-down + first-person duck-cam renders, GIF recorder,
+  optional `--live` window.
+- **Perception**: `ColorBlobDetector` (HSV, bearing + distance from apparent size) and a
+  lazy `YoloDetector` extra.
+- **Providers**: `anthropic` (adaptive thinking, refusal handling, thinking-block replay),
+  `openai`, `grok` (xAI endpoint), `gemini`, and the scripted `fake`; all vendor SDKs are
+  optional extras.
+- **`quackd serve-mcp`**: the duck as MCP tools for Claude Code / Claude Desktop through
+  the same executor; `docs/mcp.md` with verified client config; project `.mcp.json`.
+- **Transports**: `sim2d` (default), `mock`, experimental `jsonrpc` for the real robot
+  (verified `duck-ipc-proto` v16 vocabulary, fake-robotd tests), `websocket` stub.
+- **`quackd doctor`**, `quackd list-verbs`, `quackd record`.
+- Docs: architecture, duck spec, transport status, safety, learned verbs (v2), licenses,
+  FAQ, MCP; 13 ADRs; LAUNCH.md; CONTRIBUTING.md; hero GIF (scripted pilot, labelled).
+
+### Known limitations
+
+- The hardware transport has never run on a Microduck (hardware ships Christmas 2026).
+- The README hero is a scripted-pilot recording; a real-model recording needs an API key.
+- Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
 [Unreleased]: https://github.com/rokbenko/quackd/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/rokbenko/quackd/releases/tag/v0.1.0
