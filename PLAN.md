@@ -46,12 +46,14 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ Real-provider hero recording — blocked on an API key. Unblock: `quackd record find-and-kick --provider anthropic --seed 3`, copy `run.gif` + `transcript.jsonl` into `docs/assets/`, drop the label
 - ⏸ Verify non-Anthropic default model IDs (`gpt-5`, `grok-4`, `gemini-2.5-pro`) against vendor docs; all overridable via `QUACKD_MODEL`
 
-## M4 — The socket ⬜
+## M4 — The socket ✅
 
-- ⬜ `mcp_server.py` (MCP SDK v2, stdio), shared Executor, `duck_get_frame` image content
-- ⬜ `quackd doctor`
-- ⬜ `docs/mcp.md` with verified Claude Code / Claude Desktop config; 2-minute script
-- ⬜ In-process MCP client tests
+- ✅ `mcp_server.py` (MCP SDK v2 `MCPServer`, stdio, lifespan-managed transport + heartbeat), eight `duck_*` tools through the shared Executor, `duck_get_frame` returns `Image` content; `--yes` for confirm gates
+- ✅ `transport/jsonrpc_unix.py` (EXPERIMENTAL: hello handshake with API-version check, NDJSON, `robot.move` notifications, `robot.health` heartbeat, `unix://` + `tcp://` addresses) + fake-robotd TCP tests
+- ✅ `transport/websocket_stub.py` (STUB that points at upstream's draft)
+- ✅ `quackd doctor` (core deps, providers/keys masked, extras, transports, UNVERIFIED assumptions)
+- ✅ `docs/mcp.md` with verified Claude Code (`claude mcp add`, `.mcp.json`) and Claude Desktop config; 2-minute script; Windows note
+- ✅ In-process MCP client tests over memory streams (tool list, image content, contract enforcement, budgets, dry-run, confirm gate)
 
 ## M5 — The launch surface ⬜
 

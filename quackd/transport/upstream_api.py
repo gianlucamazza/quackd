@@ -81,6 +81,12 @@ ROBOT_LOOK = UpstreamRef(
     "request {x, y, z, neck_pitch} trunk-frame point -> {head, clamped}",
 )
 ROBOT_DO = UpstreamRef("robot.do", "VERIFIED", IPC_PROTO, "request {skill} -> {accepted, reason?}")
+ROBOT_POSE = UpstreamRef(
+    "robot.pose",
+    "VERIFIED",
+    IPC_PROTO,
+    "NOTIFICATION {z, roll, pitch, active} standing body pose offsets",
+)
 ROBOT_ENABLE = UpstreamRef(
     "robot.enable", "VERIFIED", IPC_PROTO, "request {on, toggle?}; enables the policy"
 )

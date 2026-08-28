@@ -349,11 +349,16 @@ def serve_mcp(
     seed: int | None = _SEED,
     address: str | None = _ADDR,
     dry_run: bool = _DRY,
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
+    ),
 ) -> None:
     """Expose the duck as MCP tools over stdio (Claude Code / Claude Desktop)."""
     from quackd.mcp_server import serve
 
-    serve(transport=transport, duckfile=duckfile, seed=seed, address=address, dry_run=dry_run)
+    serve(
+        transport=transport, duckfile=duckfile, seed=seed, address=address, dry_run=dry_run, yes=yes
+    )
 
 
 if __name__ == "__main__":

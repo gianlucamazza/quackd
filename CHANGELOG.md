@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `quackd serve-mcp`: the duck as MCP tools over stdio (Claude Code / Claude Desktop),
+  behind the same safety executor; `docs/mcp.md` with verified client config. (M4)
+- `quackd doctor`; experimental `jsonrpc` transport for the real robot (verified method
+  names, fake-robotd tests); `websocket` stub tracking upstream's draft. (M4)
 - Providers: `anthropic` (Claude, adaptive thinking, one tool call per turn, refusal
   handling), `openai`, `grok` (xAI OpenAI-compatible), `gemini` — all optional extras with
   lazy imports; `QUACKD_MODEL` / `QUACKD_EFFORT` overrides. (M3)
