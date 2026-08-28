@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "quackd": {
+      "command": "uv",
+      "args": ["run", "quackd", "serve-mcp", "--transport", "sim2d"]
+    }
+  }
+}
