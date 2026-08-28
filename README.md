@@ -19,7 +19,7 @@
   <sub>"Find the ball and kick it", in the bundled simulator, driven by the <em>scripted</em> pilot (no API key). Same verbs, same safety layer, same perception as a real model run. See <a href="docs/assets/README.md">docs/assets</a>.</sub>
 </p>
 
-**quackd** connects a small robot with two legs, the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, to a large language model (Claude, GPT, Gemini or Grok). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
+**quackd** connects a small robot with two legs, the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, to a large language model (Claude, OpenAI, Gemini or Grok). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
 
 You do not need a robot to try it. A bundled simulator runs on any laptop in seconds. Goals that work today, in that simulator:
 
@@ -111,7 +111,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 - Run a goal end to end in the bundled 2D simulator with any of five providers. `find-and-kick` succeeds on 10 of 10 seeds with the scripted pilot, in about 2 s of wall clock per run, with a GIF and a full transcript every time.
 - Thirteen verbs (ten built in, three composite), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
 - Drive the duck interactively from Claude Code or Claude Desktop over MCP, under the same rules.
-- Real model code paths for Claude, GPT, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
+- Real model code paths for Claude, OpenAI, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
 
 **Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships, upstream's WebSocket agent surface, and *learned verbs*, new skills trained from LLM written rewards that register as one more verb. Eventually, a small robot in a real room that you can ask to find, fetch, follow and check on things.
 
@@ -141,7 +141,7 @@ Three loops, three rates, three owners. The LLM decides **what**. The steering l
 ```mermaid
 flowchart LR
     HUMAN["Human<br/>goal in plain language"]
-    LLM["LLM<br/>Claude · GPT · Gemini · Grok · fake"]
+    LLM["LLM<br/>Claude · OpenAI · Gemini · Grok · fake"]
     subgraph quackd
         LOOP["agent loop<br/>observe → think → enforce → act"]
         EXEC["safety executor<br/>allowlist · confirm gates · budgets · abort rules · heartbeat"]
@@ -287,7 +287,7 @@ Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the b
 | What | How |
 |---|---|
 | API keys | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` in the environment or a `.env` file (see [`.env.example`](.env.example)) |
-| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4`. The GPT, Gemini and Grok IDs are unverified, override them if yours differ |
+| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4`. The OpenAI, Gemini and Grok IDs are unverified, override them if yours differ |
 | Claude reasoning effort | `QUACKD_EFFORT` (`low` to `max`, default `medium`). `QUACKD_ANTHROPIC_FALLBACKS=0` disables server side refusal fallbacks |
 | Determinism | `--seed N` makes a simulator run repeatable |
 | Budgets | in the `.duck`. `--max-steps` overrides for one run |
@@ -311,7 +311,7 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - Success is the model's own claim (`declare_success`). In the simulator, tests also check ground truth. On hardware, the `.duck` bodies insist on verifying with a fresh frame.
 - The robot has seven duck sounds and no text to speech. `quack("hello")` picks a tone.
 - `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
-- Default model IDs for GPT, Gemini and Grok were not verified at release.
+- Default model IDs for OpenAI, Gemini and Grok were not verified at release.
 
 <br>
 

@@ -17,7 +17,7 @@ watches a simulated duck find a ball and kick it, driven by an LLM, in under a m
 
 1. **Show HN: Pilot Hugging Face's $399 robot duck with any LLM (no hardware needed)**
 2. Show HN: quackd – a SKILL.md-style file format that makes an LLM drive a biped robot, safely
-3. Show HN: I gave a $399 open-source robot duck a brain (Claude/GPT/Gemini, MCP, built-in sim)
+3. Show HN: I gave a $399 open-source robot duck a brain (Claude/OpenAI/Gemini, MCP, built-in sim)
 
 First comment (post immediately): what it is in three sentences, the three-loop table, the
 honesty paragraph (sim now, hardware transport experimental until Christmas), and the ask

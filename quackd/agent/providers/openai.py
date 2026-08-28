@@ -1,4 +1,4 @@
-"""GPT as the duck's brain, via the `openai` SDK (optional extra). Also the base for Grok.
+"""OpenAI as the duck's brain, via the `openai` SDK (optional extra). Also the base for Grok.
 
 Chat Completions with function tools, `tool_choice="required"` and
 `parallel_tool_calls=False` for one call per turn. Tool results go back as `tool` messages;
