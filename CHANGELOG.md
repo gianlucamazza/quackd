@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `.duck` spec v0: strict pydantic frontmatter, generated `schema.json`, `quackd validate`
+  with fail-fast field-level errors; five starter ducks bundled in the wheel. (M1)
+- Verb registry with built-ins (`walk`, `sit`, `stand`, `kick`, `grab`, `stand_up`, `stop`,
+  `quack`, `gaze`, `get_frame`), composite stubs, and the reserved learned-verb interface. (M1)
+- Safety executor: allowlist, confirm gates, budgets, dry-run, machine-enforced
+  `abort_when`, heartbeat, kill switch. (M1)
+- Agent loop with transcript/summary per run, scripted `fake` provider, mock transport,
+  and `upstream_api.py` with VERIFIED/UNVERIFIED upstream constants. (M1)
 - Project scaffold: package, CLI skeleton, CI (ruff + mypy + pytest on 3.11/3.12,
   ubuntu + macos), pre-commit, licenses, community files. (M0)
 

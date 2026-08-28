@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rokbenko/quackd/blob/main/quackd/duckfile/schema.json",
+  "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Hard stops. The loop ends when any of these is hit, whatever the LLM thinks.",
+      "properties": {
+        "max_steps": {
+          "default": 40,
+          "description": "Maximum number of LLM decisions.",
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Max Steps",
+          "type": "integer"
+        },
+        "max_minutes": {
+          "default": 5.0,
+          "description": "Wall-clock (or sim-clock) cap.",
+          "exclusiveMinimum": 0,
+          "maximum": 180,
+          "title": "Max Minutes",
+          "type": "number"
+        },
+        "max_llm_calls": {
+          "default": 40,
+          "description": "Maximum provider calls.",
+          "maximum": 2000,
+          "minimum": 1,
+          "title": "Max Llm Calls",
+          "type": "integer"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    },
+    "LearnedVerbRef": {
+      "additionalProperties": false,
+      "description": "Reserved for v2. The shape a `.duck` will use to pull in a learned (ONNX) verb.\n\nSee `docs/learned-verbs.md`. Parsed and validated today; nothing executes it.",
+      "properties": {
+        "name": {
+          "description": "Verb name it registers as.",
+          "title": "Name",
+          "type": "string"
+        },
+        "policy": {
+          "description": "Path or URL of the ONNX policy.",
+          "title": "Policy",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "LLM-facing description.",
+          "title": "Description",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "policy"
+      ],
+      "title": "LearnedVerbRef",
+      "type": "object"
+    },
+    "VerbsSection": {
+      "additionalProperties": false,
+      "description": "Which verbs the LLM may call, and which need a human to say yes first.",
+      "properties": {
+        "allow": {
+          "description": "Verbs the LLM may call. Anything else is refused.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allow",
+          "type": "array"
+        },
+        "confirm": {
+          "description": "Verbs (subset of `allow`) that prompt a human y/N before executing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Confirm",
+          "type": "array"
+        }
+      },
+      "required": [
+        "allow"
+      ],
+      "title": "VerbsSection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The contract. This is what `schema.json` describes and what the executor enforces.",
+  "properties": {
+    "duck": {
+      "const": 0,
+      "description": "Spec version. Only 0 exists.",
+      "title": "Duck",
+      "type": "integer"
+    },
+    "name": {
+      "description": "Slug: lowercase letters, digits, hyphens.",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "description": "One line, human-facing.",
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author"
+    },
+    "verbs": {
+      "$ref": "#/$defs/VerbsSection"
+    },
+    "budgets": {
+      "$ref": "#/$defs/Budgets",
+      "default": {
+        "max_steps": 40,
+        "max_minutes": 5.0,
+        "max_llm_calls": 40
+      }
+    },
+    "success": {
+      "description": "Success criteria the LLM must judge itself against.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Success",
+      "type": "array"
+    },
+    "abort_when": {
+      "description": "Abort conditions. 'Battery below N%' and 'Same verb fails N times in a row' are enforced by the executor; other entries are passed to the LLM as instructions.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Abort When",
+      "type": "array"
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tone for the LLM. Optional.",
+      "title": "Persona"
+    },
+    "providers": {
+      "description": "Providers this duck was tested with (not enforced).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Providers",
+      "type": "array"
+    },
+    "learned_verbs": {
+      "description": "Reserved for v2 learned verbs. Must be empty in v0.1.",
+      "items": {
+        "$ref": "#/$defs/LearnedVerbRef"
+      },
+      "title": "Learned Verbs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "duck",
+    "name",
+    "description",
+    "verbs",
+    "success"
+  ],
+  "title": "quackd .duck v0 frontmatter",
+  "type": "object"
+}

@@ -1,0 +1,135 @@
+"""Every word the LLM reads, in one place.
+
+The system prompt carries the contract (in prose the model can act on) and the `.duck`
+body verbatim. Each turn's observation is compact and structured — features, not frames —
+with the image attached separately for providers that can see. One tool call per turn is
+stated here *and* enforced by the loop; saying it is not the same as trusting it.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from quackd.duckfile.schema import DuckFile
+from quackd.perception.base import Detection, summarize_detections
+from quackd.transport.base import DuckState
+from quackd.verbs.registry import Verb, VerbResult
+
+DECLARE_SUCCESS = {
+    "name": "declare_success",
+    "description": "Call when the success criteria are met. Say which criterion and what evidence you have.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "Which criterion was met, and the evidence.",
+            }
+        },
+        "required": ["reason"],
+        "additionalProperties": False,
+    },
+}
+
+DECLARE_FAILURE = {
+    "name": "declare_failure",
+    "description": "Call when the task cannot be completed (target not found, repeated failures, an abort condition).",
+    "input_schema": {
+        "type": "object",
+        "properties": {"reason": {"type": "string"}},
+        "required": ["reason"],
+        "additionalProperties": False,
+    },
+}
+
+META_TOOLS = [DECLARE_SUCCESS, DECLARE_FAILURE]
+META_TOOL_NAMES = {t["name"] for t in META_TOOLS}
+
+
+def build_system_prompt(duck: DuckFile, verbs: list[Verb], transport_name: str) -> str:
+    fm = duck.frontmatter
+    verb_lines = "\n".join(f"- `{v.name}`: {v.description}" for v in verbs)
+    success = "\n".join(f"- {s}" for s in fm.success)
+    advisory = fm.advisory_abort_conditions
+    abort_lines = (
+        "\n".join(f"- {a}" for a in advisory) if advisory else "- (none beyond the enforced ones)"
+    )
+    persona = f"\n## Persona\n{fm.persona}\n" if fm.persona else ""
+    sim_note = (
+        "\nYou are in the built-in 2D simulator: a cartoon top-down world. Distances are metres, "
+        "the arena is about 2 m across, and the ball is orange.\n"
+        if transport_name == "sim2d"
+        else ""
+    )
+    return f"""You are the brain of a small biped duck robot (25 cm, 800 g). You are a high-level pilot:
+you choose ONE verb per turn; the robot's own controllers handle balance and gait, and composite
+verbs like `walk_to` close their own loops on the camera. Do not micro-manage.
+
+## Rules (enforced by the executor — not optional)
+- Call exactly one tool per turn. Never zero, never two.
+- Only these verbs are allowed: {", ".join(fm.verbs.allow)}. Anything else is refused.
+- Budgets: {fm.budgets.max_steps} steps, {fm.budgets.max_minutes:g} minutes, {fm.budgets.max_llm_calls} LLM calls. The run stops when any is hit.
+- Verbs marked confirm ({", ".join(fm.verbs.confirm) or "none"}) ask a human before running.
+- When a success criterion is met, call `declare_success`. If the task is impossible, call `declare_failure`.
+
+## Success criteria
+{success}
+
+## Abort conditions you must respect yourself
+{abort_lines}
+
+## Verbs
+{verb_lines}
+{persona}{sim_note}
+## Task file: {fm.name} — {fm.description}
+
+{duck.body}
+"""
+
+
+def build_observation_text(
+    *,
+    step: int,
+    max_steps: int,
+    state: DuckState,
+    detections: list[Detection],
+    last_verb: str | None,
+    last_result: VerbResult | None,
+    budget_status: str,
+) -> str:
+    lines = [
+        f"[step {step}/{max_steps} · {budget_status}]",
+        f"state: {state.summary()}",
+        f"camera: {summarize_detections(detections)}",
+    ]
+    if last_verb is not None and last_result is not None:
+        lines.append(
+            f"last verb `{last_verb}`: {'ok' if last_result.ok else 'FAILED'} — {last_result.summary}"
+        )
+    lines.append("Choose exactly one tool.")
+    return "\n".join(lines)
+
+
+def observation_features(
+    *,
+    state: DuckState,
+    detections: list[Detection],
+    last_verb: str | None,
+    last_result: VerbResult | None,
+    allowed: list[str],
+) -> dict[str, Any]:
+    return {
+        "state": state.model_dump(),
+        "detections": [d.model_dump() for d in detections],
+        "last_result": (
+            {
+                "verb": last_verb,
+                "ok": last_result.ok,
+                "summary": last_result.summary,
+                "data": last_result.data,
+            }
+            if last_result is not None
+            else None
+        ),
+        "allowed": allowed,
+    }

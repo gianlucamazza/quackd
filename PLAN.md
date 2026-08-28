@@ -16,16 +16,17 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ Five starter `.duck` files written (needed by the wheel's force-include; validated in M1)
 - ✅ Commit `chore: scaffold quackd v0.1.0 skeleton (M0)`
 
-## M1 — Contract & registry ⬜
+## M1 — Contract & registry ✅
 
-- ⬜ `duckfile/schema.py` (pydantic), `parser.py`, `schema.json` export, `quackd validate`
-- ⬜ `verbs/registry.py`, `builtin.py`, `composite.py` (stubs), `learned.py` (interface only)
-- ⬜ `transport/base.py`, `mock.py`, `upstream_api.py` (VERIFIED/UNVERIFIED constants)
-- ⬜ `safety.py`: Budget, Executor (allowlist · confirm · dry-run), Heartbeat, kill switch
-- ⬜ `agent/loop.py`, `prompts.py`, `providers/base.py`, `providers/fake.py`, transcript writer
-- ⬜ Five starter `.duck` files
-- ⬜ Tests: parser golden, schema sync, executor, heartbeat, loop transcript golden
-- ⬜ ✅-criterion: `quackd run ducks/hello-world.duck --provider fake --transport mock` writes a transcript
+- ✅ `duckfile/schema.py` (pydantic), `parser.py`, `schema.json` export (`python -m quackd.duckfile.export`), `quackd validate`
+- ✅ `verbs/registry.py`, `builtin.py`, `composite.py` (registered stubs → M2), `learned.py` (interface only)
+- ✅ `transport/base.py`, `mock.py`, `upstream_api.py` (VERIFIED/UNVERIFIED, from duck-ipc-proto API v16)
+- ✅ `safety.py`: Budget, Executor (allowlist · confirm · dry-run · machine-enforced abort_when), Heartbeat, KillSwitch
+- ✅ `agent/loop.py`, `prompts.py`, `providers/{base,fake,factory}.py`, `transcript.py`
+- ✅ Five starter `.duck` files validate
+- ✅ Tests (61): parser + invalid fixtures, schema sync, registry, learned dummy, executor rules, heartbeat, loop golden, CLI
+- ✅ ADR-0003…0006, 0011, 0012
+- ✅ ✅-criterion: `quackd run hello-world --provider fake --transport mock` writes a transcript + summary
 
 ## M2 — The world ⬜
 

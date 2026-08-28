@@ -92,6 +92,9 @@ ignore = ["RUF012", "B008"]
 "quackd/cli.py" = ["T20"]
 "quackd/mcp_server.py" = ["T20"]
 "tests/**" = ["T20"]
+# Prose-heavy files: upstream citations and LLM-facing prompt text read better unwrapped.
+"quackd/transport/upstream_api.py" = ["E501"]
+"quackd/agent/prompts.py" = ["E501"]
 
 [tool.ruff.format]
 line-ending = "lf"
