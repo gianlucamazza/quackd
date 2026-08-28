@@ -28,13 +28,14 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ ADR-0003…0006, 0011, 0012
 - ✅ ✅-criterion: `quackd run hello-world --provider fake --transport mock` writes a transcript + summary
 
-## M2 — The world ⬜
+## M2 — The world ✅
 
-- ⬜ `sim2d/world.py`, `render.py` (top-down + duck-cam), `recorder.py` (GIF)
-- ⬜ `transport/sim2d.py`; `perception/base.py`, `color_blob.py`, `yolo.py` (lazy)
-- ⬜ Composite `search_scan`, `walk_to`, `approach_and`; FakeLLM find-and-kick strategy
-- ⬜ `quackd record`, `quackd list-verbs`
-- ⬜ Acceptance: find-and-kick succeeds on ≥ 8 of seeds 0–9, headless, < 60 s each; GIF in `runs/`
+- ✅ `sim2d/world.py` (20 Hz, seeded noise, deadman, kick cone, unreliable scoop), `render.py` (top-down + perspective duck-cam), `recorder.py` (GIF via tick hook), `live.py` (optional pygame)
+- ✅ `transport/sim2d.py`; `perception/color_blob.py` (HSV + bearing/distance geometry), `yolo.py` (lazy extra)
+- ✅ Composite `search_scan`, `walk_to` (10 Hz closed loop), `approach_and`; FakeLLM find-and-kick strategy
+- ✅ `quackd record`, `quackd list-verbs`
+- ✅ Acceptance: find-and-kick succeeds on **10/10** seeds 0–9 (ground truth checked), ~1–2 s wall-clock each; `run.gif` in `runs/`
+- ✅ ADR-0007, ADR-0008; 83 tests
 
 ## M3 — The brain ⬜
 

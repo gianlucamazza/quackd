@@ -183,7 +183,7 @@ def _run_impl(
         if gif:
             from quackd.sim2d.recorder import FrameRecorder
 
-            recorder = FrameRecorder(getattr(duck_transport, "world", None))
+            recorder = FrameRecorder(duck_transport)
 
     def log(msg: str) -> None:
         if verbose:

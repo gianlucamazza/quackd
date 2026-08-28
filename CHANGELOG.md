@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `sim2d`: built-in 2D simulator (deterministic under `--seed`, deadman, kick cone,
+  open-loop scoop), top-down + first-person duck-cam renders, GIF recorder, optional
+  `--live` pygame window. (M2)
+- Perception: `ColorBlobDetector` (HSV, bearing + distance from apparent size) and a lazy
+  `YoloDetector` extra; composite verbs `search_scan`, `walk_to`, `approach_and`. (M2)
+- `quackd record` and `quackd list-verbs`. (M2)
 - `.duck` spec v0: strict pydantic frontmatter, generated `schema.json`, `quackd validate`
   with fail-fast field-level errors; five starter ducks bundled in the wheel. (M1)
 - Verb registry with built-ins (`walk`, `sit`, `stand`, `kick`, `grab`, `stand_up`, `stop`,
