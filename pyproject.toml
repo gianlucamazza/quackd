@@ -1,0 +1,113 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quackd"
+dynamic = ["version"]
+description = "Give your Microduck a brain. Any LLM, one .duck file."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11"
+authors = [{ name = "Rok Benko" }]
+keywords = [
+  "microduck", "robotics", "embodied-ai", "physical-ai", "llm-agents",
+  "mcp", "model-context-protocol", "reinforcement-learning", "sim2real",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Framework :: Robot Framework",
+]
+# The default install must stay light so `uvx quackd` is fast.
+# Provider SDKs, YOLO and the live window are extras.
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.7,<3",
+  "pyyaml>=6.0",
+  "numpy>=1.26",
+  "pillow>=10.3",
+  "opencv-python-headless>=4.9",
+  "python-dotenv>=1.0",
+  "mcp>=2.0,<3",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=1.0,<2"]
+openai = ["openai>=1.50"]
+gemini = ["google-genai>=1.0"]
+grok = ["openai>=1.50"]
+all = ["anthropic>=1.0,<2", "openai>=1.50", "google-genai>=1.0"]
+yolo = ["ultralytics>=8.2"]
+live = ["pygame>=2.5"]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "types-PyYAML",
+  "pre-commit>=3.7",
+]
+
+[project.scripts]
+quackd = "quackd.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/rokbenko/quackd"
+Repository = "https://github.com/rokbenko/quackd"
+Issues = "https://github.com/rokbenko/quackd/issues"
+Changelog = "https://github.com/rokbenko/quackd/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "quackd/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["quackd"]
+
+# The starter .duck files live at the repo root (that is the community funnel)
+# but ship inside the wheel so `uvx quackd run find-and-kick` works without a checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"ducks" = "quackd/ducks"
+
+[tool.hatch.build.targets.sdist]
+include = ["quackd", "ducks", "docs", "tests", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["runs", "docs/assets"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ASYNC", "T20"]
+ignore = ["RUF012", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"quackd/cli.py" = ["T20"]
+"quackd/mcp_server.py" = ["T20"]
+"tests/**" = ["T20"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["quackd"]
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = false
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

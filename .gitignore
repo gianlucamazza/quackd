@@ -1,0 +1,30 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# runs are artifacts, not source (the hero GIF lives in docs/assets on purpose)
+runs/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# optional model weights (never vendor upstream assets)
+*.onnx
+*.pt

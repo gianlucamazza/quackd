@@ -1,0 +1,46 @@
+name: Bug report
+description: Something quacked when it should not have.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: quackd version
+      description: Output of `quackd --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options: ["sim2d", "mock", "jsonrpc (real robot, experimental)", "websocket (stub)"]
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options: ["fake", "anthropic", "openai", "gemini", "grok", "MCP client (Claude Code / Desktop)"]
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command and `.duck` file
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs. what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `quackd doctor`
+      render: shell
+  - type: textarea
+    id: transcript
+    attributes:
+      label: Relevant lines from `runs/<timestamp>/transcript.jsonl`
+      render: json

@@ -1,0 +1,32 @@
+name: .duck submission
+description: Share a .duck file (or open a PR to ducks/ directly — that is the preferred route).
+labels: ["duck"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PRs to `ducks/` are the fastest way in. Use this form if you want feedback first.
+  - type: input
+    id: name
+    attributes:
+      label: Duck name
+      placeholder: e.g. guard-the-snacks
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: The .duck file
+      render: markdown
+    validations:
+      required: true
+  - type: dropdown
+    id: tested
+    attributes:
+      label: Tested with
+      multiple: true
+      options: ["fake + sim2d", "anthropic", "openai", "gemini", "grok", "real robot"]
+  - type: textarea
+    id: notes
+    attributes:
+      label: What worked, what did not

@@ -1,0 +1,29 @@
+quackd
+Copyright 2026 Rok Benko and the quackd contributors
+
+Licensed under the Apache License, Version 2.0.
+
+quackd is an independent community project. It is not affiliated with or
+endorsed by Pollen Robotics or Hugging Face. "Microduck" is used nominatively
+to describe compatibility.
+
+This project builds on, interoperates with, and is grateful to:
+
+  * Microduck (pollen-robotics/microduck) — the robot's onboard daemon stack
+    (robotd, mediad, padd, tofd, configd, updaterd, btd) and its JSON-RPC
+    contract (duck-ipc-proto). Apache-2.0.
+    https://github.com/pollen-robotics/microduck
+
+  * microduck_rl (pollen-robotics/microduck_rl) — the training stack that
+    produces the ONNX policies the robot runs. Code Apache-2.0.
+    Its 3D model files are CC BY-NC-SA and are NOT included in this project.
+    https://github.com/pollen-robotics/microduck_rl
+
+  * Model Context Protocol Python SDK (modelcontextprotocol/python-sdk). MIT.
+    https://github.com/modelcontextprotocol/python-sdk
+
+  * DrEureka (Ma et al.) — the "LLM-written rewards" idea behind the
+    learned-verbs roadmap. https://eureka-research.github.io/dr-eureka/
+
+No Pollen Robotics logos, meshes, videos, or other brand assets are
+distributed with quackd.

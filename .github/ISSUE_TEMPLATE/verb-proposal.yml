@@ -1,0 +1,49 @@
+name: Verb proposal
+description: Propose a new verb (built-in, composite, or learned).
+labels: ["verb", "enhancement"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Verb name
+      placeholder: e.g. circle_around
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - "built-in (maps 1:1 to a shipped robot behaviour)"
+        - "composite (plain Python over existing verbs + perception)"
+        - "learned (ONNX policy — v2 track, see docs/learned-verbs.md)"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: LLM-facing description (one or two sentences the model will read)
+    validations:
+      required: true
+  - type: textarea
+    id: params
+    attributes:
+      label: Parameters and their ranges
+      placeholder: |
+        radius_m: float, 0.2–1.0
+        direction: "left" | "right"
+  - type: textarea
+    id: done
+    attributes:
+      label: Done condition and timeout
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety class
+      options: ["safe", "confirm", "dangerous"]
+    validations:
+      required: true
+  - type: textarea
+    id: upstream
+    attributes:
+      label: Which upstream robotd methods does it need? (link to duck-ipc-proto if verified)
