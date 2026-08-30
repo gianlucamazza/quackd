@@ -5,4 +5,4 @@ small, safety-enforced vocabulary of *verbs*, driven by a `.duck` skill file. Ev
 in the repo serves that sentence.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -7,29 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-29
+
+Local and open-source LLMs can pilot the duck. No API key needed.
+
 ### Added
 
-- Local and open-source models: `--provider ollama | vllm | llamacpp | lmstudio | local`
-  (OpenAI-compatible servers, no key, model discovery from `/v1/models`, relaxed tool
-  calling, a JSON text fallback for models that cannot call tools natively, `--vision`
-  opt-in), `--base-url` / `--api-key` flags, `quackd doctor` probes local servers, and
-  `docs/local-llms.md` with per-server setup. (ADR-0014)
-
-- The scripted `fake` pilot picks a strategy from keywords in `--goal` (ball/kick, patrol),
-  so the keyless demo really searches, walks and kicks instead of declaring success.
-
+- **Local providers** `ollama`, `vllm`, `llamacpp`, `lmstudio` and `local --base-url …`
+  for any OpenAI-compatible server: no key, model discovery from `/v1/models`,
+  `tool_choice=auto` and no `parallel_tool_calls` field for picky servers
+  (`QUACKD_TOOL_CHOICE` overrides), vision opt-in with `--vision`, and a JSON text
+  fallback for models that cannot call tools natively (marked `text_fallback` in the
+  transcript). `quackd doctor` probes the four default local addresses.
+  Guide: `docs/local-llms.md`. (ADR-0014)
 - `quackd run --goal "…"`: a plain-language goal instead of a `.duck` file (ad-hoc contract:
-  every `safe` verb, default budgets, standard abort rules).
-- `--gif-size` on `run`/`record`; the hero GIF is now recorded at 320 px panes.
+  every `safe` verb, default budgets, standard abort rules). The scripted `fake` pilot picks
+  a strategy from the goal's keywords.
+- `--base-url`, `--api-key`, `--vision/--no-vision`, and `--gif-size` on `run`/`record`.
 - Logo (`docs/assets/logo.svg`, a Microduck-like biped in the Lavender colourway) and a
   social-preview card.
 
 ### Changed
 
 - README rewritten for people who know nothing about robots or LLMs first, developers
-  second: what it does today vs. where it is going, an ASCII architecture diagram, usage,
+  second: what it does today vs. where it is going, Mermaid architecture diagrams, usage,
   configuration, performance and limitations sections. Images use absolute URLs so the
-  PyPI page renders them.
+  PyPI page renders them. Providers are named by company ("OpenAI"), not model family.
+- The hero GIF is recorded at 320 px panes.
+
+### Fixed
+
+- Rich markup ate `quackd[extra]` in CLI error hints.
+- mypy on Python 3.12 (numpy's PEP 695 stubs) in CI.
 
 ## [0.1.0] — 2026-08-28
 
@@ -70,5 +79,6 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rokbenko/quackd/releases/tag/v0.1.0

@@ -30,10 +30,13 @@ def test_readme_promises() -> None:
         "biped",
         "pronounced",
         "Any LLM, one <code>.duck</code> file",
-        "Non goals for v0.1",
+        "Non goals for now",
         "--provider openai",
         "--provider gemini",
         "--provider grok",
+        "--provider ollama",
+        "docs/local-llms.md",
+        "| Local models (",
     ):
         assert needle in README, needle
     assert "quadruped" not in README.lower()

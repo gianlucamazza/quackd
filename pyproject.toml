@@ -14,6 +14,7 @@ authors = [{ name = "Rok Benko" }]
 keywords = [
   "microduck", "robotics", "embodied-ai", "physical-ai", "llm-agents",
   "mcp", "model-context-protocol", "reinforcement-learning", "sim2real",
+  "claude", "openai", "ollama", "vllm", "llama-cpp", "local-llm",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",

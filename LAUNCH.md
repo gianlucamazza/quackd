@@ -12,6 +12,7 @@ watches a simulated duck find a ball and kick it, driven by an LLM, in under a m
 | X / Twitter | Give your Microduck a brain. Any LLM, one `.duck` file. 🦆🧠 |
 | Pollen Discord | We built the brain daemon that was missing from `robotd / mediad / padd / tofd` — and we'd like you to tell us what we got wrong about the socket API. |
 | Robotics / RL folks | Three loops: 50 Hz RL reflexes onboard, 10 Hz steering in Python, ~0.5 Hz LLM deliberation. The registry hook for learned verbs is the v2 story. |
+| Local-LLM folks (r/LocalLLaMA, llama.cpp / vLLM / Ollama Discords) | Your own model pilots a robot, no API key: `quackd run find-and-kick --provider ollama`. Weak tool callers get a JSON text fallback. We have not benchmarked local models yet, so a transcript is a contribution. |
 
 ## Show HN title candidates
 

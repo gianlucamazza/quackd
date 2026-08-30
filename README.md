@@ -13,6 +13,7 @@
   <a href="https://pypi.org/project/quackd/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
   <a href="docs/mcp.md"><img src="https://img.shields.io/badge/MCP-ready-8A2BE2" alt="MCP ready"></a>
+  <a href="docs/local-llms.md"><img src="https://img.shields.io/badge/local%20LLMs-Ollama%20%C2%B7%20vLLM%20%C2%B7%20llama.cpp-2E8B57" alt="local LLMs: Ollama, vLLM, llama.cpp"></a>
   <a href="https://github.com/pollen-robotics/microduck#readme"><img src="https://img.shields.io/badge/community-Pollen%20Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
@@ -28,6 +29,8 @@ You do not need a robot to try it. A bundled simulator runs on any laptop in sec
 
 > **"Find the ball and kick it."** · **"Patrol, and quack twice if you see someone."** · **"Follow the person."** · **"Fetch the ball"** *(experimental, because the scoop is unreliable on purpose)*
 
+Runs with a cloud model or with an open source model on your own machine (Ollama, vLLM, llama.cpp, LM Studio). The local path needs no API key.
+
 Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet. The robot ships at Christmas 2026 and nothing here has run on real hardware. The honest label for today is *LLM driven, goal directed control of a simulated robot*: an early, working step toward a small robot you can simply talk to.
 
 <br>
@@ -37,6 +40,7 @@ Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **
 ```bash
 uvx quackd run find-and-kick --provider fake                                        # no key: the scripted pilot
 uvx --from "quackd[anthropic]" quackd run find-and-kick --provider anthropic --transport sim2d   # needs ANTHROPIC_API_KEY
+uvx --from "quackd[openai]" quackd run find-and-kick --provider ollama --model qwen3:8b          # local model, no key
 open runs/*/run.gif                                                                 # every run leaves a GIF and a transcript
 ```
 
@@ -64,7 +68,7 @@ Low level skills and high level goals are different layers. The robot knows the 
 **This project.** quackd (pronounced "quacked", named after the robot's daemons `robotd`, `mediad`, `padd` and friends) is an independent, unofficial brain for it. It is a Python program that
 
 - takes a goal in plain language, from a chat, a command line, or a `.duck` task file,
-- asks an LLM, one step at a time, which of the robot's skills to use next,
+- asks an LLM, cloud or local, one step at a time, which of the robot's skills to use next,
 - runs that skill on the robot (or the simulator), looks at the camera, and asks again,
 - enforces a contract the model cannot talk its way out of: which skills are allowed, how many steps, when a human must say yes, when to abort.
 
@@ -126,6 +130,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 - Run a goal end to end in the bundled 2D simulator with any of five providers. `find-and-kick` succeeds on 10 of 10 seeds with the scripted pilot, in about 2 s of wall clock per run, with a GIF and a full transcript every time.
 - Thirteen verbs (ten built in, three composite), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
 - Drive the duck interactively from Claude Code or Claude Desktop over MCP, under the same rules.
+- Local and open source models through Ollama, vLLM, llama.cpp, LM Studio or any OpenAI compatible server, with no API key, model discovery from the server, and a JSON text fallback for models that cannot call tools natively.
 - Real model code paths for Claude, OpenAI, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
 
 **Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships, upstream's WebSocket agent surface, and *learned verbs*, new skills trained from LLM written rewards that register as one more verb. Eventually, a small robot in a real room that you can ask to find, fetch, follow and check on things.
@@ -135,6 +140,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | `sim2d` bundled simulator (default) | ✅ 10 of 10 seeds on `find-and-kick`, GIF and transcript per run |
 | MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, verified config |
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
+| Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 not yet exercised against a live server by us, transcripts welcome |
 | Real robot over JSON RPC (`--transport jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
 | WebSocket agent gateway (`--transport websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
@@ -156,7 +162,7 @@ Three loops, three rates, three owners. The LLM decides **what**. The steering l
 ```mermaid
 flowchart LR
     HUMAN["Human<br/>goal in plain language"]
-    LLM["LLM<br/>Claude · OpenAI · Gemini · Grok · fake"]
+    LLM["LLM<br/>Claude · OpenAI · Gemini · Grok · local (Ollama, vLLM, llama.cpp) · fake"]
     subgraph quackd
         LOOP["agent loop<br/>observe → think → enforce → act"]
         EXEC["safety executor<br/>allowlist · confirm gates · budgets · abort rules · heartbeat"]
@@ -205,7 +211,7 @@ sequenceDiagram
 
 **Enforcement order.** `Executor.run_verb` applies the contract in this order: abort flag, allowlist, parameter validation (errors go back to the model as feedback), confirm gate, budgets, machine enforced `abort_when`, preconditions (not fallen, not sitting), dry run, then execution with a timeout. Every result is written to the transcript and becomes the next observation.
 
-**Prompts.** The system prompt is the contract in prose (allowed verbs, budgets, confirm list, success criteria, the enforced and advisory abort conditions, the persona) followed by the `.duck` body verbatim. Tools are JSON schema definitions generated from each verb's parameter model, plus `declare_success(reason)` and `declare_failure(reason)`. The model must return exactly one tool call (`tool_choice=any` with parallel calls disabled on Claude, `tool_choice=required` on OpenAI compatible APIs, `mode=ANY` on Gemini). Only the last two observations keep their images. Everything is in [`quackd/agent/prompts.py`](quackd/agent/prompts.py).
+**Prompts.** The system prompt is the contract in prose (allowed verbs, budgets, confirm list, success criteria, the enforced and advisory abort conditions, the persona) followed by the `.duck` body verbatim. Tools are JSON schema definitions generated from each verb's parameter model, plus `declare_success(reason)` and `declare_failure(reason)`. The model must return exactly one tool call (`tool_choice=any` with parallel calls disabled on Claude, `tool_choice=required` on OpenAI compatible APIs, `mode=ANY` on Gemini). Only the last two observations keep their images. For local models the prompt adds one line with the exact JSON shape to answer with if native tool calling is unavailable, and quackd parses that shape back into a verb. Everything is in [`quackd/agent/prompts.py`](quackd/agent/prompts.py).
 
 **Perception: features, not frames.** The default detector is an HSV colour threshold, about 1 ms per frame, no model download. Bearing comes from horizontal position through the camera's focal length. Distance comes from apparent size. The simulator draws the ball in a known orange, so it works out of the box. For a real ball you tune one HSV range ([FAQ](docs/faq.md)). A YOLO detector is an optional extra. Composite verbs steer on these detections at 10 Hz and never wait for the model.
 
@@ -243,6 +249,8 @@ uvx quackd run find-and-kick --provider fake --seed 3
 ```
 
 Every run writes `runs/<timestamp>/` with `transcript.jsonl` (every prompt, tool call, result and token count), the frames the model saw, `summary.json`, and `run.gif` on the simulator.
+
+Cloud or local, same command.
 
 | Provider | Extra | Key | Run |
 |---|---|---|---|
@@ -330,7 +338,7 @@ Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the b
 
 ## Performance
 
-Measured on the simulator with the scripted pilot (no model latency): `find-and-kick` takes 3 to 8 decisions and 1 to 2 s of wall clock per run across seeds 0 to 9, and simulated time runs as fast as the CPU allows. With a real model, each decision is one API call. The system prompt is roughly 3 to 4 k tokens, the per turn observation a few hundred, plus one 256 px PNG for vision models, so a run is a handful of calls and the transcript records exact usage per turn. Model latency does not affect control: the steering loop runs at 10 Hz and the robot's own policies at 50 Hz regardless of how long the model thinks. The default install is about 250 MB, needs no GPU, and the simulator renders at 256 px (`--gif-size` for prettier GIFs).
+Measured on the simulator with the scripted pilot (no model latency): `find-and-kick` takes 3 to 8 decisions and 1 to 2 s of wall clock per run across seeds 0 to 9, and simulated time runs as fast as the CPU allows. With a real model, each decision is one API call. The system prompt is roughly 3 to 4 k tokens, the per turn observation a few hundred, plus one 256 px PNG for vision models, so a run is a handful of calls and the transcript records exact usage per turn. Model latency does not affect control: the steering loop runs at 10 Hz and the robot's own policies at 50 Hz regardless of how long the model thinks. That holds for local models too, where latency depends on your hardware and model size. The default install is about 250 MB, needs no GPU, and the simulator renders at 256 px (`--gif-size` for prettier GIFs).
 
 <br>
 
@@ -343,8 +351,9 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - The robot has seven duck sounds and no text to speech. `quack("hello")` picks a tone.
 - `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
 - Default model IDs for OpenAI, Gemini and Grok were not verified at release.
+- Local model quality is unmeasured. The JSON text fallback and the one retry exist because small models often miss native tool calls. We have not run a live local server ourselves yet.
 
-**Non goals for v0.1, on purpose:** no RL training or reward generation (that is v2, and only the registry hook exists), no features that require hardware (the real robot transport ships experimental), and no copying of Pollen Robotics assets, ever (no logos, no 3D meshes, no videos).
+**Non goals for now, on purpose:** no RL training or reward generation (that is v2, and only the registry hook exists), no features that require hardware (the real robot transport ships experimental), and no copying of Pollen Robotics assets, ever (no logos, no 3D meshes, no videos).
 
 <br>
 
@@ -354,7 +363,7 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - **v1:** the five starter tasks on a real duck, on video.
 - **v2, learned verbs.** LLM written rewards ([Eureka](https://eureka-research.github.io/) and [DrEureka](https://eureka-research.github.io/dr-eureka/) style) train new policies in `microduck_rl` that register as one more verb. The registry hook exists today. The training loop does not.
 
-**Help wanted:** a real model `find-and-kick` recording (one command, needs a key, see [docs/assets](docs/assets/README.md)), a `jsonrpc` run against real hardware, verified default model IDs, and new `.duck` files.
+**Help wanted:** a real model `find-and-kick` recording (one command, needs a key, see [docs/assets](docs/assets/README.md)), a transcript from a local model run on any server, a `jsonrpc` run against real hardware, verified default model IDs, and new `.duck` files.
 
 <br>
 

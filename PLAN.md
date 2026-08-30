@@ -70,5 +70,8 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ Verify `gpt-5` / `grok-4` / `gemini-2.5-pro` default IDs against vendor docs
 - ⏸ Run `--transport jsonrpc` against a real Microduck (Christmas 2026) and flip rows in `docs/transport-status.md`
 - ✅ Published `quackd 0.1.0` to PyPI (2026-08-28); `uvx quackd --version` resolves
+- ✅ v0.2.0 (2026-08-29): local and open-source LLM providers, `--goal`, README rewrite, logo
+- ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
+- ⏸ First transcript from a live local server (Ollama, vLLM, llama.cpp) — none available on the dev machine
 - ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)
