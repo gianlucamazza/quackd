@@ -70,6 +70,9 @@ class Budget:
             raise BudgetExceeded(f"max_steps ({self.limits.max_steps}) reached")
         if self.llm_calls >= self.limits.max_llm_calls:
             raise BudgetExceeded(f"max_llm_calls ({self.limits.max_llm_calls}) reached")
+        self.check_time()
+
+    def check_time(self) -> None:
         if self.elapsed_s > self.limits.max_minutes * 60:
             raise BudgetExceeded(f"max_minutes ({self.limits.max_minutes:g}) exceeded")
 
