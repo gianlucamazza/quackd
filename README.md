@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/logo.svg" alt="quackd" width="360">
+  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/logo.svg?v=3" alt="quackd" width="360">
 </p>
 
 <p align="center"><strong>Give your Microduck a brain. Any LLM, one <code>.duck</code> file.</strong> 🦆🧠<br>

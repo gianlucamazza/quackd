@@ -72,7 +72,8 @@ def test_readme_images_are_absolute_and_exist() -> None:
     for src in srcs:
         assert src.startswith("https://"), f"relative image breaks on PyPI: {src}"
         if src.startswith(raw):
-            assert (REPO / src[len(raw) :]).exists(), f"missing asset {src}"
+            path = src[len(raw) :].split("?", 1)[0]  # ?v=N busts GitHub's image cache
+            assert (REPO / path).exists(), f"missing asset {src}"
 
 
 def test_readme_verbs_match_registry() -> None:
