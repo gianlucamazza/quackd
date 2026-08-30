@@ -171,6 +171,7 @@ class AgentLoop:
         system = build_system_prompt(
             self.duck, [cfg.registry.get(n) for n in self.fm.verbs.allow], cfg.transport.name
         )
+        system += getattr(cfg.provider, "prompt_hint", "") or ""  # e.g. the local JSON fallback
         self.transcript.write(
             "run_start",
             duck=self.fm.name,

@@ -18,7 +18,8 @@ from rich.console import Console
 from rich.table import Table
 
 from quackd import __version__
-from quackd.agent.providers.factory import DEFAULT_MODELS, KEY_ENV, PROVIDER_NAMES
+from quackd.agent.providers.factory import DEFAULT_MODELS, KEY_ENV, LOCAL_NAMES, PROVIDER_NAMES
+from quackd.agent.providers.local import PRESETS
 from quackd.duckfile.parser import list_bundled_ducks
 from quackd.transport import upstream_api as up
 from quackd.transport.factory import TRANSPORT_STATUS
@@ -46,6 +47,25 @@ def _installed(module: str) -> str | None:
 
 def _mask(value: str) -> str:
     return value[:4] + "…" + value[-2:] if len(value) > 8 else "set"
+
+
+def _probe_models(base_url: str, timeout_s: float = 1.5) -> str:
+    """Reachability of an OpenAI-compatible server, plus the first few model ids."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{base_url.rstrip('/')}/models", timeout=timeout_s) as r:
+            payload = json.loads(r.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        return f"[yellow]HTTP {e.code}[/yellow]"
+    except Exception:
+        return "[dim]not running[/dim]"
+    ids = [str(m.get("id", "")) for m in payload.get("data", []) if isinstance(m, dict)]
+    shown = ", ".join(i for i in ids[:3] if i)
+    more = f" (+{len(ids) - 3})" if len(ids) > 3 else ""
+    return f"[green]up[/green] · {shown}{more}" if ids else "[green]up[/green] · no models loaded"
 
 
 def run_doctor(console: Console) -> bool:
@@ -78,16 +98,34 @@ def run_doctor(console: Console) -> bool:
         if name == "fake":
             t.add_row("fake", "[green]built-in[/green]", "—", "scripted")
             continue
-        module, extra = EXTRAS["openai" if name == "grok" else name]
+        module, extra = EXTRAS["openai" if name in ("grok", *LOCAL_NAMES) else name]
         ver = _installed(module)
         key = os.environ.get(KEY_ENV[name], "")
-        model = os.environ.get("QUACKD_MODEL") or DEFAULT_MODELS[name]
+        model = os.environ.get("QUACKD_MODEL") or DEFAULT_MODELS.get(name) or "auto (first served)"
+        if name in LOCAL_NAMES:
+            key_cell = f"[green]{_mask(key)}[/green]" if key else "[dim]optional[/dim]"
+        else:
+            key_cell = (
+                f"[green]{_mask(key)}[/green]" if key else f"[yellow]{KEY_ENV[name]} unset[/yellow]"
+            )
         t.add_row(
             name,
             f"[green]{ver}[/green]" if ver else f"[yellow]missing[/yellow] ({extra})",
-            f"[green]{_mask(key)}[/green]" if key else f"[yellow]{KEY_ENV[name]} unset[/yellow]",
+            key_cell,
             model,
         )
+    console.print(t)
+
+    t = Table(title="local LLM servers (GET /v1/models, 1.5 s timeout)")
+    t.add_column("preset")
+    t.add_column("base url")
+    t.add_column("status")
+    custom = os.environ.get("QUACKD_BASE_URL")
+    for preset, url in {**PRESETS, **({"local": custom} if custom else {})}.items():
+        if not url:
+            t.add_row(preset, "[dim]set QUACKD_BASE_URL or --base-url[/dim]", "")
+            continue
+        t.add_row(preset, url, _probe_models(url))
     console.print(t)
 
     t = Table(title="transports")

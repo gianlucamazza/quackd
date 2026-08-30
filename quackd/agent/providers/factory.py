@@ -10,15 +10,19 @@ import os
 
 from quackd.agent.providers.base import LLMProvider, ProviderError
 
-PROVIDER_NAMES = ("fake", "anthropic", "openai", "gemini", "grok")
+CLOUD_NAMES = ("anthropic", "openai", "gemini", "grok")
+LOCAL_NAMES = ("local", "ollama", "vllm", "llamacpp", "lmstudio")
+PROVIDER_NAMES = ("fake", *CLOUD_NAMES, *LOCAL_NAMES)
 
 # Defaults are env-overridable via QUACKD_MODEL. Non-Anthropic defaults should be checked
-# against the vendor's current model list — see docs/faq.md.
-DEFAULT_MODELS = {
+# against the vendor's current model list — see docs/faq.md. Local presets discover the
+# served model from /v1/models when none is given.
+DEFAULT_MODELS: dict[str, str | None] = {
     "anthropic": "claude-opus-5",
     "openai": "gpt-5",
     "gemini": "gemini-2.5-pro",
     "grok": "grok-4",
+    **{name: None for name in LOCAL_NAMES},
 }
 
 KEY_ENV = {
@@ -26,9 +30,16 @@ KEY_ENV = {
     "openai": "OPENAI_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "grok": "XAI_API_KEY",
+    **{name: "LOCAL_API_KEY" for name in LOCAL_NAMES},
 }
 
-EXTRA_FOR = {"anthropic": "anthropic", "openai": "openai", "gemini": "gemini", "grok": "grok"}
+EXTRA_FOR = {
+    "anthropic": "anthropic",
+    "openai": "openai",
+    "gemini": "gemini",
+    "grok": "grok",
+    **{name: "openai" for name in LOCAL_NAMES},
+}
 
 
 def default_model(provider: str) -> str | None:
@@ -36,7 +47,14 @@ def default_model(provider: str) -> str | None:
 
 
 def make_provider(
-    name: str, *, model: str | None = None, duck_name: str | None = None, goal: str | None = None
+    name: str,
+    *,
+    model: str | None = None,
+    duck_name: str | None = None,
+    goal: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    vision: bool | None = None,
 ) -> LLMProvider:
     name = name.lower()
     if name == "fake":
@@ -47,17 +65,25 @@ def make_provider(
     if name == "anthropic":
         from quackd.agent.providers.anthropic import AnthropicProvider
 
-        return AnthropicProvider(model=model or DEFAULT_MODELS["anthropic"])
+        return AnthropicProvider(model=model or "claude-opus-5")
     if name == "openai":
         from quackd.agent.providers.openai import OpenAIProvider
 
-        return OpenAIProvider(model=model or DEFAULT_MODELS["openai"])
+        return OpenAIProvider(
+            model=model or "gpt-5", api_key=api_key, base_url=base_url, vision=vision
+        )
     if name == "gemini":
         from quackd.agent.providers.gemini import GeminiProvider
 
-        return GeminiProvider(model=model or DEFAULT_MODELS["gemini"])
+        return GeminiProvider(model=model or "gemini-2.5-pro", api_key=api_key)
     if name == "grok":
         from quackd.agent.providers.grok import GrokProvider
 
-        return GrokProvider(model=model or DEFAULT_MODELS["grok"])
+        return GrokProvider(
+            model=model or "grok-4", api_key=api_key, base_url=base_url, vision=vision
+        )
+    if name in LOCAL_NAMES:
+        from quackd.agent.providers.local import LocalProvider
+
+        return LocalProvider(model, preset=name, base_url=base_url, api_key=api_key, vision=vision)
     raise ProviderError(f"unknown provider {name!r}; choose one of {', '.join(PROVIDER_NAMES)}")

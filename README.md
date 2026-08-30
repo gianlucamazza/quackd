@@ -22,7 +22,7 @@
   <sub>"Find the ball and kick it", in the bundled simulator, driven by the <em>scripted</em> pilot (no API key). Same verbs, same safety layer, same perception as a real model run. See <a href="docs/assets/README.md">docs/assets</a>.</sub>
 </p>
 
-**quackd** connects a small robot with two legs, the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, to a large language model (Claude, OpenAI, Gemini or Grok). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
+**quackd** connects a small robot with two legs, the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, to a large language model (Claude, OpenAI, Gemini, Grok, or an open source model running locally through llama.cpp, vLLM, Ollama or LM Studio). The robot already knows how to walk, turn, kick, scoop something off the floor, look around and quack. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of those skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
 
 You do not need a robot to try it. A bundled simulator runs on any laptop in seconds. Goals that work today, in that simulator:
 
@@ -251,8 +251,13 @@ Every run writes `runs/<timestamp>/` with `transcript.jsonl` (every prompt, tool
 | Gemini | `quackd[gemini]` | `GEMINI_API_KEY` | `uvx --from "quackd[gemini]" quackd run find-and-kick --provider gemini` |
 | Grok | `quackd[grok]` | `XAI_API_KEY` | `uvx --from "quackd[grok]" quackd run find-and-kick --provider grok` |
 | fake (scripted) | none | none | `uvx quackd run find-and-kick --provider fake` |
+| Ollama (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider ollama --model qwen3:8b` |
+| vLLM (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider vllm --model Qwen/Qwen3-8B` |
+| llama.cpp (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider llamacpp` |
+| LM Studio (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider lmstudio` |
+| any OpenAI compatible server | `quackd[openai]` | optional | `uvx --from "quackd[openai]" quackd run find-and-kick --provider local --base-url http://host:8000/v1` |
 
-All four real providers see the camera frame as an image. The scripted pilot only reads the detection summary.
+The four cloud providers see the camera frame as an image. Local models get the text detections by default and the frame too with `--vision`. The scripted pilot only reads the detection summary. Local setup, tool calling flags per server and what to expect from small models: [docs/local-llms.md](docs/local-llms.md).
 
 | Command | What it does |
 |---|---|
@@ -314,6 +319,7 @@ Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the b
 | API keys | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` in the environment or a `.env` file (see [`.env.example`](.env.example)) |
 | Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4`. The OpenAI, Gemini and Grok IDs are unverified, override them if yours differ |
 | Claude reasoning effort | `QUACKD_EFFORT` (`low` to `max`, default `medium`). `QUACKD_ANTHROPIC_FALLBACKS=0` disables server side refusal fallbacks |
+| Local models | `--provider ollama`, `vllm`, `llamacpp`, `lmstudio` or `local --base-url http://host:port/v1`. No key. `--model` or the first served model. `--vision` sends frames. `QUACKD_TOOL_CHOICE=auto`, `required` or `none` for picky servers. See [docs/local-llms.md](docs/local-llms.md) |
 | Determinism | `--seed N` makes a simulator run repeatable |
 | Budgets | in the `.duck`. `--max-steps` overrides for one run |
 | Human in the loop | `verbs.confirm` in the `.duck` prompts y/N. `--yes` auto accepts. MCP refuses gated verbs unless started with `--yes` |

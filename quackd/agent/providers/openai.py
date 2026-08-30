@@ -108,41 +108,72 @@ def parse_response(response: Any) -> ProviderTurn:
 
 
 class OpenAIProvider:
+    """OpenAI's own API. Subclasses (Grok, the local servers) only change the class knobs."""
+
     name = "openai"
     supports_vision = True
     key_env = "OPENAI_API_KEY"
     base_url: str | None = None
+    default_tool_choice: str | None = "required"
+    """`required` forces a call on OpenAI. `auto` for servers that reject `required`,
+    `none` to omit the field entirely."""
+    send_parallel_flag = True
+    """OpenAI accepts `parallel_tool_calls=False`. Some local servers 400 on unknown fields."""
+    prompt_hint = ""
+    """Extra system-prompt text a provider wants (the local one explains the JSON fallback)."""
 
     def __init__(
-        self, model: str = DEFAULT_MODEL, *, client: Any = None, api_key: str | None = None
+        self,
+        model: str = DEFAULT_MODEL,
+        *,
+        client: Any = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        tool_choice: str | None = None,
+        vision: bool | None = None,
     ) -> None:
         self.model = model
         self.calls = 0
+        if base_url is not None:
+            self.base_url = base_url
+        if vision is not None:
+            self.supports_vision = vision
+        self.tool_choice = tool_choice if tool_choice is not None else self.default_tool_choice
         if client is None:
             import os
 
-            key = api_key or os.environ.get(self.key_env)
+            key = api_key or os.environ.get(self.key_env) or self._fallback_key()
             if not key:
                 raise ProviderMissingKey(self.name, self.key_env)
             try:
                 from openai import AsyncOpenAI
             except ImportError as e:
-                raise ProviderNotInstalled(
-                    self.name, "openai" if self.name == "openai" else "grok"
-                ) from e
+                extra = "grok" if self.name == "grok" else "openai"
+                raise ProviderNotInstalled(self.name, extra) from e
             client = AsyncOpenAI(api_key=key, base_url=self.base_url)
         self.client = client
+
+    def _fallback_key(self) -> str | None:
+        """What to use when no key is configured. Cloud: nothing (error). Local: a dummy."""
+        return None
 
     def _params(
         self, system: str, history: list[Exchange], tools: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        return {
+        params: dict[str, Any] = {
             "model": self.model,
             "messages": render_messages(system, history),
             "tools": render_tools(tools),
-            "tool_choice": "required",
-            "parallel_tool_calls": False,
         }
+        if self.tool_choice and self.tool_choice != "none":
+            params["tool_choice"] = self.tool_choice
+        if self.send_parallel_flag:
+            params["parallel_tool_calls"] = False
+        return params
+
+    def _fallback(self, turn: ProviderTurn, tools: list[dict[str, Any]]) -> ProviderTurn:
+        """Hook for providers that can rescue a tool call from plain text. Base: nothing."""
+        return turn
 
     async def step(
         self, system: str, history: list[Exchange], tools: list[dict[str, Any]]
@@ -156,4 +187,7 @@ class OpenAIProvider:
             raise
         except Exception as e:
             raise ProviderError(f"{self.name}: {type(e).__name__}: {e}") from e
-        return parse_response(response)
+        turn = parse_response(response)
+        if not turn.tool_calls:
+            turn = self._fallback(turn, tools)
+        return turn

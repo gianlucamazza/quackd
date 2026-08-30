@@ -157,6 +157,9 @@ def _run_impl(
     gif: bool,
     gif_size: int,
     verbose: bool,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    vision: bool | None = None,
 ) -> None:
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
@@ -180,7 +183,15 @@ def _run_impl(
         _fail(str(e))
         return
     try:
-        llm = make_provider(provider, model=model, duck_name=duck.name, goal=goal)
+        llm = make_provider(
+            provider,
+            model=model,
+            duck_name=duck.name,
+            goal=goal,
+            base_url=base_url,
+            api_key=api_key,
+            vision=vision,
+        )
         duck_transport = make_transport(transport, seed=seed, address=address, live=live)
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
@@ -214,7 +225,8 @@ def _run_impl(
         on_frame=recorder.capture if recorder is not None else None,
     )
     console.print(
-        f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] ({llm.model}) · "
+        f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
+        f"({llm.model or 'model: first served'}) · "
         f"transport=[cyan]{duck_transport.name}[/cyan]"
         + (f" · seed={seed}" if seed is not None else "")
         + (" · [yellow]DRY RUN[/yellow]" if dry_run else "")
@@ -268,7 +280,21 @@ _GOAL = typer.Option(
 )
 _GIFSIZE = typer.Option(256, "--gif-size", help="sim2d: pixel size of each GIF pane.")
 _PROVIDER = typer.Option(
-    "fake", "--provider", "-p", help="fake · anthropic · openai · gemini · grok"
+    "fake",
+    "--provider",
+    "-p",
+    help="fake · anthropic · openai · gemini · grok · local · ollama · vllm · llamacpp · lmstudio",
+)
+_BASEURL = typer.Option(
+    None,
+    "--base-url",
+    help="OpenAI-compatible server, e.g. http://localhost:8000/v1 (local presets).",
+)
+_APIKEY = typer.Option(None, "--api-key", help="API key override (local servers do not need one).")
+_VISION = typer.Option(
+    None,
+    "--vision/--no-vision",
+    help="Send camera frames to the model (default: on for cloud, off for local).",
 )
 _TRANSPORT = typer.Option(
     "sim2d", "--transport", "-t", help="sim2d · mock · jsonrpc (experimental) · websocket (stub)"
@@ -301,6 +327,9 @@ def run(
     gif: bool = typer.Option(True, "--gif/--no-gif", help="sim2d: write run.gif into the run dir."),
     gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
+    base_url: str | None = _BASEURL,
+    api_key: str | None = _APIKEY,
+    vision: bool | None = _VISION,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -319,6 +348,9 @@ def run(
         gif,
         gif_size,
         verbose,
+        base_url=base_url,
+        api_key=api_key,
+        vision=vision,
     )
 
 
@@ -333,6 +365,9 @@ def record(
     runs_dir: str = _RUNS,
     gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
+    base_url: str | None = _BASEURL,
+    api_key: str | None = _APIKEY,
+    vision: bool | None = _VISION,
 ) -> None:
     """Like `run` on sim2d, but always writes a GIF (for READMEs and launches)."""
     _run_impl(
@@ -351,6 +386,9 @@ def record(
         True,
         gif_size,
         verbose,
+        base_url=base_url,
+        api_key=api_key,
+        vision=vision,
     )
 
 

@@ -16,6 +16,13 @@ against vendor docs at release (no keys in CI) — override with `--model` or `Q
 if yours differs. Anthropic extras: `QUACKD_EFFORT` (default `medium`) and
 `QUACKD_ANTHROPIC_FALLBACKS=0` to disable server-side refusal fallbacks.
 
+**Are local LLMs supported (llama.cpp, vLLM, Ollama, LM Studio)?** Yes. They all speak
+OpenAI's Chat Completions API, so `--provider ollama`, `vllm`, `llamacpp`, `lmstudio`, or
+`local --base-url http://host:port/v1` works with no API key. Tool calling must be enabled
+on the server (`llama-server --jinja`, `vllm serve --enable-auto-tool-choice
+--tool-call-parser …`), vision is off unless you pass `--vision`, and a small model that
+writes its tool call as plain JSON is still understood. Details: [local-llms.md](local-llms.md).
+
 **How does the LLM "see"?** Providers with vision get the duck-cam PNG for the last two
 turns; every provider gets a text line like `ball at bearing 12° left, ~0.80 m` from the
 detector. Composite verbs steer on detections at 10 Hz and never wait for the model.

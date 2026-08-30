@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Local and open-source models: `--provider ollama | vllm | llamacpp | lmstudio | local`
+  (OpenAI-compatible servers, no key, model discovery from `/v1/models`, relaxed tool
+  calling, a JSON text fallback for models that cannot call tools natively, `--vision`
+  opt-in), `--base-url` / `--api-key` flags, `quackd doctor` probes local servers, and
+  `docs/local-llms.md` with per-server setup. (ADR-0014)
+
 - The scripted `fake` pilot picks a strategy from keywords in `--goal` (ball/kick, patrol),
   so the keyless demo really searches, walks and kicks instead of declaring success.
 
