@@ -34,6 +34,129 @@
       "title": "Budgets",
       "type": "object"
     },
+    "FlockAllocation": {
+      "additionalProperties": false,
+      "description": "How a flock decides who kicks. Deterministic; the LLM never runs the auction.",
+      "properties": {
+        "method": {
+          "const": "auction",
+          "default": "auction",
+          "title": "Method",
+          "type": "string"
+        },
+        "bid": {
+          "const": "ball_distance",
+          "default": "ball_distance",
+          "title": "Bid",
+          "type": "string"
+        },
+        "tie_break": {
+          "const": "duck_id",
+          "default": "duck_id",
+          "title": "Tie Break",
+          "type": "string"
+        },
+        "hysteresis_pct": {
+          "default": 20.0,
+          "description": "A challenger must bid this much lower to unseat the current claimant.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Hysteresis Pct",
+          "type": "number"
+        },
+        "claim_lease_s": {
+          "default": 6.0,
+          "description": "A claim expires after this long without progress (sim clock).",
+          "exclusiveMinimum": 0,
+          "maximum": 60,
+          "title": "Claim Lease S",
+          "type": "number"
+        }
+      },
+      "title": "FlockAllocation",
+      "type": "object"
+    },
+    "FlockSafety": {
+      "additionalProperties": false,
+      "properties": {
+        "min_separation_m": {
+          "default": 0.4,
+          "maximum": 2.0,
+          "minimum": 0.1,
+          "title": "Min Separation M",
+          "type": "number"
+        },
+        "one_claimant": {
+          "default": true,
+          "description": "At most one duck approaches the ball at a time.",
+          "title": "One Claimant",
+          "type": "boolean"
+        },
+        "per_duck_heartbeat_s": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "title": "Per Duck Heartbeat S",
+          "type": "number"
+        }
+      },
+      "title": "FlockSafety",
+      "type": "object"
+    },
+    "FlockSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "partition": {
+          "const": "heading",
+          "default": "heading",
+          "title": "Partition",
+          "type": "string"
+        },
+        "restart_s": {
+          "default": 8.0,
+          "description": "Re-scan the sector when nothing was found for this long.",
+          "exclusiveMinimum": 0,
+          "maximum": 120,
+          "title": "Restart S",
+          "type": "number"
+        }
+      },
+      "title": "FlockSearch",
+      "type": "object"
+    },
+    "FlockSection": {
+      "additionalProperties": false,
+      "description": "Cooperating ducks (v0.3, simulator only). The coordinator enforces this block.",
+      "properties": {
+        "members": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": 3,
+          "description": "Count (2-4, named duck-0..) or a list of 2-4 unique slugs.",
+          "title": "Members"
+        },
+        "allocation": {
+          "$ref": "#/$defs/FlockAllocation"
+        },
+        "safety": {
+          "$ref": "#/$defs/FlockSafety"
+        },
+        "search": {
+          "$ref": "#/$defs/FlockSearch"
+        }
+      },
+      "title": "FlockSection",
+      "type": "object"
+    },
     "LearnedVerbRef": {
       "additionalProperties": false,
       "description": "Reserved for v2. The shape a `.duck` will use to pull in a learned (ONNX) verb.\n\nSee `docs/learned-verbs.md`. Parsed and validated today; nothing executes it.",
@@ -184,6 +307,18 @@
       },
       "title": "Learned Verbs",
       "type": "array"
+    },
+    "flock": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FlockSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cooperating ducks (v0.3, simulator only). Absent means a single duck."
     }
   },
   "required": [

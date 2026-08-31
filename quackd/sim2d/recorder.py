@@ -1,7 +1,9 @@
-"""Turns a run into a shareable GIF: world view | duck-cam, with a caption strip.
+"""Turns a run into a shareable GIF: world view | one duck's cam, with a caption strip.
 
-The recorder hangs off the simulator's tick hook so motion between LLM turns is visible,
-not just the snapshots the LLM saw. The GIF is the demo; the transcript is the proof.
+The recorder hangs off the shared clock's tick hook so motion between LLM turns is
+visible, not just the snapshots a model saw. For flocks, `set_focus` switches the right
+pane to the duck that matters (the coordinator focuses the claimant) and `set_caption`
+carries the phase line. The GIF is the demo; the transcript is the proof.
 """
 
 from __future__ import annotations
@@ -26,15 +28,22 @@ class FrameRecorder:
         self.every_s = every_s
         self.fps = fps
         self.caption = "start"
+        self.focus_duck = getattr(transport, "duck_index", 0)
         self.frames: list[Image.Image] = []
         self._last_t = -1e9
         hook = getattr(transport, "add_tick_hook", None)
         if hook is not None and self.world is not None:
             hook(self._on_tick)
 
+    def set_focus(self, duck_index: int) -> None:
+        self.focus_duck = duck_index
+
+    def set_caption(self, text: str) -> None:
+        self.caption = text[:80]
+
     # the loop calls this with each frame it captured; we only keep the caption
     def capture(self, _img: Image.Image, caption: str) -> None:
-        self.caption = caption[:60]
+        self.set_caption(caption)
         if self.world is not None:
             self._append()
 
@@ -42,18 +51,24 @@ class FrameRecorder:
         if world.t - self._last_t >= self.every_s:
             self._append()
 
+    def _cam_label(self) -> str:
+        if self.world is None or len(self.world.ducks) <= 1:
+            return "duck cam"
+        duck = self.world.ducks[self.focus_duck]
+        return f"duck cam {chr(ord('A') + self.focus_duck)} ({duck.colorway})"
+
     def _append(self) -> None:
         if self.world is None:
             return
         self._last_t = self.world.t
         top = render_topdown(self.world, self.size)
-        cam = render_duckcam(self.world, self.size)
+        cam = render_duckcam(self.world, self.size, duck_index=self.focus_duck)
         frame = Image.new("RGB", (self.size * 2 + 4, self.size + CAPTION_H), (30, 30, 30))
         frame.paste(top, (0, CAPTION_H))
         frame.paste(cam, (self.size + 4, CAPTION_H))
         draw = ImageDraw.Draw(frame)
         draw.text((6, 5), f"t={self.world.t:5.1f}s  {self.caption}", fill=(240, 240, 240))
-        draw.text((self.size + 10, 5), "duck-cam", fill=(180, 180, 180))
+        draw.text((self.size + 10, 5), self._cam_label(), fill=(180, 180, 180))
         self.frames.append(frame)
 
     def save_gif(self, path: Path) -> Path:

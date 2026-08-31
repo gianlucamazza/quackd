@@ -83,6 +83,88 @@ class LearnedVerbRef(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class FlockAllocation(BaseModel):
+    """How a flock decides who kicks. Deterministic; the LLM never runs the auction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["auction"] = "auction"  # Contract Net; the only method in v0.3
+    bid: Literal["ball_distance"] = "ball_distance"  # lower bid wins
+    tie_break: Literal["duck_id"] = "duck_id"  # lexicographic member name
+    hysteresis_pct: float = Field(
+        default=20.0,
+        ge=0,
+        le=100,
+        description="A challenger must bid this much lower to unseat the current claimant.",
+    )
+    claim_lease_s: float = Field(
+        default=6.0,
+        gt=0,
+        le=60,
+        description="A claim expires after this long without progress (sim clock).",
+    )
+
+
+class FlockSafety(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    min_separation_m: float = Field(default=0.4, ge=0.1, le=2.0)
+    one_claimant: bool = Field(
+        default=True, description="At most one duck approaches the ball at a time."
+    )
+    per_duck_heartbeat_s: float = Field(default=1.0, gt=0, le=10)
+
+
+class FlockSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    partition: Literal["heading"] = "heading"  # each duck owns a heading sector
+    restart_s: float = Field(
+        default=8.0,
+        gt=0,
+        le=120,
+        description="Re-scan the sector when nothing was found for this long.",
+    )
+
+
+class FlockSection(BaseModel):
+    """Cooperating ducks (v0.3, simulator only). The coordinator enforces this block."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    members: int | list[str] = Field(
+        default=3,
+        description="Count (2-4, named duck-0..) or a list of 2-4 unique slugs.",
+    )
+    allocation: FlockAllocation = Field(default_factory=FlockAllocation)
+    safety: FlockSafety = Field(default_factory=FlockSafety)
+    search: FlockSearch = Field(default_factory=FlockSearch)
+
+    @field_validator("members")
+    @classmethod
+    def _members(cls, value: int | list[str]) -> int | list[str]:
+        if isinstance(value, int):
+            if not 2 <= value <= 4:
+                raise ValueError("a flock needs 2 to 4 ducks")
+            return value
+        if not 2 <= len(value) <= 4:
+            raise ValueError("a flock needs 2 to 4 named ducks")
+        seen: set[str] = set()
+        for name in value:
+            if not _NAME_RE.match(name):
+                raise ValueError(f"{name!r} is not a valid member name (slug)")
+            if name in seen:
+                raise ValueError(f"duplicate member {name!r}")
+            seen.add(name)
+        return value
+
+    @property
+    def member_names(self) -> list[str]:
+        if isinstance(self.members, int):
+            return [f"duck-{i}" for i in range(self.members)]
+        return list(self.members)
+
+
 class DuckFrontmatter(BaseModel):
     """The contract. This is what `schema.json` describes and what the executor enforces."""
 
@@ -110,6 +192,10 @@ class DuckFrontmatter(BaseModel):
     )
     learned_verbs: list[LearnedVerbRef] = Field(
         default_factory=list, description="Reserved for v2 learned verbs. Must be empty in v0.1."
+    )
+    flock: FlockSection | None = Field(
+        default=None,
+        description="Cooperating ducks (v0.3, simulator only). Absent means a single duck.",
     )
 
     @field_validator("name")
