@@ -125,13 +125,14 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 
 ## What it can do today, and where it is going
 
-**Today (v0.1, simulator):**
+**Today (v0.3, simulator):**
 
 - Run a goal end to end in the bundled 2D simulator with any of five providers. `find-and-kick` succeeds on 10 of 10 seeds with the scripted pilot, in about 2 s of wall clock per run, with a GIF and a full transcript every time.
 - Thirteen verbs (ten built in, three composite), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
 - Drive the duck interactively from Claude Code or Claude Desktop over MCP, under the same rules.
 - Local and open source models through Ollama, vLLM, llama.cpp, LM Studio or any OpenAI compatible server, with no API key, model discovery from the server, and a JSON text fallback for models that cannot call tools natively.
 - Real model code paths for Claude, OpenAI, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
+- Run a flock: multiple simulated ducks coordinate over a message bus and a deterministic auction, each duck acting only through the verbs it already has. One choreography ships today, `flock-kick`, 10 of 10 seeds with the scripted pilot, and every message lands in `flock.jsonl`.
 
 **Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships, upstream's WebSocket agent surface, and *learned verbs*, new skills trained from LLM written rewards that register as one more verb. Eventually, a small robot in a real room that you can ask to find, fetch, follow and check on things.
 
@@ -324,7 +325,7 @@ Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the b
 
 ## Flock mode (v0.3, simulator)
 
-Multiple Microducks can cooperate. The simulated ducks split the search for a ball over a tiny message bus, hold an auction, and the closest one kicks. Everyone else keeps clear.
+Multiple simulated Microducks can now work together. They talk to each other over a tiny message bus, divide up a job, and each duck contributes the skills it already has: walking, kicking, picking things up, looking around, quacking. The first choreography that ships is a kick: the flock splits the search for a ball, holds a quick auction, and the closest duck takes the shot.
 
 ```bash
 uvx quackd run flock-kick --provider fake --seed 3
@@ -333,10 +334,10 @@ uvx quackd run flock-kick --provider fake --seed 3
 <p align="center">
   <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/flock.gif" alt="Multiple simulated ducks search, bid, and the closest one kicks the ball." width="600">
   <br>
-  <sub>One flock, one auction, one kicker. Scripted planner, deterministic coordinator. Every message is in the transcript.</sub>
+  <sub>The first choreography: one flock, one auction, one kicker. Scripted planner, deterministic coordinator. Every message is in the transcript.</sub>
 </p>
 
-The cooperation is real and inspectable, and it is honest about what it is. The ducks talk over an in process bus (BID, CLAIM, ROLE messages, all logged in `flock.jsonl`), a deterministic Contract Net auction picks the kicker from each duck's own camera distance estimate, and the LLM contributes **at most one** planning call per run. Each duck still enforces the `.duck` contract on itself. The outcome is judged from sim ground truth, not from a model's claim. Add a `flock:` block to any `.duck` or pass `--flock N`. Simulator only for now, and the per duck pilots are rules, on purpose. Details: [docs/flock.md](docs/flock.md).
+The interesting part is not the kick, it is the talking. The ducks coordinate over an in process bus (TASK, BID, CLAIM, ROLE, HB and RESULT messages, every one logged in `flock.jsonl`), and a deterministic Contract Net auction decides which duck acts, from each duck's own camera distance estimate. Every action goes through verbs the duck already has, so the machinery is task agnostic and what a flock can do is bounded by its skills, not by the ball. The kick is simply the first choreography written on top: split the search, auction, one actor, with the target label configurable. The LLM contributes **at most one** planning call per run, and each duck still enforces the `.duck` contract on itself. The outcome is judged from sim ground truth, not from a model's claim. Add a `flock:` block to any `.duck` or pass `--flock N`. Simulator only for now, and the per duck pilots are deterministic rules, on purpose. Details: [docs/flock.md](docs/flock.md).
 
 <br>
 
@@ -372,7 +373,7 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
 - Default model IDs for OpenAI, Gemini and Grok were not verified at release.
 - Local model quality is unmeasured. The JSON text fallback and the one retry exist because small models often miss native tool calls. We have not run a live local server ourselves yet.
-- Flock mode is simulator only and the per duck pilots are deterministic rules. The LLM contributes one planning call at most. Duck to duck separation uses sim ground truth, not perception.
+- Flock mode is simulator only, and one choreography ships today (find a target, the closest duck acts on it). The coordination machinery is general, the choreography library is not, yet. The per duck pilots are deterministic rules, the LLM contributes one planning call at most, and duck to duck separation uses sim ground truth, not perception.
 
 **Non goals for now, on purpose:** no RL training or reward generation (that is v2, and only the registry hook exists), no features that require hardware (the real robot transport ships experimental), and no copying of Pollen Robotics assets, ever (no logos, no 3D meshes, no videos).
 
@@ -380,7 +381,8 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 
 ## Roadmap
 
-- **v0.2:** validated hardware transport when Microducks ship (Christmas 2026). Run `jsonrpc` against a real `robotd`, flip rows from 🧪 to ✅, adopt upstream's WebSocket surface when it lands.
+- **Hardware:** validated transport when Microducks ship (Christmas 2026). Run `jsonrpc` against a real `robotd`, flip rows from 🧪 to ✅, adopt upstream's WebSocket surface when it lands.
+- **Flocks next:** more choreographies from the verbs the ducks already have (a patrol that splits the area, a follow chain), a LAN bus (MQTT) implementing the same `Bus` protocol so messages can cross a room instead of a process, and hardware flocks once Microducks ship.
 - **v1:** the five starter tasks on a real duck, on video.
 - **v2, learned verbs.** LLM written rewards ([Eureka](https://eureka-research.github.io/) and [DrEureka](https://eureka-research.github.io/dr-eureka/) style) train new policies in `microduck_rl` that register as one more verb. The registry hook exists today. The training loop does not.
 
