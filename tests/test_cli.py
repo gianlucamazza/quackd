@@ -16,7 +16,7 @@ runner = CliRunner()
 def test_validate_starter_ducks() -> None:
     result = runner.invoke(app, ["validate", *[str(p) for p in sorted(DUCKS.glob("*.duck"))]])
     assert result.exit_code == 0, result.output
-    assert "5 file(s) valid" in result.output
+    assert "6 file(s) valid" in result.output
 
 
 def test_validate_expands_globs_itself() -> None:

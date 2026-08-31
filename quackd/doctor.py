@@ -150,6 +150,10 @@ def run_doctor(console: Console) -> bool:
             note = up.WEBSOCKET_GATEWAY.note
         t.add_row(name, status, note)
     console.print(t)
+    console.print(
+        "[dim]flock mode (--flock): sim2d only in v0.3, in-process bus. "
+        "A LAN bus for real ducks is future work (docs/flock.md).[/dim]"
+    )
 
     t = Table(title="optional extras", show_header=False)
     for label, (module, extra) in EXTRAS.items():

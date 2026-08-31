@@ -46,6 +46,8 @@ class FlockCoordinator:
     policy: AuctionPolicy = field(default_factory=AuctionPolicy)
     success_moved_m: float = 0.3
     log: Any = lambda *_: None
+    on_event: Any = None
+    """Optional callback (kind: str, data: dict) for a recorder or a live view."""
 
     def __post_init__(self) -> None:
         self.abort = asyncio.Event()  # the kill switch binds here
@@ -70,6 +72,10 @@ class FlockCoordinator:
 
     def _publish(self, msg: Any) -> None:
         self.bus.publish(msg)
+
+    def _event(self, kind: str, **data: Any) -> None:
+        if self.on_event is not None:
+            self.on_event(kind, data)
 
     def _role(self, duck: str, role: str, wedge: Wedge | None = None) -> None:
         self._publish(
@@ -104,6 +110,7 @@ class FlockCoordinator:
             if not self.auction.is_open:
                 self.auction.open(msg)
                 self.transcript.write("auction_open", first_bid=msg.src, dist=msg.ball_dist_m)
+                self._event("auction", first_bid=msg.src, dist=msg.ball_dist_m)
             else:
                 self.auction.add(msg)
         elif isinstance(msg, HbMsg):
@@ -129,6 +136,7 @@ class FlockCoordinator:
 
     def _miss(self, duck: str, detail: str, cooldown: float) -> None:
         self.transcript.write("miss", duck=duck, detail=detail)
+        self._event("miss", duck=duck, detail=detail)
         self._exclude(duck, cooldown)
         if duck == self.kicker:
             self.prev_kicker = self.kicker
@@ -159,6 +167,7 @@ class FlockCoordinator:
             hysteresis_applied=decision.hysteresis_applied,
         )
         self.kicker = decision.kicker
+        self._event("claim", kicker=decision.kicker, dist=decision.winning_dist)
         self.lease_deadline = self._now() + self.policy.lease_s
         self._publish(
             ClaimMsg(

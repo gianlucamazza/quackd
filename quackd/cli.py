@@ -104,10 +104,22 @@ def validate(
                 "[red]✗ learned_verbs must be empty in v0.1 (v2 feature)[/red]",
             )
             continue
-        if not quiet:
+        if duck.frontmatter.flock is not None and duck.frontmatter.verbs.confirm:
+            failures += 1
             table.add_row(
-                path, duck.name, str(len(duck.frontmatter.verbs.allow)), "[green]✓ valid[/green]"
+                path,
+                duck.name,
+                str(len(duck.frontmatter.verbs.allow)),
+                "[red]✗ a flock cannot prompt y/N per duck: empty verbs.confirm[/red]",
             )
+            continue
+        if not quiet:
+            verdict = "[green]✓ valid[/green]"
+            if duck.frontmatter.flock is not None:
+                verdict = (
+                    f"[green]✓ valid (flock of {len(duck.frontmatter.flock.member_names)})[/green]"
+                )
+            table.add_row(path, duck.name, str(len(duck.frontmatter.verbs.allow)), verdict)
     if not quiet or failures:
         console.print(table)
     if failures:
@@ -160,6 +172,7 @@ def _run_impl(
     base_url: str | None = None,
     api_key: str | None = None,
     vision: bool | None = None,
+    flock: int | None = None,
 ) -> None:
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
@@ -181,6 +194,30 @@ def _run_impl(
             duck = load_duck(duckfile or "")
     except DuckParseError as e:
         _fail(str(e))
+        return
+    if flock is not None and not 2 <= flock <= 4:
+        _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
+        return
+    if flock is not None or duck.frontmatter.flock is not None:
+        _run_flock_impl(
+            duck,
+            provider=provider,
+            transport=transport,
+            model=model,
+            seed=seed,
+            dry_run=dry_run,
+            runs_dir=runs_dir,
+            yes=yes,
+            live=live,
+            gif=gif,
+            gif_size=gif_size,
+            verbose=verbose,
+            goal=goal,
+            base_url=base_url,
+            api_key=api_key,
+            vision=vision,
+            n_override=flock,
+        )
         return
     try:
         llm = make_provider(
@@ -269,6 +306,127 @@ def _run_impl(
         raise typer.Exit(code=1)
 
 
+def _run_flock_impl(
+    duck: Any,
+    *,
+    provider: str,
+    transport: str,
+    model: str | None,
+    seed: int | None,
+    dry_run: bool,
+    runs_dir: str,
+    yes: bool,
+    live: bool,
+    gif: bool,
+    gif_size: int,
+    verbose: bool,
+    goal: str | None,
+    base_url: str | None,
+    api_key: str | None,
+    vision: bool | None,
+    n_override: int | None,
+) -> None:
+    from quackd.agent.providers.base import ProviderError
+    from quackd.agent.providers.factory import make_provider
+    from quackd.flock.runner import run_flock
+    from quackd.safety import KillSwitch
+    from quackd.sim2d.recorder import FrameRecorder
+
+    if transport != "sim2d":
+        _fail("flock mode is simulator only in v0.3 (docs/flock.md); drop --transport")
+        return
+    if duck.frontmatter.verbs.confirm and not yes:
+        _fail("a flock cannot prompt y/N per duck: empty verbs.confirm or pass --yes")
+        return
+    try:
+        llm = make_provider(
+            provider,
+            model=model,
+            duck_name=duck.name,
+            goal=goal,
+            base_url=base_url,
+            api_key=api_key,
+            vision=vision,
+        )
+    except (ProviderError, ImportError) as e:
+        _fail(str(e))
+        return
+
+    def log(msg: str) -> None:
+        if verbose:
+            err_console.print(f"[dim]{msg}[/dim]")
+
+    holder: dict[str, Any] = {}
+
+    def on_ready(transport0: Any, coordinator: Any) -> None:
+        ks = KillSwitch(coordinator.abort, log=log)
+        ks.install()
+        holder["ks"] = ks
+        if not gif:
+            return
+        rec = FrameRecorder(transport0, size=gif_size)
+        holder["rec"] = rec
+        names = sorted(coordinator.members)
+
+        def on_event(kind: str, data: dict[str, Any]) -> None:
+            if kind == "claim":
+                rec.set_focus(names.index(data["kicker"]))
+                rec.set_caption(f"CLAIM {data['kicker']} ({data['dist']:.2f} m)")
+            elif kind == "auction":
+                rec.set_caption(f"AUCTION first bid {data['first_bid']} {data['dist']:.2f} m")
+            elif kind == "miss":
+                rec.set_caption(f"MISS {data['duck']}, re-searching")
+
+        coordinator.on_event = on_event
+
+    if n_override is not None:
+        count = n_override
+    elif duck.frontmatter.flock is not None:
+        count = len(duck.frontmatter.flock.member_names)
+    else:
+        count = 3
+    console.print(
+        f"🦆x{count} [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
+        f"({llm.model or 'model: first served'}) · flock (sim2d, EXPERIMENTAL)"
+        + (f" · seed={seed}" if seed is not None else "")
+        + (" · [yellow]DRY RUN[/yellow]" if dry_run else "")
+    )
+    console.print("[dim]Ctrl-C or q stops every duck.[/dim]")
+    try:
+        result = asyncio.run(
+            run_flock(
+                duck,
+                provider=llm,
+                seed=seed if seed is not None else 0,
+                runs_dir=runs_dir,
+                n_override=n_override,
+                dry_run=dry_run,
+                live=live,
+                gif_size=gif_size,
+                on_recorder=on_ready,
+                log=log,
+            )
+        )
+    finally:
+        if "ks" in holder:
+            holder["ks"].uninstall()
+    if "rec" in holder:
+        result.gif_path = holder["rec"].save_gif(result.run_dir / "run.gif")
+    colour = {"success": "green", "failure": "red", "budget": "yellow", "aborted": "red"}.get(
+        result.outcome, "red"
+    )
+    console.print(f"[{colour}]{result.outcome.upper()}[/{colour}] — {result.reason}")
+    console.print(
+        f"kicker={result.kicker} auctions={result.auctions} bids={result.bids} "
+        f"ball moved {result.ball_displacement_m:.2f} m in {result.sim_elapsed_s:.1f}s sim"
+    )
+    console.print(
+        f"run dir: {result.run_dir}" + (f" · gif: {result.gif_path}" if result.gif_path else "")
+    )
+    if result.outcome != "success":
+        raise typer.Exit(code=1)
+
+
 _DUCK_ARG = typer.Argument(
     None, help="Path to a .duck file, or a bundled name (hello-world, find-and-kick, ...)."
 )
@@ -279,6 +437,11 @@ _GOAL = typer.Option(
     help='A plain-language goal instead of a .duck file, e.g. --goal "find the ball and kick it".',
 )
 _GIFSIZE = typer.Option(256, "--gif-size", help="sim2d: pixel size of each GIF pane.")
+_FLOCK = typer.Option(
+    None,
+    "--flock",
+    help="EXPERIMENTAL: run N cooperating ducks (2-4) in sim2d. Overrides the file's flock block.",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -330,6 +493,7 @@ def run(
     base_url: str | None = _BASEURL,
     api_key: str | None = _APIKEY,
     vision: bool | None = _VISION,
+    flock: int | None = _FLOCK,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -351,6 +515,7 @@ def run(
         base_url=base_url,
         api_key=api_key,
         vision=vision,
+        flock=flock,
     )
 
 
@@ -368,6 +533,7 @@ def record(
     base_url: str | None = _BASEURL,
     api_key: str | None = _APIKEY,
     vision: bool | None = _VISION,
+    flock: int | None = _FLOCK,
 ) -> None:
     """Like `run` on sim2d, but always writes a GIF (for READMEs and launches)."""
     _run_impl(
@@ -389,6 +555,7 @@ def record(
         base_url=base_url,
         api_key=api_key,
         vision=vision,
+        flock=flock,
     )
 
 

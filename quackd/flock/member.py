@@ -208,8 +208,14 @@ class FlockMember:
         )
 
     async def _verb(self, name: str, params: dict[str, Any]) -> VerbResult:
+        from quackd.safety import ConfirmDenied, VerbNotAllowed
+
         self.steps += 1
-        result = await self.executor.run_verb(name, params, source="agent")
+        try:
+            result = await self.executor.run_verb(name, params, source="agent")
+        except (VerbNotAllowed, ConfirmDenied) as e:
+            # a contract refusal is feedback, not a member crash (mirrors the solo loop)
+            result = VerbResult.fail(str(e))
         if not result.ok:
             self.verbs_failed += 1
         self.flock_transcript.write(
@@ -245,7 +251,7 @@ class FlockMember:
         self._acted_for_role = True
         self._searched_at = now
         wedge = role.wedge
-        if wedge is not None:
+        if wedge is not None and self.executor.is_allowed("walk"):
             state = await self.transport.get_state()
             theta = state.theta or 0.0
             target = math.radians(wedge.start_deg)

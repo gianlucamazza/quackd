@@ -233,6 +233,13 @@ def serve(
 ) -> None:
     from quackd.transport.factory import make_transport
 
+    if duckfile:
+        probe = load_duck(duckfile)
+        if probe.frontmatter.flock is not None:
+            raise SystemExit(
+                "flock ducks are not available over MCP yet (the MCP client is one pilot, "
+                "a flock needs a coordinator). Run it with: quackd run " + duckfile
+            )
     logging.basicConfig(
         stream=sys.stderr, level=logging.INFO, format="quackd-mcp %(levelname)s %(message)s"
     )

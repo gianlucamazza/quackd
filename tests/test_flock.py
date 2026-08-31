@@ -1,0 +1,267 @@
+"""Flock primitives: the contract block, messages, bus, auction, planner, and the clock."""
+
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace as NS
+from typing import Any
+
+import pytest
+from pydantic import TypeAdapter, ValidationError
+
+from quackd.agent.providers.base import ProviderTurn, ToolCall, Usage
+from quackd.agent.providers.fake import FakeProvider
+from quackd.duckfile.parser import parse_duck_text
+from quackd.duckfile.schema import FlockSection
+from quackd.flock.auction import Auction, AuctionPolicy
+from quackd.flock.bus import InProcessBus
+from quackd.flock.messages import BidMsg, FlockMessage, TaskMsg
+from quackd.flock.planner import equal_wedges, plan_flock_task
+from quackd.sim2d.clock import FlockClock
+from quackd.sim2d.world import DT, World
+
+# ── schema ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_flock_section_defaults_and_names() -> None:
+    flock = FlockSection()
+    assert flock.member_names == ["duck-0", "duck-1", "duck-2"]
+    assert flock.allocation.hysteresis_pct == 20.0
+    assert flock.safety.min_separation_m == 0.4
+    named = FlockSection(members=["ada", "grace"])
+    assert named.member_names == ["ada", "grace"]
+
+
+@pytest.mark.parametrize("bad", [1, 5, ["solo"], ["a", "a"], ["A", "b"], ["x"] * 5])
+def test_flock_members_validation(bad: Any) -> None:
+    with pytest.raises(ValidationError):
+        FlockSection(members=bad)
+
+
+def test_flock_block_parses_in_a_duck_and_is_optional() -> None:
+    duck = parse_duck_text(
+        "---\nduck: 0\nname: t\ndescription: d\nverbs:\n  allow: [stop]\nsuccess: [x]\n"
+        "flock:\n  members: 2\n---\n# T\nx\n"
+    )
+    assert duck.frontmatter.flock is not None
+    assert duck.frontmatter.flock.member_names == ["duck-0", "duck-1"]
+    solo = parse_duck_text(
+        "---\nduck: 0\nname: t\ndescription: d\nverbs:\n  allow: [stop]\n"
+        "success: [x]\n---\n# T\nx\n"
+    )
+    assert solo.frontmatter.flock is None
+
+
+# ── messages ────────────────────────────────────────────────────────────────────────────
+
+
+def test_messages_round_trip_through_json() -> None:
+    adapter: TypeAdapter[FlockMessage] = TypeAdapter(FlockMessage)
+    bid = BidMsg(t=1.5, src="duck-1", task_id="t1", ball_dist_m=0.62, bearing_deg=-8.0)
+    again = adapter.validate_python(bid.model_dump())
+    assert again == bid and again.kind == "BID"
+
+
+# ── bus ─────────────────────────────────────────────────────────────────────────────────
+
+
+def test_bus_fanout_no_echo_and_tap() -> None:
+    tapped: list[FlockMessage] = []
+    bus = InProcessBus(tap=tapped.append)
+    a = bus.subscribe("duck-0")
+    b = bus.subscribe("duck-1")
+    msg = BidMsg(t=0.0, src="duck-0", task_id="t", ball_dist_m=1.0)
+    bus.publish(msg)
+    assert b.drain() == [msg]
+    assert a.drain() == []  # no echo to the sender
+    assert tapped == [msg] and bus.published == 1
+    b.close()
+    bus.publish(msg)
+    assert b.drain() == []  # closed subscriptions receive nothing
+
+
+# ── auction ─────────────────────────────────────────────────────────────────────────────
+
+
+def _bid(src: str, dist: float, t: float = 0.0) -> BidMsg:
+    return BidMsg(t=t, src=src, task_id="t", ball_dist_m=dist)
+
+
+def test_auction_window_lowest_bid_and_ties() -> None:
+    now = NS(t=0.0)
+    auction = Auction(AuctionPolicy(window_s=0.4), lambda: now.t)
+    auction.open(_bid("duck-2", 0.9))
+    auction.add(_bid("duck-0", 0.5))
+    auction.add(_bid("duck-0", 0.7))  # keeps the lowest per duck
+    auction.add(_bid("duck-1", 0.5))  # tie with duck-0
+    assert not auction.due()
+    now.t = 0.5
+    assert auction.due()
+    decision = auction.decide(prev_kicker=None, excluded=set())
+    assert decision is not None
+    assert decision.kicker == "duck-0"  # tie broken by lowest name
+    assert decision.tie is True and decision.winning_dist == 0.5
+
+
+def test_auction_hysteresis_boundary() -> None:
+    policy = AuctionPolicy(hysteresis=0.2)
+    auction = Auction(policy, lambda: 1.0)
+    auction.open(_bid("duck-1", 0.85))  # challenger, 15 % better than prev
+    auction.add(_bid("duck-0", 1.0))  # previous kicker
+    d = auction.decide(prev_kicker="duck-0", excluded=set())
+    assert d is not None and d.kicker == "duck-0" and d.hysteresis_applied
+    auction.open(_bid("duck-1", 0.75))  # 25 % better: unseats
+    auction.add(_bid("duck-0", 1.0))
+    d = auction.decide(prev_kicker="duck-0", excluded=set())
+    assert d is not None and d.kicker == "duck-1" and not d.hysteresis_applied
+
+
+def test_auction_exclusions() -> None:
+    auction = Auction(AuctionPolicy(), lambda: 0.0)
+    auction.open(_bid("duck-0", 0.4))
+    auction.add(_bid("duck-1", 0.6))
+    d = auction.decide(prev_kicker=None, excluded={"duck-0"})
+    assert d is not None and d.kicker == "duck-1"
+    auction.open(_bid("duck-0", 0.4))
+    assert auction.decide(prev_kicker=None, excluded={"duck-0"}) is None
+
+
+# ── planner ─────────────────────────────────────────────────────────────────────────────
+
+DUCK = parse_duck_text(
+    "---\nduck: 0\nname: flock-kick\ndescription: d\nverbs:\n  allow: [stop]\nsuccess: [x]\n"
+    "flock:\n  members: 3\n---\n# Task\nkick the ball\n"
+)
+
+
+def test_equal_wedges_partition_the_circle() -> None:
+    wedges = equal_wedges(["b", "a", "c"])
+    assert list(wedges) == ["a", "b", "c"]
+    assert sum(w.width_deg for w in wedges.values()) == pytest.approx(360.0)
+    assert wedges["a"].start_deg == 0.0 and wedges["c"].end_deg == 360.0
+
+
+async def test_planner_fake_makes_zero_calls() -> None:
+    task, wedges, _usage, calls, fallback = await plan_flock_task(
+        DUCK, ["duck-0", "duck-1"], FakeProvider.for_duck("flock-kick"), "t1"
+    )
+    assert calls == 0 and not fallback and task.target == "ball" and len(wedges) == 2
+
+
+class _PlannerStub:
+    name = "stub"
+    model = "stub-1"
+    supports_vision = False
+
+    def __init__(self, turn: ProviderTurn | Exception) -> None:
+        self._turn = turn
+        self.calls = 0
+
+    async def step(self, system: str, history: Any, tools: Any) -> ProviderTurn:
+        self.calls += 1
+        if isinstance(self._turn, Exception):
+            raise self._turn
+        return self._turn
+
+
+async def test_planner_applies_valid_tuning_and_counts_one_call() -> None:
+    turn = ProviderTurn(
+        tool_calls=[ToolCall(name="plan_flock_task", arguments={"stop_distance": 0.3})],
+        usage=Usage(input_tokens=10, output_tokens=5),
+    )
+    stub = _PlannerStub(turn)
+    task, _, usage, calls, fallback = await plan_flock_task(DUCK, ["duck-0", "duck-1"], stub, "t")
+    assert calls == 1 and stub.calls == 1 and not fallback
+    assert task.stop_distance == 0.3 and usage.input_tokens == 10
+
+
+@pytest.mark.parametrize(
+    "turn",
+    [
+        ProviderTurn(
+            tool_calls=[ToolCall(name="plan_flock_task", arguments={"stop_distance": 99})]
+        ),
+        ProviderTurn(tool_calls=[]),
+        RuntimeError("provider down"),
+    ],
+)
+async def test_planner_falls_back_on_trouble(turn: Any) -> None:
+    task, _, _, calls, fallback = await plan_flock_task(
+        DUCK, ["duck-0", "duck-1"], _PlannerStub(turn), "t"
+    )
+    assert calls == 1 and fallback and task.stop_distance == 0.22  # defaults
+
+
+# ── the lockstep clock ──────────────────────────────────────────────────────────────────
+
+
+async def test_clock_single_participant_step_counts() -> None:
+    world = World(seed=0)
+    clock = FlockClock(world)
+    await clock.sleep("duck-0", 0.1)
+    assert world.steps == 2  # round(0.1 / DT)
+    await clock.sleep("duck-0", DT)
+    assert world.steps == 3
+    await clock.stop()
+
+
+async def test_clock_barrier_advances_to_each_deadline() -> None:
+    world = World(seed=0, n_ducks=3)
+    clock = FlockClock(world)
+
+    async def sleeper(pid: str, seconds: float) -> float:
+        await clock.sleep(pid, seconds)
+        woke_at = world.t
+        clock.unregister(pid)  # a finished participant must leave, or it freezes time
+        return woke_at
+
+    woke = await asyncio.gather(
+        sleeper("duck-0", 0.10), sleeper("duck-1", 0.05), sleeper("duck-2", 0.20)
+    )
+    assert world.steps == 4  # advanced exactly to the furthest deadline
+    assert woke[1] <= woke[0] <= woke[2]
+    await clock.stop()
+
+
+async def test_clock_freezes_while_anyone_is_awake() -> None:
+    world = World(seed=0, n_ducks=2)
+    clock = FlockClock(world)
+    clock.register("duck-1")  # registered but AWAKE: the barrier must hold time still
+
+    task = asyncio.create_task(clock.sleep("duck-0", 0.05))
+    await asyncio.sleep(0.05)  # real time passes; sim time must not
+    assert world.steps == 0 and not task.done()
+    clock.unregister("duck-1")  # now everyone (i.e. duck-0) is parked
+    await asyncio.wait_for(task, timeout=2)
+    assert world.steps == 1
+    clock.unregister("duck-0")
+    await clock.stop()
+
+
+async def test_clock_unregister_mid_sleep_does_not_deadlock_the_rest() -> None:
+    world = World(seed=0, n_ducks=2)
+    clock = FlockClock(world)
+
+    async def dies() -> None:
+        with pytest.raises(asyncio.CancelledError):
+            await clock.sleep("duck-1", 10.0)
+
+    clock.register("holder")  # stays awake: freezes time so duck-1 stays parked
+    dying = asyncio.create_task(dies())
+    await asyncio.sleep(0.02)
+    clock.unregister("duck-1")  # cancels its future, re-evaluates the barrier
+    await asyncio.wait_for(dying, timeout=2)
+    survivor = asyncio.create_task(clock.sleep("duck-0", 0.1))
+    await asyncio.sleep(0.02)
+    clock.unregister("holder")  # now only duck-0 is left, and it is parked
+    await asyncio.wait_for(survivor, timeout=2)
+    assert world.steps >= 2
+    await clock.stop()
+
+
+def test_task_msg_carries_the_plan() -> None:
+    from quackd.flock.messages import FlockTask
+
+    task = FlockTask(task_id="t", name="n", goal="g")
+    msg = TaskMsg(t=0.0, src="coordinator", task_id="t", task=task, members=["duck-0", "duck-1"])
+    assert msg.task.target == "ball" and msg.members[0] == "duck-0"
