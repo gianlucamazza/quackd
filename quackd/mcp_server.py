@@ -211,6 +211,15 @@ def build_server(
             duck = load_duck(path)
         except DuckParseError as e:
             return {"ok": False, "error": str(e)}
+        if duck.frontmatter.flock is not None:
+            # same guard as serve(): one MCP pilot must not adopt a many-duck contract
+            return {
+                "ok": False,
+                "error": (
+                    "flock ducks are not available over MCP (this session is one pilot, "
+                    f"a flock needs a coordinator). Run it with: quackd run {path}"
+                ),
+            }
         session.adopt(duck)
         return {
             "ok": True,

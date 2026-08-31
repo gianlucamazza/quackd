@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from quackd.duckfile.schema import FlockSection
 from quackd.flock.messages import BidMsg
 
+LONGEST_VERB_SLEEP_S = 1.5
+"""The kick verb parks in one unbroken 1.5 s sim sleep, during which no HB can go out."""
+
 
 @dataclass(frozen=True)
 class AuctionPolicy:
@@ -26,11 +29,14 @@ class AuctionPolicy:
 
     @classmethod
     def from_flock(cls, flock: FlockSection) -> AuctionPolicy:
+        # the watchdog must survive a healthy duck's longest single verb sleep plus one
+        # heartbeat period, or a small (valid) heartbeat setting kills every kicker mid-kick
+        hb = flock.safety.per_duck_heartbeat_s
         return cls(
             hysteresis=flock.allocation.hysteresis_pct / 100.0,
             lease_s=flock.allocation.claim_lease_s,
             min_sep_m=flock.safety.min_separation_m,
-            hb_timeout_s=3.0 * flock.safety.per_duck_heartbeat_s,
+            hb_timeout_s=max(3.0 * hb, hb + LONGEST_VERB_SLEEP_S + 1.0),
         )
 
 

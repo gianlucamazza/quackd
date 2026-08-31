@@ -178,9 +178,6 @@ async def test_planner_applies_valid_tuning_and_counts_one_call() -> None:
 @pytest.mark.parametrize(
     "turn",
     [
-        ProviderTurn(
-            tool_calls=[ToolCall(name="plan_flock_task", arguments={"stop_distance": 99})]
-        ),
         ProviderTurn(tool_calls=[]),
         RuntimeError("provider down"),
     ],
@@ -190,6 +187,24 @@ async def test_planner_falls_back_on_trouble(turn: Any) -> None:
         DUCK, ["duck-0", "duck-1"], _PlannerStub(turn), "t"
     )
     assert calls == 1 and fallback and task.stop_distance == 0.22  # defaults
+
+
+async def test_planner_clamps_numbers_and_drops_only_the_invalid_field() -> None:
+    turn = ProviderTurn(
+        tool_calls=[
+            ToolCall(
+                name="plan_flock_task",
+                arguments={"stop_distance": 99, "step_deg": 60, "kick_leg": "sideways"},
+            )
+        ]
+    )
+    task, _, _, calls, fallback = await plan_flock_task(
+        DUCK, ["duck-0", "duck-1"], _PlannerStub(turn), "t"
+    )
+    assert calls == 1 and not fallback
+    assert task.stop_distance == 1.0  # out of range clamps to the schema bound
+    assert task.step_deg == 60  # the valid field survives
+    assert task.kick_leg == "right"  # the unclampable invalid field is dropped alone
 
 
 # ── the lockstep clock ──────────────────────────────────────────────────────────────────
@@ -265,3 +280,96 @@ def test_task_msg_carries_the_plan() -> None:
     task = FlockTask(task_id="t", name="n", goal="g")
     msg = TaskMsg(t=0.0, src="coordinator", task_id="t", task=task, members=["duck-0", "duck-1"])
     assert msg.task.target == "ball" and msg.members[0] == "duck-0"
+
+
+# ── regressions from the v0.3.0 adversarial review ─────────────────────────────────────
+
+
+async def test_clock_survives_a_raising_tick_hook() -> None:
+    world = World(seed=0)
+    clock = FlockClock(world)
+
+    def bad_hook(_w: World) -> None:
+        raise RuntimeError("boom")
+
+    clock.add_tick_hook(bad_hook)
+    await asyncio.wait_for(clock.sleep("duck-0", 0.2), timeout=2)  # must not wedge
+    assert world.steps == 4
+    assert len(clock.hook_errors) == 1 and bad_hook not in clock._tick_hooks
+    await clock.stop()
+
+
+async def test_clock_hook_keyboard_interrupt_reaches_the_sleeper() -> None:
+    from quackd.sim2d.clock import HookInterrupt
+
+    world = World(seed=0)
+    clock = FlockClock(world)
+
+    def quit_hook(_w: World) -> None:
+        raise KeyboardInterrupt  # the live window's close button
+
+    clock.add_tick_hook(quit_hook)
+    # translated, never a raw KeyboardInterrupt: asyncio would re-raise that into the loop
+    with pytest.raises(HookInterrupt):
+        await asyncio.wait_for(clock.sleep("duck-0", 1.0), timeout=2)
+    await clock.stop()
+
+
+def test_hb_timeout_floors_above_the_longest_verb_sleep() -> None:
+    fast = FlockSection.model_validate({"members": 2, "safety": {"per_duck_heartbeat_s": 0.5}})
+    policy = AuctionPolicy.from_flock(fast)
+    # the kick verb sleeps 1.5 s in one piece; a healthy kicker must survive that
+    assert policy.hb_timeout_s >= 0.5 + 1.5
+
+
+def test_one_claimant_false_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="one_claimant"):
+        FlockSection.model_validate({"members": 2, "safety": {"one_claimant": False}})
+
+
+def test_restart_s_reaches_the_task() -> None:
+    duck = parse_duck_text(
+        "---\nduck: 0\nname: slow-scan\ndescription: d\nverbs:\n  allow: [stop]\n"
+        "success: [x]\nflock:\n  members: 2\n  search:\n    restart_s: 30\n---\n# T\nx\n",
+        "slow-scan.duck",
+    )
+    from quackd.flock.planner import default_task
+
+    assert default_task(duck, "t").restart_s == 30.0
+
+
+def _mini_coordinator() -> Any:
+    from quackd.flock.coordinator import FlockCoordinator
+    from quackd.flock.messages import FlockTask
+
+    world = World(seed=0)
+    clock = FlockClock(world)
+    transcript: Any = NS(write=lambda *a, **k: None)
+    return FlockCoordinator(
+        task=FlockTask(task_id="t", name="n", goal="g"),
+        members={},
+        wedges={},
+        bus=InProcessBus(),
+        clock=clock,
+        transcript=transcript,
+    )
+
+
+def test_exclusion_is_never_shortened() -> None:
+    import math
+
+    coord = _mini_coordinator()
+    coord._exclude("duck-1", math.inf)  # presumed dead
+    coord._exclude("duck-1", 3.0)  # a late RESULT must not resurrect it
+    assert coord.excluded_until["duck-1"] == math.inf
+
+
+def test_excluded_duck_cannot_bid_and_a_bid_clears_search_empty() -> None:
+    coord = _mini_coordinator()
+    coord.searching_empty.add("duck-1")
+    coord._exclude("duck-0", 3.0)
+    coord._dispatch(BidMsg(t=0.0, src="duck-0", task_id="t", ball_dist_m=0.5))
+    assert not coord.auction.is_open  # a cooldown duck's bid opens nothing
+    coord._dispatch(BidMsg(t=0.0, src="duck-1", task_id="t", ball_dist_m=0.7))
+    assert coord.auction.is_open
+    assert "duck-1" not in coord.searching_empty  # its sighting outranks the empty scan

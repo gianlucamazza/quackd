@@ -217,6 +217,7 @@ def _run_impl(
             api_key=api_key,
             vision=vision,
             n_override=flock,
+            max_steps=max_steps,
         )
         return
     try:
@@ -325,6 +326,7 @@ def _run_flock_impl(
     api_key: str | None,
     vision: bool | None,
     n_override: int | None,
+    max_steps: int | None,
 ) -> None:
     from quackd.agent.providers.base import ProviderError
     from quackd.agent.providers.factory import make_provider
@@ -401,6 +403,7 @@ def _run_flock_impl(
                 runs_dir=runs_dir,
                 n_override=n_override,
                 dry_run=dry_run,
+                max_steps=max_steps,
                 live=live,
                 gif_size=gif_size,
                 on_recorder=on_ready,

@@ -106,6 +106,14 @@ async def test_contract_is_enforced_after_loading_a_duck() -> None:
         assert bad["ok"] is False
 
 
+async def test_load_duckfile_refuses_flock_ducks() -> None:
+    # regression: only serve() guarded flock ducks; the load tool adopted them silently
+    async with connected() as (client, session, _transport):
+        res = _data(await client.call_tool("duck_load_duckfile", {"path": "flock-kick"}))
+        assert res["ok"] is False and "flock" in res["error"]
+        assert session.duck is None  # nothing was adopted
+
+
 async def test_dry_run_sends_nothing() -> None:
     async with connected(dry_run=True) as (client, _session, transport):
         res = _data(await client.call_tool("duck_set_velocity", {"vx": 0.2}))

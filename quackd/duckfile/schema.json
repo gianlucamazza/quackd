@@ -66,7 +66,7 @@
         },
         "claim_lease_s": {
           "default": 6.0,
-          "description": "A claim expires after this long without progress (sim clock).",
+          "description": "Longest a claim may be held before re-auction (sim clock). A fixed fuse from the moment the claim is granted, not a progress timer.",
           "exclusiveMinimum": 0,
           "maximum": 60,
           "title": "Claim Lease S",
@@ -88,7 +88,7 @@
         },
         "one_claimant": {
           "default": true,
-          "description": "At most one duck approaches the ball at a time.",
+          "description": "At most one duck approaches the ball at a time. Always enforced in v0.3; false is rejected rather than silently ignored.",
           "title": "One Claimant",
           "type": "boolean"
         },

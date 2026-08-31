@@ -43,8 +43,11 @@ async def test_flock_acceptance_seeds(tmp_path: Path) -> None:
     report = []
     for seed in range(10):
         t0 = time.perf_counter()
-        result = await run_flock(
-            DUCK, provider=FakeProvider.for_duck("flock-kick"), seed=seed, runs_dir=tmp_path
+        result = await asyncio.wait_for(
+            run_flock(
+                DUCK, provider=FakeProvider.for_duck("flock-kick"), seed=seed, runs_dir=tmp_path
+            ),
+            timeout=120,  # a clock wedge must FAIL the test, not hang CI
         )
         wall = time.perf_counter() - t0
         ok = result.outcome == "success" and result.ball_displacement_m >= 0.3
@@ -65,12 +68,15 @@ async def test_flock_acceptance_seeds(tmp_path: Path) -> None:
 
 
 async def test_flock_dry_run_moves_nothing(tmp_path: Path) -> None:
-    result = await run_flock(
-        DUCK,
-        provider=FakeProvider.for_duck("flock-kick"),
-        seed=1,
-        runs_dir=tmp_path,
-        dry_run=True,
+    result = await asyncio.wait_for(
+        run_flock(
+            DUCK,
+            provider=FakeProvider.for_duck("flock-kick"),
+            seed=1,
+            runs_dir=tmp_path,
+            dry_run=True,
+        ),
+        timeout=120,
     )
     assert result.outcome != "success"
     assert result.ball_displacement_m == 0.0
@@ -78,43 +84,94 @@ async def test_flock_dry_run_moves_nothing(tmp_path: Path) -> None:
 
 
 async def test_flock_kill_switch_stops_every_duck(tmp_path: Path) -> None:
+    # fire the kill switch on the FIRST auction event: deterministic in sim time, mid-run
     def on_ready(_transport: Any, coordinator: Any) -> None:
-        async def pull() -> None:
-            await asyncio.sleep(0.2)  # wall time, mid-run
-            coordinator.abort.set()
+        def on_event(kind: str, _data: dict[str, Any]) -> None:
+            if kind == "auction":
+                coordinator.abort.set()
 
-        asyncio.get_running_loop().create_task(pull())
+        coordinator.on_event = on_event
 
-    result = await run_flock(
-        DUCK,
-        provider=FakeProvider.for_duck("flock-kick"),
-        seed=4,  # a seed that needs several auctions, so the pull lands mid-run
-        runs_dir=tmp_path,
-        on_recorder=on_ready,
+    result = await asyncio.wait_for(
+        run_flock(
+            DUCK,
+            provider=FakeProvider.for_duck("flock-kick"),
+            seed=4,
+            runs_dir=tmp_path,
+            on_recorder=on_ready,
+        ),
+        timeout=120,
     )
-    assert result.outcome in ("aborted", "success")  # success only if it finished in <0.2 s
-    if result.outcome == "aborted":
-        assert "kill switch" in result.reason
+    assert result.outcome == "aborted"
+    assert "kill switch" in result.reason
+    # every duck actually stopped, and nobody reached the ball after the abort
+    assert all(d["final_status"] in ("aborted", "stopped") for d in result.per_duck.values())
+    assert result.ball_displacement_m < 0.3
 
 
 async def test_flock_survives_a_dead_member(tmp_path: Path) -> None:
+    # duck-2 goes SILENT from the start: aborted and muted, so no HB and no RESULT ever
+    # reach the bus. Only the sim-time watchdog can notice it. Deterministic, no races.
     def on_ready(_transport: Any, coordinator: Any) -> None:
-        async def kill_one() -> None:
-            await asyncio.sleep(0.1)
-            victim = coordinator.members["duck-2"]
-            await victim.transport.close()  # heartbeat dies; clock unregisters
+        victim = coordinator.members["duck-2"]
+        victim._publish = lambda _msg: None
+        victim.executor.abort.set()
 
-        asyncio.get_running_loop().create_task(kill_one())
-
-    result = await run_flock(
-        DUCK,
-        provider=FakeProvider.for_duck("flock-kick"),
-        seed=0,
-        runs_dir=tmp_path,
-        on_recorder=on_ready,
+    result = await asyncio.wait_for(
+        run_flock(
+            DUCK,
+            provider=FakeProvider.for_duck("flock-kick"),
+            seed=0,
+            runs_dir=tmp_path,
+            on_recorder=on_ready,
+        ),
+        timeout=120,  # the run must END (no clock wedge)
     )
-    # the run must END (no clock wedge) with the survivors either winning or failing
-    assert result.outcome in ("success", "failure", "aborted")
+    assert result.outcome in ("success", "failure")
+    assert result.per_duck["duck-2"]["final_status"] == "aborted"
+    events = read_jsonl(result.run_dir / "flock.jsonl")
+    assert any(e["kind"] == "member_dead" and e["duck"] == "duck-2" for e in events), (
+        "the watchdog never declared the silent duck dead"
+    )
+    assert any(e["kind"] == "verb" and e["duck"] != "duck-2" for e in events), (
+        "the survivors did nothing"
+    )
+
+
+async def test_flock_enforces_max_minutes(tmp_path: Path) -> None:
+    # regression: budget.start() was never called, so max_minutes was silently dead
+    from quackd.duckfile.parser import parse_duck_text
+
+    duck = parse_duck_text(
+        "---\nduck: 0\nname: flock-blink\ndescription: d\n"
+        "verbs:\n  allow: [search_scan, walk_to, walk, kick, quack, get_frame, stop]\n"
+        "budgets:\n  max_steps: 60\n  max_minutes: 0.02\n"
+        "success: [x]\nflock:\n  members: 2\n---\n# T\nx\n",
+        "flock-blink.duck",
+    )
+    result = await asyncio.wait_for(
+        run_flock(duck, provider=FakeProvider.for_duck("flock-kick"), seed=1, runs_dir=tmp_path),
+        timeout=120,
+    )
+    assert result.outcome == "failure"
+    assert all(d["final_status"] == "budget" for d in result.per_duck.values())
+
+
+async def test_flock_honours_max_steps_override(tmp_path: Path) -> None:
+    # regression: run --flock silently dropped --max-steps
+    result = await asyncio.wait_for(
+        run_flock(
+            DUCK,
+            provider=FakeProvider.for_duck("flock-kick"),
+            seed=1,
+            runs_dir=tmp_path,
+            max_steps=1,
+        ),
+        timeout=120,
+    )
+    assert result.outcome == "failure"
+    assert all(d["final_status"] == "budget" for d in result.per_duck.values())
+    assert all(d["steps"] <= 2 for d in result.per_duck.values())
 
 
 def test_cli_flock_run_and_guards(tmp_path: Path) -> None:

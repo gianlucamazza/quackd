@@ -110,11 +110,14 @@ class FlockMember:
     def _ingest(self) -> None:
         for msg in [*self._pending, *self.sub.drain()]:
             if msg.kind == "ROLE" and msg.duck == self.name:
-                if (
+                is_new = (
                     self.role is None
                     or msg.role != self.role.role
-                    or msg.wedge != (self.role.wedge if self.role else None)
-                ):
+                    or msg.wedge != self.role.wedge
+                    or msg.retreat != self.role.retreat
+                )
+                # a repeated retreat order is always actionable: we are still too close
+                if is_new or msg.retreat:
                     self.role = msg
                     self._acted_for_role = False
                     self._searched_at = None
@@ -159,9 +162,12 @@ class FlockMember:
     # ── the loop ────────────────────────────────────────────────────────────────────
 
     async def run(self) -> None:
-        await self.transport.connect()
-        self.heartbeat.start()
         try:
+            # inside the try: a failed connect must still hit the finally below, or a
+            # half-registered duck would freeze the lockstep clock for the whole flock
+            await self.transport.connect()
+            self.heartbeat.start()
+            self.budget.start()
             while not self._done:
                 self._ingest()
                 if self._done:
@@ -184,6 +190,11 @@ class FlockMember:
         except Aborted as e:
             self.final_status = "aborted"
             self._result("aborted", str(e))
+        except Exception as e:
+            # a crashed member must still tell the flock it is gone, not just vanish
+            self.final_status = "error"
+            with contextlib.suppress(Exception):
+                self._result("aborted", f"member error: {e}")
         finally:
             with contextlib.suppress(Exception):
                 await self.transport.stop()
@@ -245,7 +256,9 @@ class FlockMember:
 
     async def _act_search(self, role: RoleMsg) -> None:
         now = self.transport.now()
-        restart_due = self._searched_at is not None and now - self._searched_at >= 8.0
+        restart_due = (
+            self._searched_at is not None and now - self._searched_at >= self.task.restart_s
+        )
         if self._acted_for_role and not restart_due:
             return
         self._acted_for_role = True
@@ -276,7 +289,9 @@ class FlockMember:
             detections = result.data.get("detections") or []
             dist = detections[0].get("est_distance_m") if detections else None
             bearing = detections[0].get("bearing_deg") if detections else None
-            with contextlib.suppress(SafetyStop):
+            # only a role preemption may be swallowed here: Aborted/BudgetExceeded must
+            # propagate so a dying duck ends with a RESULT instead of placing a bid
+            with contextlib.suppress(FlockPreempted):
                 await self._verb("quack", {"text": "quack! ball!"})  # the theatrical sighting
             self._bid = BidMsg(
                 t=self.transport.now(),
@@ -311,7 +326,8 @@ class FlockMember:
 
     async def _act_yield(self, role: RoleMsg) -> None:
         await self._verb("stop", {})
-        # blind courtesy: if our last ball estimate was inside the separation ring, back off
-        if self._bid is not None and self._bid.ball_dist_m < role.min_sep_m:
+        # back off on a coordinator retreat order (measured from world ground truth), or
+        # as blind courtesy when our own last ball estimate was inside the ring
+        if role.retreat or (self._bid is not None and self._bid.ball_dist_m < role.min_sep_m):
             await self._verb("walk", {"vx": -0.1, "duration_s": 1.5})
             self._bid = None

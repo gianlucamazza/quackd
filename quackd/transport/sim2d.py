@@ -14,7 +14,7 @@ from typing import Any
 
 from PIL import Image
 
-from quackd.sim2d.clock import FlockClock
+from quackd.sim2d.clock import FlockClock, HookInterrupt
 from quackd.sim2d.render import render_duckcam
 from quackd.sim2d.world import DT, World
 from quackd.transport.base import Ack, DuckState, HeartbeatError, Intent
@@ -61,17 +61,20 @@ class Sim2DTransport:
 
     async def connect(self) -> None:
         self._closed = False
-        self.clock.register(self.pid)
         if self.live:
+            # the window can fail to open (no pygame, headless display): fail BEFORE
+            # registering with the clock, or a dead registration would freeze the flock
             from quackd.sim2d.live import LiveWindow  # optional pygame dependency
 
             self._window = LiveWindow(self.frame_size)
             self.add_tick_hook(self._window.draw)
+        self.clock.register(self.pid)
 
     async def close(self) -> None:
         self._closed = True
         self.clock.unregister(self.pid)
         if self._window is not None:
+            self.clock.remove_tick_hook(self._window.draw)  # never draw on a dead display
             with contextlib.suppress(Exception):
                 self._window.close()
             self._window = None
@@ -161,7 +164,12 @@ class Sim2DTransport:
         return self.world.t
 
     async def sleep(self, seconds: float) -> None:
-        await self.clock.sleep(self.pid, seconds)
+        try:
+            await self.clock.sleep(self.pid, seconds)
+        except HookInterrupt as e:
+            from quackd.safety import Aborted  # local import: safety must stay clock-free
+
+            raise Aborted(str(e)) from None
         if self.post_sleep is not None:
             self.post_sleep()
 

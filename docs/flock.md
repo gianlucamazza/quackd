@@ -35,9 +35,12 @@ Contract Net, the same shape RoboCup teams use. The first `BID` opens a window o
 of sim time. When it closes, the lowest camera distance wins, ties break on the member
 name, and a previous kicker keeps its claim unless a challenger undercuts it by the
 hysteresis margin (20 % by default), which stops role oscillation. The claim carries a
-lease (6 s). A miss, a fall, a lost heartbeat or an expired lease releases the claim, the
-failed duck sits out a cooldown, everyone re-scans the full circle (the ball has moved),
-and the auction runs again.
+lease (6 s), a fixed fuse from the moment it is granted. A miss or an expired lease
+releases the claim and the failed duck sits out a cooldown, during which it may keep
+searching but cannot bid. A lost heartbeat also releases the claim, but that duck is
+presumed dead and excluded for good. Either way everyone re-scans the full circle (the
+ball has moved) and the auction runs again. Ducks cannot fall in the 2D simulator, so
+fall handling waits for hardware.
 
 ## Roles
 
@@ -45,8 +48,9 @@ and the auction runs again.
   it, quack on a sighting (the theatrical part), publish a `BID`.
 - **KICK**: `walk_to` the target, `kick`, report the result. The contract's criterion is
   total ball displacement, so a rally of short kicks counts.
-- **YIELD**: stop, and back away if your last ball estimate was inside the minimum
-  separation ring.
+- **YIELD**: stop, and back away when the coordinator's ground truth check says you are
+  inside the minimum separation ring, or as blind courtesy when your own last ball
+  estimate was.
 - **STOP**: the run is over.
 
 Each role step is one verb through that duck's own executor. A role change mid verb
@@ -55,9 +59,10 @@ preempts it cleanly and does not count as a failure.
 ## What the LLM does, and does not do
 
 At most **one** model call per run: the planner may tune task parameters (target label,
-approach distance, scan step, timeout) through a single forced tool call, validated and
-clamped to the schema's ranges. Anything invalid falls back to deterministic defaults and
-is logged. With `--provider fake` even that call is skipped and the plan is a pure
+approach distance, scan step, timeout) through a single forced tool call. Numeric
+parameters are clamped into the schema's ranges, an invalid field is dropped on its own
+(the valid ones survive), and a missing or broken call falls back to deterministic
+defaults, logged. With `--provider fake` even that call is skipped and the plan is a pure
 function. The auction, the roles and the steering are deterministic code. Per duck LLM
 pilots and LLM negotiated bids are deliberately out of scope in v0.3: they would cost N
 times the tokens and latency, and the demo does not need them to be honest.
@@ -67,9 +72,10 @@ times the tokens and latency, and the demo does not need them to be honest.
 
 The outcome is judged by the coordinator from sim telemetry (`ball_displacement_m`), not
 from any model's claim. A member reporting a kick the world did not record turns the run
-into a failure. Duck to duck safety separation is enforced from world ground truth (and
-the docs say so), while the kicker's ball approach uses perception only, exactly like a
-solo run.
+into a failure. Duck to duck safety separation is watched from world ground truth: while
+a claim is live the coordinator measures every other duck's true distance to the kicker
+and orders an intruder to retreat, with the motion still running through that duck's own
+executor. The kicker's ball approach uses perception only, exactly like a solo run.
 
 ## Reading a flock run
 

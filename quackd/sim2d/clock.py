@@ -22,6 +22,12 @@ from dataclasses import dataclass
 from quackd.sim2d.world import DT, World
 
 
+class HookInterrupt(Exception):
+    """A tick hook raised KeyboardInterrupt (the live window's close button). Raised into
+    every parked sleeper, because a raw KeyboardInterrupt inside an asyncio task would be
+    re-raised into the event loop itself and take the whole process down messily."""
+
+
 @dataclass
 class _Waiter:
     steps_left: int
@@ -38,11 +44,17 @@ class FlockClock:
         self._kick: asyncio.Event | None = None
         self._advancer: asyncio.Task[None] | None = None
         self._stopped = False
+        self.hook_errors: list[Exception] = []
+        """Exceptions raised by tick hooks. The offending hook is removed and time goes on."""
 
     # ── hooks (recorder, live window) ───────────────────────────────────────────────
 
     def add_tick_hook(self, hook: Callable[[World], None]) -> None:
         self._tick_hooks.append(hook)
+
+    def remove_tick_hook(self, hook: Callable[[World], None]) -> None:
+        if hook in self._tick_hooks:
+            self._tick_hooks.remove(hook)
 
     # ── participants ────────────────────────────────────────────────────────────────
 
@@ -101,8 +113,17 @@ class FlockClock:
             self._kick.clear()
             while self._all_parked() and not self._stopped:
                 self.world.step(DT)
-                for hook in self._tick_hooks:
-                    hook(self.world)
+                for hook in list(self._tick_hooks):
+                    try:
+                        hook(self.world)
+                    except KeyboardInterrupt:
+                        # e.g. the live window's close button: abort every sleeper loudly
+                        self.remove_tick_hook(hook)
+                        self._interrupt_sleepers()
+                        return
+                    except Exception as e:  # a broken hook must never freeze sim time
+                        self.remove_tick_hook(hook)
+                        self.hook_errors.append(e)
                 due: list[str] = []
                 for pid in sorted(self._waiters):
                     waiter = self._waiters[pid]
@@ -124,6 +145,15 @@ class FlockClock:
                     if steps_since_yield >= self.yield_every:
                         steps_since_yield = 0
                         await asyncio.sleep(0)
+
+    def _interrupt_sleepers(self) -> None:
+        """Wake every parked participant with HookInterrupt (the human said stop)."""
+        for pid in sorted(self._waiters):
+            waiter = self._waiters[pid]
+            if waiter is not None:
+                self._waiters[pid] = None
+                if not waiter.future.done():
+                    waiter.future.set_exception(HookInterrupt("live window closed"))
 
     async def stop(self) -> None:
         self._stopped = True

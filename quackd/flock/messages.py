@@ -37,6 +37,7 @@ class FlockTask(BaseModel):
     kick_leg: Literal["left", "right"] = "right"
     stop_distance: float = Field(default=0.22, ge=0.1, le=1.0)
     step_deg: float = Field(default=45.0, ge=15, le=120)
+    restart_s: float = Field(default=8.0, gt=0, le=120, description="Re-scan cadence.")
     timeout_s: float = Field(default=90.0, gt=0, le=600, description="Global cap, sim seconds.")
     max_search_rounds: int = Field(default=2, ge=1, le=10)
     success_moved_m: float = Field(default=0.3, gt=0, le=2.0)
@@ -75,6 +76,11 @@ class RoleMsg(_Base):
     role: Literal["SEARCH", "KICK", "YIELD", "STOP"]
     wedge: Wedge | None = None
     min_sep_m: float = 0.4
+    retreat: bool = Field(
+        default=False,
+        description="YIELD only: the coordinator measured you inside the separation ring "
+        "(ground truth), back away now.",
+    )
 
 
 class HbMsg(_Base):

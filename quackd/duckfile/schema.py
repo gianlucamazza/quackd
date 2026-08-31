@@ -101,7 +101,8 @@ class FlockAllocation(BaseModel):
         default=6.0,
         gt=0,
         le=60,
-        description="A claim expires after this long without progress (sim clock).",
+        description="Longest a claim may be held before re-auction (sim clock). A fixed "
+        "fuse from the moment the claim is granted, not a progress timer.",
     )
 
 
@@ -110,9 +111,21 @@ class FlockSafety(BaseModel):
 
     min_separation_m: float = Field(default=0.4, ge=0.1, le=2.0)
     one_claimant: bool = Field(
-        default=True, description="At most one duck approaches the ball at a time."
+        default=True,
+        description="At most one duck approaches the ball at a time. Always enforced in "
+        "v0.3; false is rejected rather than silently ignored.",
     )
     per_duck_heartbeat_s: float = Field(default=1.0, gt=0, le=10)
+
+    @field_validator("one_claimant")
+    @classmethod
+    def _one_claimant(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError(
+                "one_claimant: false is not supported in v0.3 "
+                "(the coordinator always enforces a single claimant)"
+            )
+        return value
 
 
 class FlockSearch(BaseModel):

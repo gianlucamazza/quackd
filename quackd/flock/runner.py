@@ -52,6 +52,7 @@ async def run_flock(
     runs_dir: str | Path = "runs",
     n_override: int | None = None,
     dry_run: bool = False,
+    max_steps: int | None = None,
     live: bool = False,
     gif_size: int = 256,
     on_recorder: Any = None,
@@ -86,13 +87,19 @@ async def run_flock(
         usage=usage.model_dump(),
     )
 
+    contract = duck.frontmatter
+    if max_steps is not None:
+        # --max-steps overrides for one run, per duck, exactly as in a solo run
+        contract = contract.model_copy(
+            update={"budgets": contract.budgets.model_copy(update={"max_steps": max_steps})}
+        )
     detectors = [ColorBlobDetector() for _ in members]
     flock_members: dict[str, FlockMember] = {}
     ordered = sorted(members)
     for i, name in enumerate(ordered):
         flock_members[name] = FlockMember(
             name,
-            duck.frontmatter,
+            contract,
             transports[i],
             detectors[i],
             bus,

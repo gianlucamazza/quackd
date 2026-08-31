@@ -36,6 +36,7 @@ PLAN_TOOL = {
 }
 
 TUNABLE = ("target", "kick_leg", "stop_distance", "step_deg", "timeout_s")
+CLAMPS = {"stop_distance": (0.1, 1.0), "step_deg": (15.0, 120.0), "timeout_s": (10.0, 600.0)}
 
 
 def equal_wedges(members: list[str]) -> dict[str, Wedge]:
@@ -50,7 +51,9 @@ def equal_wedges(members: list[str]) -> dict[str, Wedge]:
 def default_task(duck: DuckFile, task_id: str) -> FlockTask:
     goal = duck.body.strip()
     target = "person" if "person" in duck.name else "ball"
-    return FlockTask(task_id=task_id, name=duck.name, goal=goal, target=target)
+    flock = duck.frontmatter.flock
+    restart_s = flock.search.restart_s if flock is not None else 8.0
+    return FlockTask(task_id=task_id, name=duck.name, goal=goal, target=target, restart_s=restart_s)
 
 
 async def plan_flock_task(
@@ -85,9 +88,22 @@ async def plan_flock_task(
         call = next((c for c in turn.tool_calls if c.name == "plan_flock_task"), None)
         if call is None:
             raise ValueError("no plan_flock_task call in the reply")
-        tuned = {k: v for k, v in call.arguments.items() if k in TUNABLE}
-        task = FlockTask(**{**task.model_dump(), **tuned})
-    except Exception as e:  # any planner trouble (refusal, bad args, network) -> defaults
+        # per-field: numeric arguments clamp into range, the rest validate individually,
+        # so one bad argument never discards the model's valid choices
+        dropped: dict[str, Any] = {}
+        for k, v in call.arguments.items():
+            if k not in TUNABLE:
+                continue
+            if k in CLAMPS and isinstance(v, int | float) and not isinstance(v, bool):
+                lo, hi = CLAMPS[k]
+                v = min(max(float(v), lo), hi)
+            try:
+                task = FlockTask(**{**task.model_dump(), k: v})
+            except Exception:
+                dropped[k] = v
+        if dropped:
+            log(f"planner dropped invalid arguments: {dropped}")
+    except Exception as e:  # planner trouble (refusal, no call, network) -> defaults
         fallback = True
         log(f"planner fallback: {type(e).__name__}: {e}")
         task = default_task(duck, task_id)

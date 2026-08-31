@@ -28,7 +28,7 @@ from quackd.flock.messages import (
     Wedge,
 )
 from quackd.flock.transcript import FlockTranscript
-from quackd.sim2d.clock import FlockClock
+from quackd.sim2d.clock import FlockClock, HookInterrupt
 
 FlockOutcome = Literal["success", "failure", "budget", "aborted", "error"]
 COORD_TICK_S = 0.05
@@ -62,6 +62,7 @@ class FlockCoordinator:
         self.bids = 0
         self.search_rounds = 0
         self.searching_empty: set[str] = set()
+        self._sep_warned: dict[str, float] = {}
         self.outcome: FlockOutcome = "error"
         self.reason = "coordinator exited unexpectedly"
 
@@ -77,7 +78,9 @@ class FlockCoordinator:
         if self.on_event is not None:
             self.on_event(kind, data)
 
-    def _role(self, duck: str, role: str, wedge: Wedge | None = None) -> None:
+    def _role(
+        self, duck: str, role: str, wedge: Wedge | None = None, *, retreat: bool = False
+    ) -> None:
         self._publish(
             RoleMsg(
                 t=self._now(),
@@ -87,6 +90,7 @@ class FlockCoordinator:
                 role=role,  # type: ignore[arg-type]
                 wedge=wedge,
                 min_sep_m=self.policy.min_sep_m,
+                retreat=retreat,
             )
         )
 
@@ -98,13 +102,18 @@ class FlockCoordinator:
         return {name for name in self.members if self.excluded_until.get(name, 0.0) != math.inf}
 
     def _exclude(self, duck: str, seconds: float) -> None:
-        self.excluded_until[duck] = self._now() + seconds if seconds != math.inf else math.inf
+        # never SHORTEN an exclusion: a late RESULT must not resurrect a presumed-dead duck
+        until = math.inf if seconds == math.inf else self._now() + seconds
+        self.excluded_until[duck] = max(self.excluded_until.get(duck, 0.0), until)
 
     # ── dispatch ────────────────────────────────────────────────────────────────────
 
     def _dispatch(self, msg: Any) -> None:
         if isinstance(msg, BidMsg):
             self.bids += 1
+            self.searching_empty.discard(msg.src)  # a sighting outranks an earlier empty scan
+            if msg.src in self._excluded_now():
+                return  # the cooldown gates bidding itself, not just winning at decide time
             if self.kicker is not None:
                 return  # standby sighting while a claim is live
             if not self.auction.is_open:
@@ -193,10 +202,35 @@ class FlockCoordinator:
                 if name == self.kicker:
                     self._miss(name, "heartbeat lost while holding the claim", math.inf)
 
+    def _enforce_separation(self) -> None:
+        """Ground truth guard: while a claim is live, a non-kicker inside the separation
+        ring around the kicker gets a retreat order (motion still runs through that
+        duck's own executor, the coordinator never moves anyone directly)."""
+        if self.kicker is None or self.kicker not in self.members:
+            return
+        kicker = self.members[self.kicker].transport
+        kd = kicker.world.ducks[kicker.duck_index]
+        now = self._now()
+        for name, m in self.members.items():
+            if name == self.kicker or self.excluded_until.get(name, 0.0) == math.inf:
+                continue
+            d = m.transport.world.ducks[m.transport.duck_index]
+            dist = math.hypot(d.x - kd.x, d.y - kd.y)
+            if dist < self.policy.min_sep_m and now - self._sep_warned.get(name, -1e9) >= 1.0:
+                self._sep_warned[name] = now
+                self.transcript.write("separation_hold", duck=name, dist_m=round(dist, 3))
+                self._event("separation", duck=name, dist=dist)
+                self._role(name, "YIELD", retreat=True)
+
     def _rotate_wedges_if_empty(self) -> bool:
         """All live searchers came up empty: rotate the partition and try again."""
         live = self._live() - self._excluded_now()
-        if self.kicker is not None or not live or not live <= self.searching_empty:
+        if (
+            self.kicker is not None
+            or self.auction.is_open  # a live sighting is being decided: not empty
+            or not live
+            or not live <= self.searching_empty
+        ):
             return True
         self.search_rounds += 1
         if self.search_rounds >= self.task.max_search_rounds:
@@ -235,6 +269,10 @@ class FlockCoordinator:
         for name in self.members:
             self._role(name, "SEARCH", self.wedges[name])
         t0 = self._now()
+        for name in self.members:
+            # seed the watchdog: a duck that dies before its FIRST heartbeat must still
+            # be declared dead instead of blocking wedge rotation until the timeout
+            self.last_hb.setdefault(name, t0)
         self.outcome = "error"
         try:
             while True:
@@ -244,6 +282,7 @@ class FlockCoordinator:
                     break
                 self._watchdog()
                 self._decide_if_due()
+                self._enforce_separation()
                 if (
                     self.kicker is not None
                     and self.lease_deadline is not None
@@ -266,7 +305,14 @@ class FlockCoordinator:
                     self.outcome = "failure"
                     self.reason = f"global timeout after {self.task.timeout_s:g}s of sim time"
                     break
-                await self.clock.sleep(COORD_PID, COORD_TICK_S)
+                try:
+                    await self.clock.sleep(COORD_PID, COORD_TICK_S)
+                except HookInterrupt as e:
+                    self.outcome = "aborted"
+                    self.reason = str(e) or "interrupted"
+                    for m in self.members.values():
+                        m.executor.abort.set()
+                    break
         finally:
             for name in self.members:
                 self._role(name, "STOP")
