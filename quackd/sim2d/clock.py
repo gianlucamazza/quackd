@@ -1,0 +1,135 @@
+"""One clock for N ducks: the world advances only when every participant is asleep.
+
+With a single duck, whoever called `transport.sleep()` could just step the world. With a
+flock of concurrent tasks that breaks: time would advance once per sleeper and in racy
+order. This clock makes sim time a shared, deterministic resource: participants park with
+an INTEGER remaining-step count (exactly reproducing the single-duck step arithmetic), an
+advancer task steps the world one DT at a time only while *everyone* is parked, and due
+sleepers are woken in sorted-participant order. The world is frozen while any participant
+is awake, so LLM latency costs zero sim time — same semantics a solo run has today.
+
+Rule for participants: every await in your loop must bottom out in `sleep()` here, and you
+must `unregister()` when you finish (or you wedge time for everyone else).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from quackd.sim2d.world import DT, World
+
+
+@dataclass
+class _Waiter:
+    steps_left: int
+    future: asyncio.Future[None]
+
+
+class FlockClock:
+    def __init__(self, world: World, *, realtime: bool = False, yield_every: int = 4) -> None:
+        self.world = world
+        self.realtime = realtime
+        self.yield_every = yield_every
+        self._waiters: dict[str, _Waiter | None] = {}  # pid -> parked waiter, or None if awake
+        self._tick_hooks: list[Callable[[World], None]] = []
+        self._kick: asyncio.Event | None = None
+        self._advancer: asyncio.Task[None] | None = None
+        self._stopped = False
+
+    # ── hooks (recorder, live window) ───────────────────────────────────────────────
+
+    def add_tick_hook(self, hook: Callable[[World], None]) -> None:
+        self._tick_hooks.append(hook)
+
+    # ── participants ────────────────────────────────────────────────────────────────
+
+    def register(self, pid: str) -> None:
+        self._waiters.setdefault(pid, None)
+
+    def unregister(self, pid: str) -> None:
+        waiter = self._waiters.pop(pid, None)
+        if waiter is not None and not waiter.future.done():
+            waiter.future.cancel()
+        self._nudge()
+
+    def now(self) -> float:
+        return self.world.t
+
+    # ── sleeping ────────────────────────────────────────────────────────────────────
+
+    async def sleep(self, pid: str, seconds: float) -> None:
+        self._ensure_advancer()
+        self.register(pid)
+        if seconds <= 0:
+            await asyncio.sleep(0)
+            return
+        steps = max(1, round(seconds / DT))
+        future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._waiters[pid] = _Waiter(steps, future)
+        self._nudge()
+        try:
+            await future
+        finally:
+            # normal wake: the advancer already marked us awake; cancellation: do it here
+            if self._waiters.get(pid) is not None:
+                self._waiters[pid] = None
+                self._nudge()
+
+    # ── the advancer ────────────────────────────────────────────────────────────────
+
+    def _ensure_advancer(self) -> None:
+        if self._advancer is None or self._advancer.done():
+            self._kick = asyncio.Event()
+            self._stopped = False
+            self._advancer = asyncio.create_task(self._run(), name="quackd-flock-clock")
+
+    def _nudge(self) -> None:
+        if self._kick is not None:
+            self._kick.set()
+
+    def _all_parked(self) -> bool:
+        return bool(self._waiters) and all(w is not None for w in self._waiters.values())
+
+    async def _run(self) -> None:
+        assert self._kick is not None
+        steps_since_yield = 0
+        while not self._stopped:
+            await self._kick.wait()
+            self._kick.clear()
+            while self._all_parked() and not self._stopped:
+                self.world.step(DT)
+                for hook in self._tick_hooks:
+                    hook(self.world)
+                due: list[str] = []
+                for pid in sorted(self._waiters):
+                    waiter = self._waiters[pid]
+                    if waiter is None:
+                        continue
+                    waiter.steps_left -= 1
+                    if waiter.steps_left <= 0:
+                        due.append(pid)
+                for pid in due:  # sorted: deterministic wake order
+                    waiter = self._waiters[pid]
+                    if waiter is not None:
+                        self._waiters[pid] = None  # mark awake BEFORE resolving
+                        if not waiter.future.done():
+                            waiter.future.set_result(None)
+                if self.realtime:
+                    await asyncio.sleep(DT)
+                else:
+                    steps_since_yield += 1
+                    if steps_since_yield >= self.yield_every:
+                        steps_since_yield = 0
+                        await asyncio.sleep(0)
+
+    async def stop(self) -> None:
+        self._stopped = True
+        self._nudge()
+        if self._advancer is not None:
+            self._advancer.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._advancer
+            self._advancer = None

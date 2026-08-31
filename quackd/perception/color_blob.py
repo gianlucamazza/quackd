@@ -43,6 +43,12 @@ DEFAULT_TARGETS: tuple[Target, ...] = (
     Target("ball", HSVRange(5, 22), 0.05, round=True),  # sim orange (255,140,0) → H≈16
     Target("person", HSVRange(100, 130), 0.12, round=False),  # sim blue (60,90,220) → H≈112
     Target("pet", HSVRange(50, 80), 0.10, round=False),  # sim green (60,180,80) → H≈65
+    # the four Microduck colorways, one Target each so a flock member can see its peers
+    # (max_per_label applies per Target, so this yields up to one blob per colorway)
+    Target("duck", HSVRange(23, 34), 0.08, round=False),  # cream (250,210,40) → H≈24
+    Target("duck", HSVRange(86, 98), 0.08, round=False),  # sky (70,210,225) → H≈93
+    Target("duck", HSVRange(133, 148), 0.08, round=False),  # lavender (185,105,235) → H≈138
+    Target("duck", HSVRange(152, 172), 0.08, round=False),  # graphite (140,60,110) → H≈161
 )
 
 

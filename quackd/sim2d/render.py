@@ -1,9 +1,11 @@
-"""Two views of the same cartoon world.
+"""Two views of the same cartoon world, for one duck or a flock.
 
-`render_topdown` is for humans and GIFs. `render_duckcam` is what the *duck* sees — a
+`render_topdown` is for humans and GIFs. `render_duckcam` is what one *duck* sees — a
 first-person projection with real perspective, so the same colour-blob detector that
 finds an orange ball in a real camera frame finds it here, and its distance estimate
-comes out in metres. That is what lets one perception path serve sim and hardware.
+comes out in metres. In a flock, teammates appear in each other's cameras in their own
+colorway body colour (deliberately WITHOUT the beak: the beak orange sits inside the
+ball's hue band and would forge ball detections).
 """
 
 from __future__ import annotations
@@ -19,11 +21,22 @@ FLOOR = (236, 229, 212)
 SKY = (204, 222, 240)
 WALL = (70, 62, 55)
 BALL = (255, 140, 0)  # orange — hue ≈ 33°
-DUCK = (250, 210, 40)  # yellow
-BEAK = (230, 100, 20)
+DUCK = (250, 210, 40)  # cream colorway (the historic duck yellow)
+BEAK = (230, 100, 20)  # NEVER used for peers in duck-cams: its hue is inside the ball band
 PERSON = (60, 90, 220)  # blue
 PET = (60, 180, 80)  # green
 TEXT = (40, 40, 40)
+
+# The four Microduck colorways, HSV-separable from ball/person/pet and from each other
+# (OpenCV hues: cream 24, sky 93, lavender 138, graphite 161). A literal grey has no hue,
+# so "graphite" is a saturated dark plum stand-in — documented in docs/flock.md.
+COLORWAY_RGB: dict[str, tuple[int, int, int]] = {
+    "cream": DUCK,
+    "sky": (70, 210, 225),
+    "lavender": (185, 105, 235),
+    "graphite": (140, 60, 110),
+}
+DUCK_BODY_HEIGHT_M = 0.18  # how tall a peer looks in another duck's camera
 
 CAM_FOV_DEG = 90.0
 CAM_HEIGHT_M = 0.20
@@ -56,34 +69,39 @@ def render_topdown(world: World, size: int = 256) -> Image.Image:
         draw.ellipse(
             [cx - rr, cy - rr, cx + rr, cy + rr], fill=PERSON if p.label == "person" else PET
         )
-    d = world.duck
-    cx, cy = px(d.x, d.y)
-    rr = d.r * scale * 1.4
-    pts = []
-    for ang in (0.0, 2.4, -2.4):
-        a = d.theta + ang
-        r = rr if ang == 0.0 else rr * 0.8
-        pts.append((cx + r * math.cos(a), cy - r * math.sin(a)))
-    draw.polygon(pts, fill=DUCK, outline=WALL)
-    ha = d.theta + d.head_yaw
-    draw.ellipse(
-        [
-            cx + rr * 0.55 * math.cos(ha) - 3,
-            cy - rr * 0.55 * math.sin(ha) - 3,
-            cx + rr * 0.55 * math.cos(ha) + 3,
-            cy - rr * 0.55 * math.sin(ha) + 3,
-        ],
-        fill=BEAK,
-    )
-    if d.posture != "standing":
-        draw.text((cx - 10, cy + rr), d.posture, fill=TEXT)
-    if d.holding:
-        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=BALL)
+    flock = len(world.ducks) > 1
+    for i, d in enumerate(world.ducks):
+        body = COLORWAY_RGB.get(d.colorway, DUCK)
+        cx, cy = px(d.x, d.y)
+        rr = d.r * scale * 1.4
+        pts = []
+        for ang in (0.0, 2.4, -2.4):
+            a = d.theta + ang
+            r = rr if ang == 0.0 else rr * 0.8
+            pts.append((cx + r * math.cos(a), cy - r * math.sin(a)))
+        draw.polygon(pts, fill=body, outline=WALL)
+        ha = d.theta + d.head_yaw
+        draw.ellipse(
+            [
+                cx + rr * 0.55 * math.cos(ha) - 3,
+                cy - rr * 0.55 * math.sin(ha) - 3,
+                cx + rr * 0.55 * math.cos(ha) + 3,
+                cy - rr * 0.55 * math.sin(ha) + 3,
+            ],
+            fill=BEAK,
+        )
+        if flock:
+            draw.text((cx - 3, cy - rr - 12), chr(ord("A") + i), fill=TEXT)
+        if d.posture != "standing":
+            draw.text((cx - 10, cy + rr), d.posture, fill=TEXT)
+        if d.holding:
+            draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=BALL)
     return img
 
 
-def render_duckcam(world: World, size: int = 256) -> Image.Image:
-    """First-person view. Floor objects project below the horizon by f·h/d; size ∝ 1/d."""
+def render_duckcam(world: World, size: int = 256, *, duck_index: int = 0) -> Image.Image:
+    """One duck's first-person view. Floor objects project below the horizon by f·h/d,
+    size ∝ 1/d. Peers are body-colour boxes (no beak — hue collision with the ball)."""
     w = h = size
     img = Image.new("RGB", (w, h), SKY)
     draw = ImageDraw.Draw(img)
@@ -94,10 +112,18 @@ def render_duckcam(world: World, size: int = 256) -> Image.Image:
 
     objects: list[tuple[float, float, float, float, tuple[int, int, int], bool]] = []
     for p in world.people:
-        dist, bearing = world.relative(p.x, p.y, camera=True)
+        dist, bearing = world.relative(p.x, p.y, camera=True, duck_index=duck_index)
         objects.append((dist, bearing, p.r, 0.5, PERSON if p.label == "person" else PET, False))
+    for i, peer in enumerate(world.ducks):
+        if i == duck_index:
+            continue  # the viewer never sees itself
+        dist, bearing = world.relative(peer.x, peer.y, camera=True, duck_index=duck_index)
+        body = COLORWAY_RGB.get(peer.colorway, DUCK)
+        objects.append((dist, bearing, peer.r, DUCK_BODY_HEIGHT_M, body, False))
     if world.ball.present:
-        dist, bearing = world.relative(world.ball.x, world.ball.y, camera=True)
+        dist, bearing = world.relative(
+            world.ball.x, world.ball.y, camera=True, duck_index=duck_index
+        )
         objects.append((dist, bearing, world.ball.r, 0.0, BALL, True))
 
     # far to near, so near things occlude
