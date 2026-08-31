@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-31
+
+Multiple simulated Microducks cooperate: split the search, hold an auction, the closest
+one kicks. Everything is on the record.
+
+### Added
+
+- **Flock mode** (`flock:` block in the `.duck`, or `--flock N` on `run`/`record`): 2 to 4
+  ducks share one arena and an in-process message bus. A deterministic Contract Net
+  auction picks the kicker (bid = each duck's own camera distance estimate, 20 %
+  hysteresis, 6 s claim lease, duck-id tie-break, one-claimant lock), heading sectors
+  split the search, misses trigger a full-circle re-search and re-auction, and a sim-time
+  watchdog drops silent ducks. Every message, bid, claim and role change lands in
+  `flock.jsonl`; the outcome is judged from sim ground truth, not a model claim.
+  Guide: `docs/flock.md`. (ADR-0015)
+- **Multi-duck simulator**: `World(n_ducks=…)` with per-duck deadman, noise streams, kick
+  counters, duck-duck collisions and the four Microduck colorways (Cream, Sky, Lavender,
+  Graphite); per-duck cameras render teammates, and the detector gained four `duck`
+  targets. Sim time is governed by a lockstep clock, so the world freezes while any pilot
+  thinks and single-duck runs stay bit-identical per seed. (ADR-0016)
+- The planner makes **at most one** LLM call per flock run (parameters validated and
+  clamped, deterministic fallback); `--provider fake` computes the plan as a pure
+  function. Per-duck LLM pilots are deliberately out of scope.
+- Duck to duck separation is watched from world ground truth while a claim is live: the
+  coordinator orders an intruding non-kicker to retreat, and the retreat still runs
+  through that duck's own executor.
+- Starter `ducks/flock-kick.duck`; `runs/<ts>-flock-…/` layout with per-duck transcripts;
+  flock demo GIF in the README. Scripted 3-duck acceptance: 10 of 10 seeds.
+- The flock shipped through an adversarial review (69 agents, 24 confirmed findings, all
+  fixed before release): deadlock guards around the shared clock's tick hooks and around
+  member connect failures, per-duck `max_minutes` enforcement, a heartbeat watchdog floor
+  above the longest verb sleep, cooldown gating at bid time, per-field planner clamping,
+  `--max-steps` honoured on flock runs, `flock.search.restart_s` honoured, and
+  `one_claimant: false` rejected instead of silently ignored.
+
+### Changed
+
+- `.duck` spec v0 gains the optional `flock:` block (`docs/duck-spec.md`, `schema.json`
+  regenerated). Files using it need quackd 0.3.0 or newer; older versions refuse them
+  loudly. `quackd validate` reports flock size and rejects flock + `verbs.confirm`.
+- `quackd doctor` notes flock status; `serve-mcp` refuses flock ducks with a clear
+  message.
+
 ## [0.2.0] — 2026-08-29
 
 Local and open-source LLMs can pilot the duck. No API key needed.
@@ -79,6 +122,7 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rokbenko/quackd/releases/tag/v0.1.0

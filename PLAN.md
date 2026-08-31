@@ -73,5 +73,7 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ v0.2.0 (2026-08-29): local and open-source LLM providers, `--goal`, README rewrite, logo
 - ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
 - ⏸ First transcript from a live local server (Ollama, vLLM, llama.cpp) — none available on the dev machine
+- ✅ v0.3.0 (2026-08-31): flock mode — multi-duck sim, lockstep clock, in-process bus, Contract Net auction, one planner LLM call, 10/10 seeded acceptance (ADR-0015/0016); hardened by a 69-agent adversarial review, 24 confirmed findings fixed pre-release
+- ⏸ Flock future work: MQTT/LAN bus behind the same Bus protocol, hardware flocks when Microducks ship, real-provider planner recording
 - ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)
