@@ -24,6 +24,11 @@ Sources: [duck-ipc-proto/src/lib.rs](https://github.com/pollen-robotics/microduc
 | `jsonrpc` | 🧪 experimental | The real robot over `robotd`'s socket (`unix:///run/robotd.sock`) or an SSH-forwarded TCP port. Every method it uses is VERIFIED below; the whole has never run on hardware. |
 | `websocket` | ⏳ stub | Tracks architecture.md §5.3. Raises with a link until upstream ships it. |
 
+**Flock runs** (`--flock`, v0.3) use N in-process sim2d views of one world and an
+in-process message bus. There is no network bus: an MQTT/LAN bus for real ducks is future
+work behind the same `Bus` protocol and will land in this table when it exists
+([flock.md](flock.md)).
+
 ## VERIFIED (read from upstream source)
 
 | Thing | Value | Used for |

@@ -37,10 +37,13 @@ def test_readme_promises() -> None:
         "--provider ollama",
         "docs/local-llms.md",
         "| Local models (",
+        "--flock",
+        "flock-kick",
+        "docs/flock.md",
     ):
         assert needle in README, needle
     assert "quadruped" not in README.lower()
-    for hype in ("revolutionary", "world's first", "fully autonomous"):
+    for hype in ("revolutionary", "world's first", "fully autonomous", "swarm intelligence"):
         assert hype not in README.lower(), hype
 
 

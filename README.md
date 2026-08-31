@@ -141,6 +141,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, verified config |
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
 | Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 not yet exercised against a live server by us, transcripts welcome |
+| Flock mode (2 to 4 cooperating ducks, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |
 | Real robot over JSON RPC (`--transport jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
 | WebSocket agent gateway (`--transport websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
@@ -269,7 +270,7 @@ The four cloud providers see the camera frame as an image. Local models get the 
 
 | Command | What it does |
 |---|---|
-| `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size` |
+| `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size`, `--flock N` |
 | `quackd validate ducks/*.duck` | Check task files against the spec and the verb registry. Exits 1 with field level errors |
 | `quackd serve-mcp` | Expose the duck as MCP tools over stdio |
 | `quackd doctor` | Keys, extras, transports, and every upstream assumption on this machine |
@@ -307,6 +308,7 @@ Find the ball and kick it.
 | `patrol-and-quack` | wander, quack twice on a person or pet | |
 | `follow-me` | keep a person in view and follow at 0.5 m | |
 | `fetch` | scoop the ball up and bring it back | **experimental**, the scoop is open loop and fails about 40 % of the time in sim, by design |
+| `flock-kick` | three ducks split the search, the closest one kicks | **flock mode**, cooperation over a bus and an auction |
 
 Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks/).
 
@@ -317,6 +319,24 @@ claude mcp add quackd -- uvx quackd serve-mcp --transport sim2d
 ```
 
 Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Config for both clients, the eight `duck_*` tools, and a two minute script: [docs/mcp.md](docs/mcp.md).
+
+<br>
+
+## Flock mode (v0.3, simulator)
+
+Multiple Microducks can cooperate. Three simulated ducks split the search for a ball over a tiny message bus, hold an auction, and the closest one kicks. Everyone else keeps clear.
+
+```bash
+uvx quackd run flock-kick --provider fake --seed 3
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/flock.gif" alt="Three simulated ducks search, bid, and the closest one kicks the ball." width="600">
+  <br>
+  <sub>Three ducks, one auction, one kicker. Scripted planner, deterministic coordinator. Every message is in the transcript.</sub>
+</p>
+
+The cooperation is real and inspectable, and it is honest about what it is. The ducks talk over an in process bus (BID, CLAIM, ROLE messages, all logged in `flock.jsonl`), a deterministic Contract Net auction picks the kicker from each duck's own camera distance estimate, and the LLM contributes **at most one** planning call per run. Each duck still enforces the `.duck` contract on itself. The outcome is judged from sim ground truth, not from a model's claim. Add a `flock:` block to any `.duck` or pass `--flock N` (2 to 4). Simulator only for now, and the per duck pilots are rules, on purpose. Details: [docs/flock.md](docs/flock.md).
 
 <br>
 
@@ -352,6 +372,7 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 - `grab` is open loop upstream and unreliable here on purpose. `fetch` says so in its file.
 - Default model IDs for OpenAI, Gemini and Grok were not verified at release.
 - Local model quality is unmeasured. The JSON text fallback and the one retry exist because small models often miss native tool calls. We have not run a live local server ourselves yet.
+- Flock mode is simulator only and the per duck pilots are deterministic rules. The LLM contributes one planning call at most. Duck to duck separation uses sim ground truth, not perception.
 
 **Non goals for now, on purpose:** no RL training or reward generation (that is v2, and only the registry hook exists), no features that require hardware (the real robot transport ships experimental), and no copying of Pollen Robotics assets, ever (no logos, no 3D meshes, no videos).
 
