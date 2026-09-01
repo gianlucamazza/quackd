@@ -410,6 +410,16 @@ quackd is an independent community project, not affiliated with or endorsed by P
 
 <br>
 
+## Star history
+
+<p align="center">
+  <a href="https://www.repostars.dev/?repos=rokbenko%2Fquackd&theme=terminal">
+    <img src="https://www.repostars.dev/api/embed?repo=rokbenko%2Fquackd&theme=terminal" alt="Star history chart for rokbenko/quackd" width="600">
+  </a>
+</p>
+
+<br>
+
 ## License
 
 [Apache 2.0](LICENSE), like the upstream projects. Third party and asset licenses (including why the robot's CC BY NC SA meshes are never vendored) are in [docs/licenses.md](docs/licenses.md) and [NOTICE](NOTICE).
