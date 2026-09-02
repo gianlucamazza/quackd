@@ -76,6 +76,33 @@
       "title": "FlockAllocation",
       "type": "object"
     },
+    "FlockRole": {
+      "additionalProperties": false,
+      "description": "A role in a heterogeneous flock (v1): who may take it is decided by capability.",
+      "properties": {
+        "requires": {
+          "description": "Verbs a robot must provide to bid for this role.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requires",
+          "type": "array"
+        },
+        "count": {
+          "const": 1,
+          "default": 1,
+          "description": "Robots per role. Only 1 in 0.4.",
+          "title": "Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "requires"
+      ],
+      "title": "FlockRole",
+      "type": "object"
+    },
     "FlockSafety": {
       "additionalProperties": false,
       "properties": {
@@ -126,7 +153,7 @@
     },
     "FlockSection": {
       "additionalProperties": false,
-      "description": "Cooperating ducks (v0.3, simulator only). The coordinator enforces this block.",
+      "description": "Cooperating robots (simulator only). The coordinator enforces this block.",
       "properties": {
         "members": {
           "anyOf": [
@@ -152,6 +179,33 @@
         },
         "search": {
           "$ref": "#/$defs/FlockSearch"
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/FlockRole"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "v1: named roles (spotter, kicker) with the verbs each requires.",
+          "title": "Roles"
+        },
+        "frame_hints": {
+          "default": "auto",
+          "description": "v1: share arena-frame target hints between robots. auto = only when every member runs in sim2d (there is no shared frame on hardware).",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "title": "Frame Hints",
+          "type": "string"
         }
       },
       "title": "FlockSection",
@@ -223,8 +277,11 @@
   "description": "The contract. This is what `schema.json` describes and what the executor enforces.",
   "properties": {
     "duck": {
-      "const": 0,
-      "description": "Spec version. Only 0 exists.",
+      "description": "Spec version: 0 (quackd 0.1 to 0.3) or 1 (0.4: requires, robots, flock.roles, flock.frame_hints). v0 files parse unchanged.",
+      "enum": [
+        0,
+        1
+      ],
       "title": "Duck",
       "type": "integer"
     },
@@ -318,7 +375,34 @@
         }
       ],
       "default": null,
-      "description": "Cooperating ducks (v0.3, simulator only). Absent means a single duck."
+      "description": "Cooperating robots (simulator only). Absent means a single robot."
+    },
+    "requires": {
+      "description": "v1: verbs the task needs. `quackd validate --robot` checks them against the robot's manifest. For v0 files every allowed verb is required.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Requires",
+      "type": "array"
+    },
+    "robots": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "v1: default robot as <adapter>[:<backend>], or a mapping from flock member name to such a spec, so `quackd run <duck>` needs no --robot flag.",
+      "title": "Robots"
     }
   },
   "required": [
@@ -328,6 +412,6 @@
     "verbs",
     "success"
   ],
-  "title": "quackd .duck v0 frontmatter",
+  "title": "quackd .duck frontmatter (v0, v1)",
   "type": "object"
 }

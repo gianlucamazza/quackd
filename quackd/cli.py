@@ -69,6 +69,7 @@ def validate(
 ) -> None:
     """Validate .duck files against the spec and the verb registry. Exits 1 on any failure."""
     from quackd.duckfile.parser import DuckParseError, load_duck
+    from quackd.duckfile.validate import validate_duck
     from quackd.verbs.registry import default_registry
 
     registry = default_registry()
@@ -83,34 +84,16 @@ def validate(
             duck = load_duck(path)
         except DuckParseError as e:
             failures += 1
-            table.add_row(path, "—", "—", f"[red]✗ {e.reason}[/red]")
+            table.add_row(path, "—", "—", f"[red]✗ {escape(e.reason)}[/red]")
             continue
-        unknown = registry.unknown(duck.frontmatter.verbs.allow)
-        if unknown:
+        problems = validate_duck(duck, registry=registry)
+        if problems:
             failures += 1
             table.add_row(
                 path,
                 duck.name,
                 str(len(duck.frontmatter.verbs.allow)),
-                f"[red]✗ unknown verbs: {', '.join(unknown)}[/red]",
-            )
-            continue
-        if duck.frontmatter.learned_verbs:
-            failures += 1
-            table.add_row(
-                path,
-                duck.name,
-                str(len(duck.frontmatter.verbs.allow)),
-                "[red]✗ learned_verbs must be empty in v0.1 (v2 feature)[/red]",
-            )
-            continue
-        if duck.frontmatter.flock is not None and duck.frontmatter.verbs.confirm:
-            failures += 1
-            table.add_row(
-                path,
-                duck.name,
-                str(len(duck.frontmatter.verbs.allow)),
-                "[red]✗ a flock cannot prompt y/N per duck: empty verbs.confirm[/red]",
+                "[red]✗ " + escape("; ".join(p.message for p in problems)) + "[/red]",
             )
             continue
         if not quiet:

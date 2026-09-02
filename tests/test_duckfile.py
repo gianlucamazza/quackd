@@ -86,7 +86,8 @@ def test_advisory_abort_conditions_pass_through() -> None:
     [
         (lambda s: s.replace("---\nduck", "duck", 1), "missing frontmatter"),
         (lambda s: s.replace("---\n# Task", "# Task"), "unterminated"),
-        (lambda s: s.replace("duck: 0", "duck: 1"), "duck"),
+        (lambda s: s.replace("duck: 0", "duck: 2"), "duck"),
+        (lambda s: s.replace("success: [x]", "success: [x]\nrequires: [quack]"), "needs duck: 1"),
         (lambda s: s.replace("name: t", "name: Not A Slug"), "name"),
         (lambda s: s.replace("success: [x]", "success: [x]\nbogus: 1"), "bogus"),
         (lambda s: s.replace("allow: [quack]", "allow: [quack]\n  confirm: [kick]"), "not allowed"),
@@ -118,3 +119,79 @@ def test_defaults_applied() -> None:
     assert fm.budgets.max_minutes == 5
     assert fm.verbs.confirm == []
     assert fm.providers == []
+    assert fm.requires == [] and fm.robots is None
+    assert fm.effective_requires == ["quack"]  # a v0 task needs everything it allows
+
+
+V1 = """\
+---
+duck: 1
+name: t
+description: d
+requires: [observe, kick]
+robots: {reachy-01: reachy_mini:sim2d, duck-01: microduck:sim2d}
+verbs:
+  allow: [observe, gaze, go_to, kick, stop]
+success: [x]
+flock:
+  members: [reachy-01, duck-01]
+  roles:
+    spotter: {requires: [observe, gaze]}
+    kicker: {requires: [go_to, kick]}
+  frame_hints: auto
+---
+# Task
+Do it.
+"""
+
+
+def test_duck_v1_parses_requires_robots_and_roles() -> None:
+    fm = parse_duck_text(V1).frontmatter
+    assert fm.duck == 1 and fm.effective_requires == ["observe", "kick"]
+    assert fm.robots == {"reachy-01": "reachy_mini:sim2d", "duck-01": "microduck:sim2d"}
+    assert fm.flock is not None and fm.flock.roles is not None
+    assert fm.flock.roles["kicker"].requires == ["go_to", "kick"]
+    assert fm.flock.frame_hints == "auto"
+    solo = parse_duck_text(
+        V1.replace(
+            "robots: {reachy-01: reachy_mini:sim2d, duck-01: microduck:sim2d}",
+            "robots: microduck:mock",
+        ).split("flock:")[0]
+        + "---\n# Task\nx\n"
+    )
+    assert solo.frontmatter.robots == "microduck:mock"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "needle"),
+    [
+        (
+            lambda s: s.replace("requires: [observe, kick]", "requires: [observe, fly]"),
+            "not allowed",
+        ),
+        (
+            lambda s: s.replace("requires: [observe, kick]", "requires: [observe, get_frame]"),
+            "same verb",
+        ),
+        (lambda s: s.replace("spotter:", "judge:"), "unknown flock role"),
+        (
+            lambda s: s.replace("    kicker: {requires: [go_to, kick]}\n", ""),
+            "both spotter and kicker",
+        ),
+        (lambda s: s.replace("members: [reachy-01, duck-01]", "members: 2"), "name the members"),
+        (
+            lambda s: s.replace("kicker: {requires: [go_to, kick]}", "kicker: {requires: [fly]}"),
+            "not allowed",
+        ),
+        (
+            lambda s: s.replace("duck-01: microduck:sim2d", "duck-02: microduck:sim2d"),
+            "does not have",
+        ),
+        (lambda s: s.replace("microduck:sim2d", "Micro Duck"), "<adapter>"),
+        (lambda s: s.replace("frame_hints: auto", "frame_hints: maybe"), "frame_hints"),
+    ],
+)
+def test_invalid_v1_ducks_fail_fast(mutation, needle: str) -> None:
+    with pytest.raises(DuckParseError) as exc:
+        parse_duck_text(mutation(V1), path="x.duck")
+    assert needle.lower() in str(exc.value).lower()
