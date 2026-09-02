@@ -33,7 +33,7 @@ Encoding UTF-8. The first non-blank, non-comment line must be `---`.
 | `verbs.allow` | list of verb names, ≥ 1, unique | yes | **executor** | The only verbs the LLM may call. `stop` is always allowed. Unknown names fail `quackd validate`. |
 | `verbs.confirm` | list ⊆ `allow` | no (default `[]`) | **executor** | Verbs that prompt a human y/N before running (`--yes` auto-accepts; MCP refuses unless `--yes`). |
 | `budgets.max_steps` | int 1–1000 (default 40) | no | **executor** | Maximum verb executions. |
-| `budgets.max_minutes` | number > 0 ≤ 180 (default 5) | no | **loop** | Transport-clock cap (sim time in `sim2d`, wall-clock on hardware). |
+| `budgets.max_minutes` | number > 0 ≤ 180 (default 5) | no | **loop** | Robot-clock cap (sim time in `sim2d`, wall-clock on hardware). |
 | `budgets.max_llm_calls` | int 1–2000 (default 40) | no | **loop** | Maximum provider calls (re-prompts count). |
 | `success` | list of strings, ≥ 1 | yes | LLM (+ ground truth in sim tests) | Criteria the model judges itself against via `declare_success(reason)`. |
 | `abort_when` | list of strings | no | **executor** for two phrasings; LLM otherwise | See below. |
@@ -57,7 +57,7 @@ below). Aliases count: a robot that provides `observe` satisfies `get_frame`.
 `robots` names the default robot for a solo task (`robots: microduck:sim2d`) or one per
 flock member (`robots: {reachy-01: reachy_mini:sim2d, duck-01: microduck:sim2d}`).
 
-### `flock` — cooperating ducks (v0.3, simulator only)
+### `flock` — cooperating robots (simulator only)
 
 Added in spec v0 by quackd 0.3.0 as an optional field. Older quackd versions refuse files
 that use it (strict parsing), which is the correct failure: they cannot honour the block.
@@ -67,13 +67,13 @@ terminal to prompt on). Full semantics: [flock.md](flock.md).
 | Field | Type | Default | Enforced by | Meaning |
 |---|---|---|---|---|
 | `flock.members` | int 2–4, or list of 2–4 unique slugs | 3 | coordinator | Member count (named `duck-0`…) or explicit names. `--flock N` overrides. |
-| `flock.allocation.method` | `auction` | `auction` | coordinator | Contract Net is the only method in v0.3. |
+| `flock.allocation.method` | `auction` | `auction` | coordinator | Contract Net is still the only method. |
 | `flock.allocation.bid` | `ball_distance` | `ball_distance` | coordinator | Lower camera-estimated distance wins. |
 | `flock.allocation.tie_break` | `duck_id` | `duck_id` | coordinator | Lexicographic member name. |
 | `flock.allocation.hysteresis_pct` | 0–100 | 20 | coordinator | A challenger must bid this much lower to unseat the current claimant. |
 | `flock.allocation.claim_lease_s` | 0–60 | 6 | coordinator | Longest a claim may be held before re-auction (sim clock). A fixed fuse from the grant, not a progress timer. |
 | `flock.safety.min_separation_m` | 0.1–2.0 | 0.4 | coordinator | Non-kickers keep at least this far from the action. |
-| `flock.safety.one_claimant` | bool | true | coordinator | At most one duck approaches the ball. Always enforced in v0.3, `false` is rejected at validation. |
+| `flock.safety.one_claimant` | bool | true | coordinator | At most one robot approaches the ball. Always enforced, `false` is rejected at validation. |
 | `flock.safety.per_duck_heartbeat_s` | 0–10 | 1.0 | coordinator | Bus heartbeat period; the watchdog presumes a duck dead after 3×. |
 | `flock.search.partition` | `heading` | `heading` | coordinator | Each duck owns a heading sector. |
 | `flock.search.restart_s` | 0–120 | 8 | member | Re-scan the sector when nothing was found for this long. |
@@ -86,8 +86,11 @@ Unknown keys anywhere are errors (`extra="forbid"`).
 
 Two phrasings are recognised (case-insensitive) and enforced by the executor:
 
-- `Battery below N%` (also `under`, `<`) — before every verb, if the transport reports
-  `battery_percent < N`, the run aborts.
+- `Battery below N%` (also `under`, `<`) — before every verb, if the robot reports
+  `battery_percent < N`, the run aborts. A body whose manifest has no `battery` sensor
+  reports `None` and this rule can never fire on it, so it is silently unenforceable
+  there rather than an error. A Reachy Mini is the shipped example
+  ([adapters/reachy_mini.md](adapters/reachy_mini.md)); `quackd validate --robot` warns.
 - `Same verb fails N times in a row` — N consecutive failed results of one verb abort the run.
 
 Every other entry is handed to the LLM under *"Abort conditions you must respect yourself"*.
@@ -118,8 +121,8 @@ is refused at runtime and the LLM is told so.
 ## Runtime semantics
 
 - The loop ends with one of `success`, `failure` (the LLM's declaration), `budget`, or
-  `aborted` (heartbeat, kill switch, enforced `abort_when`). The duck is stopped in every
-  case and the transport closed.
+  `aborted` (heartbeat, kill switch, enforced `abort_when`). The robot is stopped in every
+  case and its adapter closed.
 - `--max-steps` on the CLI overrides `budgets.max_steps` for one run.
 - `--dry-run` executes read-only verbs (`get_frame`) and logs everything else without
   sending an intent.

@@ -20,12 +20,29 @@ body:
       render: markdown
     validations:
       required: true
+  - type: input
+    id: robot
+    attributes:
+      label: Which robot is it for?
+      description: >-
+        The `--robot <adapter>:<backend>` it targets, or the `robots:` line in the file.
+        `quackd validate your.duck --robot <spec>` should pass for it.
+      placeholder: e.g. microduck:sim2d, or reachy_mini:sim2d
+    validations:
+      required: true
   - type: dropdown
     id: tested
     attributes:
       label: Tested with
       multiple: true
-      options: ["fake + sim2d", "anthropic", "openai", "gemini", "grok", "real robot"]
+      options:
+        - "fake (the scripted pilot)"
+        - "anthropic"
+        - "openai"
+        - "gemini"
+        - "grok"
+        - "a local model (ollama, vllm, llamacpp, lmstudio, local)"
+        - "a real robot"
   - type: textarea
     id: notes
     attributes:

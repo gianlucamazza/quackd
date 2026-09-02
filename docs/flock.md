@@ -129,7 +129,7 @@ parameters are clamped into the schema's ranges, an invalid field is dropped on 
 (the valid ones survive), and a missing or broken call falls back to deterministic
 defaults, logged. With `--provider fake` even that call is skipped and the plan is a pure
 function. The auction, the roles and the steering are deterministic code. Per duck LLM
-pilots and LLM negotiated bids are deliberately out of scope in v0.3: they would cost N
+pilots and LLM negotiated bids are still deliberately out of scope: they would cost N
 times the tokens and latency, and the demo does not need them to be honest.
 `summary.json` records `planner.llm_calls` (0 or 1) as proof.
 

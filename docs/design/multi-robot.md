@@ -1,6 +1,6 @@
 # Design: quackd 0.4, from "a brain for the Microduck" to "a brain for any small robot"
 
-**Status:** approved 2026-09-02 · **Branch:** `feat/multi-robot` · **Target:** 0.4.0
+**Status:** implemented in 0.4.0 · **Branch:** `feat/multi-robot` · **Shipped:** 2026-09-02
 
 ## Why
 

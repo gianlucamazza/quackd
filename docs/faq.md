@@ -54,6 +54,14 @@ is POSIX-only; forward it with `ssh -L 9870:/run/robotd.sock <robot>` and use
 `duck-ipc-proto` v16 vocabulary but has never touched hardware. Start with `--dry-run`,
 read [adapter-status.md](adapter-status.md), and tell us what happened.
 
+**Can I drive it from the Claude mobile app?** Not yet. `quackd serve-mcp` speaks `stdio`
+only, so Claude Code and Claude Desktop spawn it as a local subprocess on the same machine
+and talk to it over pipes. The mobile app reaches tools as remote connectors instead:
+servers that run persistently at a network address with their own auth. quackd would need
+an HTTP or SSE transport, a long-lived process, a reachable address and authentication
+before a phone could talk to it. Roadmap, not shipped. The details are in
+[mcp.md](mcp.md#why-not-from-my-phone-yet).
+
 **Can quackd drive something that is not a duck?** Since 0.4, yes: a robot is an adapter
 that returns a manifest, and the verbs come from the manifest. `quackd list-adapters`
 shows the four that ship (Microduck, Reachy Mini, a LeRobot arm, any base over

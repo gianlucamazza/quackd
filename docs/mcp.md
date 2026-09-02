@@ -98,6 +98,27 @@ Restart Claude Desktop completely. The duck appears under *Connectors → Manage
 > `C:\\Users\\you\\.local\\bin\\uvx.exe`). Server stderr lands in
 > `%APPDATA%\Claude\logs\mcp-server-quackd.log` (macOS: `~/Library/Logs/Claude/`).
 
+## Why not from my phone yet
+
+Both setups above are *local*. `quackd serve-mcp` speaks the `stdio` transport and nothing
+else (`mcp.run(transport="stdio")` in `quackd/mcp_server.py`), so the client spawns it as a
+subprocess on the same machine and talks to it over stdin and stdout. It lives exactly as
+long as that process does.
+
+Reaching it from the Claude mobile app would need a different shape: a remote connector,
+which is a server that runs persistently somewhere reachable over the network, with its own
+address and its own authentication. quackd is not that today, and there is no flag that makes
+it one. Four things would have to land first:
+
+- an HTTP or SSE transport option in `serve()`, instead of `stdio` only,
+- a long-lived process rather than one spawned per client session,
+- a reachable address for it (a tunnel, or a small always-on host next to the robot),
+- authentication and session isolation, which the server does not have because it assumes
+  one trusted local pilot.
+
+None of that is built. It is on the roadmap, and it is worth wanting: the robot is the thing
+you would most like to poke at from the sofa.
+
 ## Useful flags
 
 ```

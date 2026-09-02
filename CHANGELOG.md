@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Nothing yet.
+
 ## [0.4.0] — 2026-09-02
 
 From "a brain for the Microduck" to "a brain for any small robot". The thesis does not
@@ -120,12 +124,51 @@ simulator, and nothing claimed on hardware. Design: `docs/design/multi-robot.md`
   the connected robot.
 - `docs/transport-status.md` is a redirect to `docs/adapter-status.md`; the docs test
   that keeps the Microduck's upstream table in sync now reads the new page.
+- **The README was rewritten for four bodies**: the tagline and intro name the other
+  robots, a new "Any small robot" section puts all four side by side with what each gets
+  and what has actually run, the verb table gains a row per body, both architecture
+  diagrams show the adapter layer, and the status table states per feature what was
+  exercised against its real target and what was not.
+- Test suite: 360 tests collected, no network and no keys, with four seeded sweeps CI holds
+  at 10 of 10 (`find-and-kick`, `flock-kick`, `reachy-spotter`, `reachy-spots-duck-kicks`).
+- Eight starter `.duck` files ship, up from six.
 
 ### Deprecated
 
 - `--transport X` is an alias of `--robot microduck:X` that prints one warning per
   process; it is removed in 0.5. The `quackd.transport` package is not deprecated: it is
   the Microduck backend layer.
+- The eight `duck_*` MCP tools (`duck_list_verbs`, `duck_run_verb`, `duck_get_frame`,
+  `duck_get_state`, `duck_set_velocity`, `duck_stop`, `duck_quack`, `duck_load_duckfile`)
+  are aliases of the six `robot_*` tools on the default robot. Each carries a deprecation
+  note in its description and all eight are removed in 0.5.
+
+### Fixed
+
+- A role auction is complete only when every role can be filled by a *different* member,
+  so a single robot that satisfies both roles can no longer deadlock a heterogeneous
+  flock.
+- `Subscription.drain()` is an atomic `popleft` loop rather than copy-then-clear, so a
+  producer on another thread (the MQTT bus, before a message reaches the event loop)
+  cannot have its message cleared unseen.
+
+### Known limitations
+
+- **Nothing has run on hardware, on any of the four adapters.** `microduck:jsonrpc`,
+  `reachy_mini:sdk`, `lerobot:real` and `rosbridge:ws` spell every upstream name from
+  upstream source (the three new ones at pinned commits) and have only ever talked to
+  fakes. `microduck:websocket` is a stub waiting on upstream.
+- LAN discovery and the MQTT bus were each exercised once, on one machine: zeroconf
+  between two processes, MQTT against a local `amqtt` broker. Neither has crossed to a
+  second machine, and a flock across machines also needs a clock across machines, which
+  does not exist.
+- Flock mode stays simulator only, with two choreographies and exactly two roles.
+- A manifest can be smaller than the robot: `lerobot:real` claims no camera and no `pick`
+  until it connects, and `rosbridge:ws` has no camera verbs unless the address names an
+  image topic.
+- The MCP server speaks `stdio` only, so it is a local subprocess of Claude Code or
+  Claude Desktop and cannot be reached from a phone. A network transport is roadmap, not
+  shipped.
 
 ## [0.3.0] — 2026-08-31
 
@@ -242,7 +285,8 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/rokbenko/quackd/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rokbenko/quackd/releases/tag/v0.1.0

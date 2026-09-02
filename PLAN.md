@@ -1,4 +1,4 @@
-# PLAN.md — quackd v0.1.0
+# PLAN.md — quackd
 
 The task DAG per milestone. Updated as work lands. Decisions live in `docs/adr/`.
 
@@ -8,7 +8,7 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 
 - ✅ Verify name: PyPI `quackd` free (404, 2026-08-28); repo `rokbenko/quackd` owned → ADR-0002
 - ✅ ADR-0001 language/tooling
-- ✅ `pyproject.toml` (uv, hatchling, extras: anthropic/openai/gemini/grok/all/yolo/live/dev)
+- ✅ `pyproject.toml` (uv, hatchling, extras: anthropic/openai/gemini/grok/all/yolo/live/dev; 0.4 adds reachy/lerobot/rosbridge/lan)
 - ✅ Package skeleton with "why it exists" docstrings; `quackd --help`, `--version`
 - ✅ LICENSE (Apache-2.0), NOTICE, CODE_OF_CONDUCT, SECURITY, CHANGELOG, .env.example, .gitignore
 - ✅ CI (ruff · mypy · pytest · validate ducks; 3.11/3.12 × ubuntu/macos), pre-commit, dependabot, issue/PR templates
@@ -68,14 +68,14 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 
 - ⏸ Real-model hero recording (needs an API key) — `quackd record find-and-kick --provider anthropic --seed 3`
 - ⏸ Verify `gpt-5` / `grok-4` / `gemini-2.5-pro` default IDs against vendor docs
-- ⏸ Run `--transport jsonrpc` against a real Microduck (Christmas 2026) and flip rows in `docs/transport-status.md`
+- ⏸ Run `--robot microduck:jsonrpc` against a real Microduck (Christmas 2026) and flip its rows in `docs/adapter-status.md` (see the 0.4 human-only list below, which covers all four adapters)
 - ✅ Published `quackd 0.1.0` to PyPI (2026-08-28); `uvx quackd --version` resolves
 - ✅ v0.2.0 (2026-08-29): local and open-source LLM providers, `--goal`, README rewrite, logo
 - ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
 - ⏸ First transcript from a live local server (Ollama, vLLM, llama.cpp) — none available on the dev machine
 - ✅ v0.3.0 (2026-08-31): flock mode — multi-duck sim, lockstep clock, in-process bus, Contract Net auction, one planner LLM call, 10/10 seeded acceptance (ADR-0015/0016); hardened by a 69-agent adversarial review, 24 confirmed findings fixed pre-release
 - ⏸ Flock future work: hardware flocks when Microducks ship, real-provider planner recording
-- ✅ v0.4.0 (2026-09-02): "a brain for any small robot" — robot adapters and manifests (ADR-0017/0018), `.duck` v1 with `requires` and `robots` (ADR-0019), the Reachy Mini adapter (ADR-0023), heterogeneous flocks with `reachy-spots-duck-kicks` 10/10 (ADR-0020), multi-robot MCP (`--robots`, six `robot_*` tools), zeroconf discovery and an MQTT bus behind `quackd[lan]` (ADR-0021), LeRobot and rosbridge adapters (ADR-0022); 157 → 360 tests, still offline, four seeded sweeps at 10 of 10
+- ✅ v0.4.0 (2026-09-02): "a brain for any small robot" — robot adapters and manifests (ADR-0017/0018), `.duck` v1 with `requires` and `robots` (ADR-0019), the Reachy Mini adapter (ADR-0023), heterogeneous flocks with `reachy-spots-duck-kicks` 10/10 (ADR-0020), multi-robot MCP (`--robots`, six `robot_*` tools), zeroconf discovery and an MQTT bus behind `quackd[lan]` (ADR-0021), LeRobot and rosbridge adapters (ADR-0022); 360 tests collected, still offline, four seeded sweeps at 10 of 10
 - ⏸ Only a human can: run `reachy_mini:sdk` against a Reachy Mini (or `reachy-mini-daemon --mockup-sim`), `lerobot:real` against an SO-101, `rosbridge:ws` against a bridge, `microduck:jsonrpc` against a robotd; a flock across two machines needs a distributed clock first; flip rows in `docs/adapter-status.md` only after
 - ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)

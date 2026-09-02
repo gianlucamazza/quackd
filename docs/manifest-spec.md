@@ -70,7 +70,7 @@ and MCP `robot_list` returns it.
 
 ## Examples
 
-Three manifests, from `quackd list-verbs --robot ... --json` or `describe()`:
+The four shipped manifests, from `quackd list-verbs --robot ...` or `describe()`:
 
 | Robot | embodiment / mobility | intents | verbs |
 |---|---|---|---|

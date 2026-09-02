@@ -1,13 +1,13 @@
 # Architecture
 
-quackd is the brain daemon Microduck was missing. This page is the map; the ADRs in
-[`adr/`](adr/) are the reasons.
+quackd is the brain daemon Microduck was missing, and since 0.4 a brain for any small robot
+that has an adapter. This page is the map; the ADRs in [`adr/`](adr/) are the reasons.
 
 ## Three loops
 
 | Loop | Rate | Where | Owner |
 |---|---|---|---|
-| Reflexes | 50 Hz | onboard `robotd` | RL policies (ONNX): balance, gait, stand-up. quackd never touches this. |
+| Reflexes | the body's own (50 Hz on a Microduck) | below quackd: `robotd` on a Microduck, the daemon on a Reachy Mini, the position controller on an arm, the driver on a base | the robot's own controllers: RL policies (ONNX) for balance, gait and stand-up on the Microduck, a learned pick policy on the arm when one is loaded. quackd never touches this layer on any body. |
 | Steering | 5–20 Hz | quackd process | perception + composite verbs. `go_to` (alias `walk_to`) closes the approach loop on detections. |
 | Deliberation | ~0.2–1 Hz | LLM | reads frame summary + state + last result, picks one **verb**, judges success. |
 
@@ -62,6 +62,7 @@ sequenceDiagram
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
 | `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: six `robot_*` tools through one executor per robot, the eight `duck_*` tools kept as aliases of the default robot. |
 | `quackd/lan/` | LAN discovery over zeroconf (`_quackd._tcp.local.`): a pure TXT wire format, `announce`, `discover`; behind `quackd[lan]` ([lan.md](lan.md)). |
+| `quackd/flock/` | Many robots on one task: the in-process `Bus`, the typed messages, the Contract Net `Auction` and the role auction, the deterministic coordinator, the scripted member FSM, the one-call planner and the runner that judges from ground truth ([flock.md](flock.md)). |
 | `quackd/flock/mqtt_bus.py` | The flock `Bus` protocol over an MQTT broker, library only; the in-process bus stays the default. |
 | `quackd/doctor.py` | What can run here and what we are assuming about the robot. |
 
