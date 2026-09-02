@@ -134,30 +134,58 @@ ducks/                          + reachy-spotter.duck, reachy-spots-duck-kicks.d
 ### 4.1 `RobotManifest` (`quackd/adapters/manifest.py`)
 
 ```python
-Embodiment   = Literal["biped", "quadruped", "wheeled", "arm", "stationary_head", "humanoid"]
-Mobility     = Literal["none", "legged", "wheeled"]
-IntentName   = Literal["twist", "skill", "gaze", "sound", "joint", "pose", "gripper"]
-Sensor       = Literal["camera", "battery", "odometry", "imu", "tof", "microphone", "joint_state"]
-SafetyClass  = Literal["safe", "confirm", "dangerous"]        # registry.py imports it from here
+Embodiment = Literal["biped", "quadruped", "wheeled", "arm", "stationary_head", "humanoid"]
+Mobility = Literal["none", "legged", "wheeled"]
+IntentName = Literal["twist", "skill", "gaze", "sound", "joint", "pose", "gripper"]
+Sensor = Literal["camera", "battery", "odometry", "imu", "tof", "microphone", "joint_state"]
+SafetyClass = Literal["safe", "confirm", "dangerous"]  # registry.py imports it from here
 NativeSafety = Literal["robotd_deadman", "lease", "torque_limit", "estop", "none"]
-INTENT_KIND_FOR = {"twist": "move", "skill": "do", "gaze": "look", "sound": "sound",
-                   "joint": "joint", "pose": "pose", "gripper": "gripper"}
+# manifest intent name -> transport.base.IntentKind
+INTENT_KIND_FOR = {
+    "twist": "move",
+    "skill": "do",
+    "gaze": "look",
+    "sound": "sound",
+    "joint": "joint",
+    "pose": "pose",
+    "gripper": "gripper",
+}
 
-class VerbSpec(BaseModel):            # extra=forbid
-    name: str                         # canonical, never an alias (validator)
+
+class VerbSpec(BaseModel):
+    """One manifest verb. `extra="forbid"`."""
+
+    name: str  # canonical, never an alias (validator)
     core: bool = False
-    description: str = ""             # "" means the implementation's default
-    params_schema: dict[str, Any] = {}   # informational (MCP, mDNS); derived from the params model
+    description: str = ""  # "" means the implementation's default
+    params_schema: dict[str, Any] = {}  # informational (MCP, mDNS); from the params model
     safety_class: SafetyClass = "safe"
     timeout_s: float | None = None
 
-class SafetyAuthority(BaseModel): native: NativeSafety = "none"; deadman: bool = False; heartbeat_hz: float = 2.0
-class Frame(BaseModel): reference: Literal["body", "head", "base", "world"] = "body"; note: str = ""
-class Health(BaseModel): ok: bool = True; reason: str | None = None; battery_percent: float | None = None; extras: dict = {}
 
-class RobotManifest(BaseModel):       # extra=forbid
+class SafetyAuthority(BaseModel):
+    native: NativeSafety = "none"
+    deadman: bool = False
+    heartbeat_hz: float = 2.0
+
+
+class Frame(BaseModel):
+    reference: Literal["body", "head", "base", "world"] = "body"
+    note: str = ""
+
+
+class Health(BaseModel):
+    ok: bool = True
+    reason: str | None = None
+    battery_percent: float | None = None
+    extras: dict[str, Any] = {}
+
+
+class RobotManifest(BaseModel):
+    """What a connected robot is and can do. Data only. `extra="forbid"`."""
+
     manifest: Literal[1] = 1
-    id: str                           # slug: "microduck", "reachy-01", or the fleet/member name when given
+    id: str  # slug: "microduck", "reachy-01", or the fleet/member name when given
     vendor: str
     model: str
     embodiment: Embodiment
@@ -165,13 +193,14 @@ class RobotManifest(BaseModel):       # extra=forbid
     intents: list[IntentName]
     sensors: list[Sensor] = []
     verbs: list[VerbSpec]
-    preconditions: dict[str, list[str]] = {}   # verb -> condition names; the adapter supplies the predicates
+    # verb -> condition names; the adapter supplies the predicates by name
+    preconditions: dict[str, list[str]] = {}
     safety_authority: SafetyAuthority = SafetyAuthority()
     frame: Frame = Frame()
-    limits: dict[str, float] = {}              # "max_vx", "gaze_yaw_deg", ...
-    backend: str = ""                          # informational
-    blurb: str = ""                            # prompt intro: "a small biped duck robot (25 cm, 800 g)"
-    extras: dict[str, Any] = {}                # adapter-specific, e.g. {"speech": "tones"}
+    limits: dict[str, float] = {}  # "max_vx", "gaze_yaw_deg", ...
+    backend: str = ""  # informational
+    blurb: str = ""  # prompt intro: "a small biped duck robot (25 cm, 800 g)"
+    extras: dict[str, Any] = {}  # adapter-specific, e.g. {"speech": "tones"}
 ```
 
 Validators: `id` is a slug; no duplicate or alias verb names; `stop` present and safe; every core verb's `REQUIREMENTS` are met by the manifest (a `go_to` on `mobility: none` is rejected before any registry exists); every precondition key names a declared verb. Methods: `verb_names()`, `provides(name)` and `verb(name)` (alias-aware), `digest()`, `summary()`.
@@ -179,30 +208,58 @@ Validators: `id` is a slug; no duplicate or alias verb names; `stop` present and
 ### 4.2 `RobotAdapter` (`quackd/adapters/base.py`)
 
 ```python
-class AdapterError(TransportError): ...        # every existing `except TransportError` still catches it
-class AdapterNotInstalled(AdapterError): ...   # "adapter 'reachy_mini' needs an extra: uv pip install 'quackd[reachy]'"
+class AdapterError(TransportError):
+    """Subclass, so every existing `except TransportError` still catches it."""
+
+
+class AdapterNotInstalled(AdapterError):
+    """'adapter reachy_mini needs an extra: uv pip install quackd[reachy]'."""
+
 
 @runtime_checkable
-class RobotAdapter(Protocol):                   # a superset of DuckTransport
-    name: str                                   # adapter name: "microduck"
-    backend: str                                # "sim2d" | "mock" | "jsonrpc" | "websocket" | "sdk" | "real" | "ws"
-    manifest: RobotManifest | None              # None until connect()
-    async def connect(self) -> RobotManifest: ...
-    async def disconnect(self) -> None: ...
-    async def close(self) -> None: ...          # same as disconnect(); kept for DuckTransport callers
-    async def get_state(self) -> DuckState: ...
-    async def get_frame(self) -> Image.Image | None: ...
-    async def send_intent(self, intent: Intent) -> Ack: ...
-    async def health(self) -> Health: ...       # informational: doctor, robot_list, discovery
-    async def heartbeat(self) -> None: ...      # the watchdog contract, unchanged: raises HeartbeatError
-    async def stop(self) -> None: ...
-    def subscribe(self, topic: str) -> AsyncIterator[dict[str, Any]]: ...
-    def now(self) -> float: ...
-    async def sleep(self, seconds: float) -> None: ...
-    def preconditions(self) -> dict[str, Precondition]: ...   # condition name -> predicate(DuckState) -> reason | None
-    def implementations(self) -> dict[str, Verb]: ...         # extension verbs and core overrides, by canonical name
+class RobotAdapter(Protocol):
+    """A robot, whatever its body. A superset of `DuckTransport`."""
 
-def backend_name(t: Any) -> str: ...            # "sim2d" for a bare Sim2DTransport and for an adapter over one
+    name: str  # adapter name: "microduck"
+    backend: str  # "sim2d" | "mock" | "jsonrpc" | "websocket" | "sdk" | "real" | "ws"
+    manifest: RobotManifest | None  # None until connect()
+
+    async def connect(self) -> RobotManifest: ...
+
+    async def disconnect(self) -> None: ...
+
+    async def close(self) -> None:
+        """Same as disconnect(). Kept so an adapter satisfies DuckTransport."""
+
+    async def get_state(self) -> DuckState: ...
+
+    async def get_frame(self) -> Image.Image | None: ...
+
+    async def send_intent(self, intent: Intent) -> Ack: ...
+
+    async def health(self) -> Health:
+        """Informational: doctor, robot_list, discovery."""
+
+    async def heartbeat(self) -> None:
+        """The watchdog contract, unchanged: raise HeartbeatError."""
+
+    async def stop(self) -> None: ...
+
+    def subscribe(self, topic: str) -> AsyncIterator[dict[str, Any]]: ...
+
+    def now(self) -> float: ...
+
+    async def sleep(self, seconds: float) -> None: ...
+
+    def preconditions(self) -> dict[str, Precondition]:
+        """Condition name -> predicate(DuckState) -> reason or None."""
+
+    def implementations(self) -> dict[str, Verb]:
+        """Extension verbs and core overrides, keyed by canonical name."""
+
+
+def backend_name(t: Any) -> str:
+    """'sim2d' for a bare Sim2DTransport and for an adapter over one."""
 ```
 
 `DuckState` keeps its name. Non-duck robots use `posture = "unknown"`, `holding` for grippers, pose fields `None` when unknown. `transport/base.py` changes are additive only: `IntentKind` gains `joint` and `gripper`, `Intent.do(skill: str)` is widened (the `Skill` Literal stays as the Microduck vocabulary), `Intent.joint(positions, duration_s)` and `Intent.gripper(open)` are added.
@@ -238,9 +295,24 @@ def backend_name(t: Any) -> str: ...            # "sim2d" for a bare Sim2DTransp
 
 ```python
 DUCK_SPEC_VERSION = 1
-class FlockRole(BaseModel): requires: list[str]; count: Literal[1] = 1
-class FlockSection: ...; roles: dict[str, FlockRole] | None = None; frame_hints: Literal["auto", "on", "off"] = "auto"
-class DuckFrontmatter: duck: Literal[0, 1]; requires: list[str] = []; robots: str | dict[str, str] | None = None
+
+
+class FlockRole(BaseModel):
+    requires: list[str]
+    count: Literal[1] = 1
+
+
+class FlockSection(BaseModel):
+    # ... existing fields ...
+    roles: dict[str, FlockRole] | None = None
+    frame_hints: Literal["auto", "on", "off"] = "auto"
+
+
+class DuckFrontmatter(BaseModel):
+    duck: Literal[0, 1]
+    # ... existing fields ...
+    requires: list[str] = []
+    robots: str | dict[str, str] | None = None
 ```
 
 Validators: v1 keys under `duck: 0` raise "needs duck: 1"; `requires` and every role's `requires` are subsets of `allow` (canonical comparison); role names are exactly `spotter` and `kicker`, both present when given; `members` must be a named list when roles are given; `robots` keys are member names; `VerbsSection` rejects alias duplicates (`'walk' and 'move' are the same verb`) and `stop` in `confirm`. `effective_requires` is `requires` for v1 and `verbs.allow` for v0.

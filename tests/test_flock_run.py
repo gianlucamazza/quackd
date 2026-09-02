@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,8 @@ from quackd.flock.runner import run_flock
 
 runner = CliRunner()
 DUCK = load_duck("flock-kick")
+# CI sets QUACKD_STRICT_SEEDS=1 (see tests/test_acceptance_sim2d.py)
+MIN_SUCCESSES = 10 if os.environ.get("QUACKD_STRICT_SEEDS") == "1" else 8
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -64,7 +67,7 @@ async def test_flock_acceptance_seeds(tmp_path: Path) -> None:
         for name in summary["flock"]["members"]:
             assert (result.run_dir / "ducks" / name / "transcript.jsonl").exists()
             assert not (result.run_dir / "ducks" / name / "summary.json").exists()
-    assert successes >= 8, "\n".join(report)
+    assert successes >= MIN_SUCCESSES, "\n".join(report)
 
 
 async def test_flock_dry_run_moves_nothing(tmp_path: Path) -> None:
