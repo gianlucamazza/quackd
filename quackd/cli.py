@@ -717,9 +717,14 @@ def doctor(
 @app.command("serve-mcp")
 def serve_mcp(
     robot: str | None = _ROBOT,
+    robots: str | None = typer.Option(
+        None,
+        "--robots",
+        help="A fleet: name=<adapter>:<backend>,... (six robot_* tools, one executor each).",
+    ),
     transport: str | None = _TRANSPORT,
     duckfile: str | None = typer.Option(
-        None, "--duckfile", help="Load a .duck contract at startup."
+        None, "--duckfile", help="Load a .duck contract at startup (on the default robot)."
     ),
     seed: int | None = _SEED,
     address: str | None = _ADDR,
@@ -735,6 +740,7 @@ def serve_mcp(
     try:
         serve(
             robot=robot,
+            robots=robots,
             transport=transport,
             duckfile=duckfile,
             seed=seed,

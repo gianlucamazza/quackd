@@ -141,7 +141,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | Piece | Status |
 |---|---|
 | `sim2d` bundled simulator (default) | ✅ 10 of 10 seeds on `find-and-kick`, GIF and transcript per run |
-| MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, verified config |
+| MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, verified config, fleets with `--robots` (six `robot_*` tools, tested in process against the simulator and the mocks) |
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
 | Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 not yet exercised against a live server by us, transcripts welcome |
 | Flock mode (multiple cooperating ducks, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |
@@ -326,7 +326,7 @@ Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks
 claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d
 ```
 
-Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Config for both clients, the eight `duck_*` tools, and a two minute script: [docs/mcp.md](docs/mcp.md).
+Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Pass `--robots duck=microduck:sim2d,reachy=reachy_mini:mock` to front a fleet, with one executor, budget and heartbeat per robot. Config for both clients, the six `robot_*` tools, the eight `duck_*` aliases, and a two minute script: [docs/mcp.md](docs/mcp.md).
 
 <br>
 

@@ -93,6 +93,15 @@ def test_readme_verbs_match_registry() -> None:
         assert f"`{name}`" in README, f"README does not mention verb {name}"
 
 
+def test_mcp_doc_lists_every_tool() -> None:
+    from quackd.mcp_server import TOOL_NAMES
+
+    doc = (REPO / "docs" / "mcp.md").read_text(encoding="utf-8")
+    missing = [name for name in TOOL_NAMES if f"`{name}" not in doc]
+    assert not missing, f"docs/mcp.md is missing: {missing}"
+    assert "--robots" in doc and "--robots" in README
+
+
 def test_mcp_json_is_a_stdio_server() -> None:
     cfg = json.loads((REPO / ".mcp.json").read_text(encoding="utf-8"))
     server = cfg["mcpServers"]["quackd"]

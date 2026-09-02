@@ -60,7 +60,7 @@ sequenceDiagram
 | `quackd/sim2d/` | The cartoon world, two renders (top-down, duck-cam), the GIF recorder, the optional live window. |
 | `quackd/perception/` | `Detection` + `Detector`; the HSV colour-blob default; the lazy YOLO extra. |
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
-| `quackd/mcp_server.py` | The duck as MCP tools, through the same executor. |
+| `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: six `robot_*` tools through one executor per robot, the eight `duck_*` tools kept as aliases of the default robot. |
 | `quackd/doctor.py` | What can run here and what we are assuming about the robot. |
 
 ## A turn, concretely

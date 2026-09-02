@@ -64,6 +64,13 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
 - **`reachy-spots-duck-kicks` starter duck**: a Reachy Mini head spots the ball, a
   Microduck kicks it, the head judges the kick. 10 of 10 seeds with scripted pilots,
   every message in `flock.jsonl`, zero planner calls with the fake provider.
+- **Multi-robot MCP**: `quackd serve-mcp --robots duck=microduck:sim2d,reachy=reachy_mini:mock`
+  fronts a fleet with `robot_list`, `robot_list_verbs`, `robot_run_verb`, `robot_observe`,
+  `robot_say` and `robot_load_duckfile`; every robot has its own executor, budget,
+  heartbeat and contract, and `robot_load_duckfile` checks the contract's `requires`
+  against that robot's manifest before adopting it. The eight `duck_*` tools stay as
+  aliases of the default robot (deprecated, removed in 0.5). Simulated robots over MCP
+  each get their own world; a shared arena over MCP is future work.
 
 ### Changed
 

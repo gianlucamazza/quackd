@@ -19,6 +19,14 @@ from quackd.mcp_server import DuckSession, build_server
 from quackd.transport.sim2d import Sim2DTransport
 
 TOOLS = {
+    # 0.4: six fleet tools
+    "robot_list",
+    "robot_list_verbs",
+    "robot_run_verb",
+    "robot_observe",
+    "robot_say",
+    "robot_load_duckfile",
+    # 0.3: eight duck_* tools, kept as aliases of the default robot
     "duck_list_verbs",
     "duck_run_verb",
     "duck_get_frame",
@@ -61,6 +69,11 @@ async def test_tools_and_basic_calls() -> None:
     async with connected() as (client, session, transport):
         tools = await client.list_tools()
         assert {t.name for t in tools.tools} == TOOLS
+        from quackd.mcp_server import TOOL_NAMES
+
+        assert set(TOOL_NAMES) == TOOLS  # the docs test reads the same constant
+        notes = {t.name: t.description or "" for t in tools.tools}
+        assert all("alias" in notes[n] for n in TOOLS if n.startswith("duck_"))
         verbs = _data(await client.call_tool("duck_list_verbs", {}))
         names = {v["name"] for v in verbs["verbs"]}
         assert {"move", "kick", "go_to", "quack"} <= names
