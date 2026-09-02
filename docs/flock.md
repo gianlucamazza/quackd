@@ -179,6 +179,8 @@ Sim only. Nothing multi robot has run on hardware, and the acoustic channel stay
 theatrical (a quack, or a Reachy's expressive sound, marks the sighting; Wi Fi would carry
 the real data). Two choreographies ship: `flock-kick` (ducks) and
 `reachy-spots-duck-kicks` (a head and a duck), both 10 of 10 seeds with scripted pilots
-and ground truth checks. Future work, labelled as such when it lands: a LAN bus (MQTT)
-implementing the same `Bus` protocol for real robots, and hardware flocks once Microducks
-ship. See [transport-status.md](transport-status.md) for the wider honesty table.
+and ground truth checks. An MQTT bus implementing the same `Bus` protocol exists since 0.4
+([lan.md](lan.md)), library only and tested on a fake broker; a flock across machines
+also needs a clock across machines, which is future work, as are hardware flocks once
+Microducks ship. See [transport-status.md](transport-status.md) for the wider honesty
+table.

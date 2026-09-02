@@ -71,6 +71,21 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
   against that robot's manifest before adopting it. The eight `duck_*` tools stay as
   aliases of the default robot (deprecated, removed in 0.5). Simulated robots over MCP
   each get their own world; a shared arena over MCP is future work.
+- **LAN discovery** (`quackd discover`, `quackd announce`, ADR-0021): zeroconf service
+  `_quackd._tcp.local.` with an identity-only TXT record (manifest id, digest, adapter,
+  body, verb count), every pair validated under 200 bytes before zeroconf sees it. Behind
+  `quackd[lan]`, imported lazily, tested on fakes; exercised once for real between two
+  processes on one machine, never between two machines.
+- **MQTT flock bus** (`quackd.flock.mqtt_bus.MqttBus`, `run_flock(bus_factory=)`): the
+  same two-method `Bus` protocol over a broker, `quackd/<flock_id>/ctl` at QoS 1 and
+  `/hb` at QoS 0, never retained, the `FlockMessage` JSON as payload. Broker echo is
+  dropped, the tap fires exactly once per message per node, remote messages are
+  marshalled onto the event loop, and duplicates are tolerated by the coordinator's
+  idempotent handlers. Library only: a flock across machines also needs a clock across
+  machines, so there is no `--bus` flag. Tested on a fake broker; exercised once for real
+  against a local `amqtt` broker with paho 2.1 (all eight kinds, one machine).
+  `Subscription.drain()` is now an atomic `popleft` loop. `doctor` lists both LAN
+  libraries.
 
 ### Changed
 

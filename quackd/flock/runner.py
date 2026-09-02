@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,9 +20,10 @@ from quackd.agent.providers.base import LLMProvider, Usage
 from quackd.agent.transcript import new_run_dir
 from quackd.duckfile.schema import DuckFile, FlockSection
 from quackd.flock.auction import AuctionPolicy
-from quackd.flock.bus import InProcessBus
+from quackd.flock.bus import Bus, InProcessBus
 from quackd.flock.coordinator import FlockCoordinator, FlockOutcome
 from quackd.flock.member import FlockMember
+from quackd.flock.messages import FlockMessage
 from quackd.flock.planner import plan_flock_task
 from quackd.flock.transcript import FlockTranscript
 from quackd.perception.color_blob import ColorBlobDetector
@@ -30,6 +32,9 @@ from quackd.sim2d.world import World
 from quackd.transport.sim2d import Sim2DTransport, make_flock
 
 DEFAULT_MEMBER = "microduck:sim2d"
+
+BusFactory = Callable[[Callable[[FlockMessage], None]], Bus]
+"""`bus_factory(tap) -> Bus`: the seam for `MqttBus`; the in-process bus is the default."""
 
 
 @dataclass
@@ -122,6 +127,7 @@ async def run_flock(
     on_recorder: Any = None,
     log: Any = lambda *_: None,
     robots: dict[str, str] | None = None,
+    bus_factory: BusFactory | None = None,
 ) -> FlockResult:
     flock: FlockSection = duck.frontmatter.flock or FlockSection()
     if n_override is not None:
@@ -143,7 +149,12 @@ async def run_flock(
     run_dir = new_run_dir(runs_dir, run_name)
     world, clock, adapters = make_sim_flock(specs, seed=seed, live=live)
     transcript = FlockTranscript(run_dir, now=clock.now)
-    bus = InProcessBus(tap=transcript.on_bus)
+    bus: Bus = (
+        bus_factory(transcript.on_bus) if bus_factory else InProcessBus(tap=transcript.on_bus)
+    )
+    start_bus = getattr(bus, "start", None)
+    if callable(start_bus):
+        start_bus()  # inside the event loop, so remote deliveries are marshalled onto it
 
     task_id = uuid.uuid4().hex[:8]
     task, wedges, usage, llm_calls, fallback = await plan_flock_task(
@@ -255,7 +266,7 @@ async def run_flock(
         "frame_hints": task.frame_hints,
         "auctions": coordinator.auctions,
         "bids": coordinator.bids,
-        "bus_messages": bus.published,
+        "bus_messages": getattr(bus, "published", 0),
         "ball_displacement_m": round(truth, 3),
         "planner": {
             "provider": provider.name,
@@ -275,6 +286,9 @@ async def run_flock(
     transcript.write("flock_end", **{k: v for k, v in summary.items() if k != "per_duck"})
     transcript.write_summary(summary)
     transcript.close()
+    close_bus = getattr(bus, "close", None)
+    if callable(close_bus):
+        close_bus()
     return FlockResult(
         outcome=outcome,
         reason=reason,

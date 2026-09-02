@@ -149,6 +149,8 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | WebSocket agent gateway (`--robot microduck:websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
 | Reachy Mini adapter (`--robot reachy_mini:sim2d`, `mock`, `sdk`) | ✅ sim2d and mock, `reachy-spotter` 10 of 10 seeds, 🧪 sdk with every SDK name verified against a pinned commit, never run on a robot ([docs/adapters/reachy_mini.md](docs/adapters/reachy_mini.md)) |
 | Heterogeneous flock (a Reachy Mini head and a Microduck, sim2d) | ✅ `reachy-spots-duck-kicks` 10 of 10 seeds, capability aware auction, the spotter judges from its own frames, ground truth vetoes, 🧪 simulator only |
+| LAN discovery (`quackd discover`, `quackd announce`, `quackd[lan]`) | ✅ record format and both commands on fakes in the suite, 🧪 real zeroconf exercised once between two processes on one machine, never between two machines |
+| MQTT flock bus (`MqttBus`, library only) | ✅ every message kind, echo, duplicates and a full flock run on a fake broker, 🧪 one real round trip against a local `amqtt` broker, never a flock across machines (no distributed clock yet) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
 Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
@@ -281,6 +283,8 @@ The four cloud providers see the camera frame as an image. Local models get the 
 | `quackd doctor` | Keys, extras, adapters, and every upstream assumption on this machine |
 | `quackd list-verbs` | The vocabulary with parameters and safety classes (`--robot` for another robot) |
 | `quackd list-adapters` | The robot adapters this build knows, their backends and status |
+| `quackd discover` | The quackd robots answering on the LAN (zeroconf, needs `quackd[lan]`) |
+| `quackd announce` | Advertise a robot's identity on the LAN (a static manifest, no robot connection) |
 | `quackd record <duck>` | `run` on the simulator that always writes a GIF |
 
 ### The `.duck` file
@@ -395,7 +399,7 @@ Measured on the simulator with the scripted pilot (no model latency): `find-and-
 ## Roadmap
 
 - **Hardware:** validated transport when Microducks ship (Christmas 2026). Run `jsonrpc` against a real `robotd`, flip rows from 🧪 to ✅, adopt upstream's WebSocket surface when it lands.
-- **Flocks next:** more choreographies from the verbs the ducks already have (a patrol that splits the area, a follow chain), a LAN bus (MQTT) implementing the same `Bus` protocol so messages can cross a room instead of a process, and hardware flocks once Microducks ship.
+- **Flocks next:** more choreographies from the verbs the ducks already have (a patrol that splits the area, a follow chain), a clock that crosses machines so the MQTT bus shipped in 0.4 (library only, [docs/lan.md](docs/lan.md)) can carry a flock across a room instead of a process, and hardware flocks once Microducks ship.
 - **v1:** the five starter tasks on a real duck, on video.
 - **v2, learned verbs.** LLM written rewards ([Eureka](https://eureka-research.github.io/) and [DrEureka](https://eureka-research.github.io/dr-eureka/) style) train new policies in `microduck_rl` that register as one more verb. The registry hook exists today. The training loop does not.
 
