@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] — 2026-09-02
 
-Toward 0.4.0, from "a brain for the Microduck" to "a brain for any small robot". The
-thesis does not change: the LLM picks verbs, the robot's own controllers move, quackd
-enforces the contract. Design: `docs/design/multi-robot.md`.
+From "a brain for the Microduck" to "a brain for any small robot". The thesis does not
+change: the LLM picks verbs, the robot's own controllers move, quackd enforces the
+contract. Four adapters (Microduck, Reachy Mini, a LeRobot arm, any base over rosbridge),
+one `.duck` contract across bodies, a head and a duck completing one task together in the
+simulator, and nothing claimed on hardware. Design: `docs/design/multi-robot.md`.
 
 ### Added
 
@@ -103,6 +105,11 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
 - **Speed limits come from the manifest**: `move`, `go_to` and the turn used by
   `search_scan` clamp to `limits.max_vx/max_vy/max_wz` when a manifest names them; the
   Microduck's limits equal the old schema bounds, so its runs are unchanged.
+- **Docs**: `docs/adapters.md` (write an adapter in a day), `docs/manifest-spec.md`,
+  `docs/adapter-status.md` (every adapter's honesty table, the Microduck's rows moved
+  there unchanged), `docs/lan.md`, one page per adapter under `docs/adapters/`, and
+  ADRs 0017 to 0023. `docs/safety.md` says what stops each body; `docs/faq.md` answers
+  "can it drive something that is not a duck".
 
 ### Changed
 
@@ -111,6 +118,8 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
   bundled starter ducks keep their 0.3 spellings and stay at `duck: 0`.
 - The agent loop connects before writing `run_start`, because the vocabulary comes from
   the connected robot.
+- `docs/transport-status.md` is a redirect to `docs/adapter-status.md`; the docs test
+  that keeps the Microduck's upstream table in sync now reads the new page.
 
 ### Deprecated
 
