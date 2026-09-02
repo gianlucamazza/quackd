@@ -36,7 +36,8 @@ always sends `stop` and closes the transport. Works on Windows (signal handler, 
 ## Dry run
 
 `--dry-run` prints every intent a model *would* send and sends nothing. Read-only verbs
-(`get_frame`) still run. Use it the first time you point a new `.duck` at hardware.
+(`observe`, alias `get_frame`, and `report_state`) still run. Use it the first time you
+point a new `.duck` at hardware.
 
 ## On hardware
 

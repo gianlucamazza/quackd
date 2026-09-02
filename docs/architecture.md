@@ -8,13 +8,20 @@ quackd is the brain daemon Microduck was missing. This page is the map; the ADRs
 | Loop | Rate | Where | Owner |
 |---|---|---|---|
 | Reflexes | 50 Hz | onboard `robotd` | RL policies (ONNX): balance, gait, stand-up. quackd never touches this. |
-| Steering | 5–20 Hz | quackd process | perception + composite verbs. `walk_to` closes the approach loop on detections. |
+| Steering | 5–20 Hz | quackd process | perception + composite verbs. `go_to` (alias `walk_to`) closes the approach loop on detections. |
 | Deliberation | ~0.2–1 Hz | LLM | reads frame summary + state + last result, picks one **verb**, judges success. |
 
 Every design choice defends this separation: the LLM's only output is one tool call per
-turn; composites never call the LLM; built-ins send *intents*, never joint targets; the
-transport owns time, so the steering loop runs at sim speed in the simulator and in real
+turn; composites never call the LLM; verbs send *intents*, never joint targets; the
+adapter owns time, so the steering loop runs at sim speed in the simulator and in real
 time on hardware without changing verb code. ([ADR-0003](adr/0003-three-loops.md))
+
+Since 0.4 the robot side is an **adapter** that declares a **manifest**: what body it has,
+which intents and sensors, which verbs. The registry, the tool list, the allowlist universe
+and the system prompt are all built from that manifest at connect time; a verb that is not
+in it does not exist. The Microduck is the first adapter, wrapping the four transports
+below unchanged. ([ADR-0017](adr/0017-robot-adapters-and-manifest.md),
+[design/multi-robot.md](design/multi-robot.md))
 
 ```mermaid
 sequenceDiagram
@@ -22,14 +29,14 @@ sequenceDiagram
     participant A as agent loop
     participant E as executor
     participant V as verb
-    participant T as transport
+    participant T as adapter
     participant P as perception
     A->>T: get_state / get_frame
     T-->>P: frame
     P-->>A: detections ("ball at bearing 12° left, ~0.8 m")
     A->>L: observation (text + image) + tool list
-    L-->>A: exactly one tool call (e.g. walk_to)
-    A->>E: run_verb("walk_to", params)
+    L-->>A: exactly one tool call (e.g. go_to)
+    A->>E: run_verb("go_to", params)
     E->>E: allowlist · confirm · budget · abort_when · preconditions · dry-run
     E->>V: execute(ctx, params) with timeout
     loop 10 Hz steering
@@ -44,11 +51,12 @@ sequenceDiagram
 
 | Path | Why it exists |
 |---|---|
-| `quackd/cli.py` | The front door: `run · validate · doctor · serve-mcp · list-verbs · record`. |
-| `quackd/duckfile/` | The `.duck` contract: strict pydantic frontmatter, parser, generated `schema.json`. |
-| `quackd/verbs/` | The registry (one list for the LLM, the allowlist, MCP and v2), built-ins, composites, the learned-verb interface. |
-| `quackd/safety.py` | The layer that does not trust the LLM: `Executor`, `Budget`, `Heartbeat`, `KillSwitch`. |
-| `quackd/transport/` | One `DuckTransport` protocol; `sim2d`, `mock`, `jsonrpc` (experimental), `websocket` (stub); `upstream_api.py` is the only file allowed to spell an upstream method. |
+| `quackd/cli.py` | The front door: `run · validate · doctor · serve-mcp · list-verbs · list-adapters · record`. `--robot <adapter>:<backend>` everywhere; `--transport` is a deprecated alias. |
+| `quackd/duckfile/` | The `.duck` contract (v0 and v1): strict pydantic frontmatter, parser, generated `schema.json`, `validate.py` (a task against one or more manifests). |
+| `quackd/adapters/` | `RobotManifest` (data: what a robot is and can do), the `RobotAdapter` protocol, the factory behind `--robot`, and one package per robot: `microduck/` wraps the four transports and declares its manifest and extension verbs. |
+| `quackd/verbs/` | `core.py`: the verbs any robot can carry and what each requires; `aliases.py`: the one alias table; `registry.py`: built from a manifest at connect time; `learned.py`: the v2 interface. |
+| `quackd/safety.py` | The layer that does not trust the LLM: `Executor`, `Budget`, `Heartbeat`, `KillSwitch`. Preconditions arrive from the adapter; the executor spells none. |
+| `quackd/transport/` | The Microduck backend layer: the `DuckTransport` protocol; `sim2d`, `mock`, `jsonrpc` (experimental), `websocket` (stub); `upstream_api.py` is the only file allowed to spell a Microduck upstream method. |
 | `quackd/sim2d/` | The cartoon world, two renders (top-down, duck-cam), the GIF recorder, the optional live window. |
 | `quackd/perception/` | `Detection` + `Detector`; the HSV colour-blob default; the lazy YOLO extra. |
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
@@ -66,10 +74,15 @@ sequenceDiagram
 3. **Enforce.** Zero tool calls → one re-prompt, then failure. Several → the first. Then
    `Executor.run_verb`: abort flag → allowlist → params → confirm → budget → machine-enforced
    `abort_when` → preconditions → dry-run → execute with timeout.
-4. **Act.** The verb runs; composites loop on the camera at 10 Hz; built-ins re-send `move`
-   every 100 ms to feed the robot's deadman.
-5. **Record.** `transcript.jsonl` gets `observation`, `llm` (with usage), `verb` events;
-   `summary.json` at the end; `run.gif` from the recorder on sim2d.
+4. **Act.** The verb runs; composites loop on the camera at 10 Hz; `move` re-sends its
+   velocity every 100 ms to feed the robot's deadman.
+5. **Record.** `transcript.jsonl` gets `observation`, `llm` (with usage), `verb` events
+   (`name` as called plus `canonical`); `summary.json` at the end; `run.gif` from the
+   recorder on sim2d.
+
+Step 0, before all of that: the loop calls `connect()` and, when an adapter answers with a
+manifest, builds the registry from it (`registry_from_manifest`). A bare transport answers
+`None` and gets the Microduck vocabulary, which is why every 0.3 test path is unchanged.
 
 Outcomes: `success` / `failure` (the LLM's claim via the meta tools), `budget`, `aborted`
 (heartbeat, kill switch, `abort_when`). In sim the run summary also carries ground truth
@@ -87,6 +100,8 @@ stop_reason), `enforce`, `verb` (name, params, ok, summary, data), `declare`, `f
 - **Providers** — add a file under `agent/providers/`, one line in `factory.py`.
 - **Detectors** — implement `detect(image) -> list[Detection]`; upstream's future feature
   stream becomes one more detector that reads a socket.
-- **Transports** — implement `DuckTransport`; keep upstream names in `upstream_api.py`.
+- **Robots** — a package under `adapters/` with `describe()` (the static manifest),
+  `make()` (a `RobotAdapter`), `implementations()` (its own verbs) and `conditions()`
+  (its named preconditions); keep upstream names in its own `upstream_api.py`.
 - **Learned verbs** — `register_learned_verb(registry, spec, runner)`; see
   [learned-verbs.md](learned-verbs.md).

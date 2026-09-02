@@ -5,7 +5,7 @@
 ## Kind of change
 
 - [ ] New or changed **verb** (`quackd/verbs/`) — I updated `docs/architecture.md` and `quackd list-verbs` shows it
-- [ ] New or changed **`.duck` file** (`ducks/`) — `quackd validate` passes and I ran it with `--provider fake --transport sim2d`
+- [ ] New or changed **`.duck` file** (`ducks/`) — `quackd validate` passes and I ran it with `--provider fake --robot microduck:sim2d`
 - [ ] Transport / upstream API — every upstream method name is in `quackd/transport/upstream_api.py` marked `VERIFIED` (with a link) or `UNVERIFIED`, and `docs/transport-status.md` is updated
 - [ ] Docs only
 - [ ] Other

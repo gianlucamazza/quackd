@@ -50,7 +50,7 @@ records usage per turn.
 is POSIX-only; forward it with `ssh -L 9870:/run/robotd.sock <robot>` and use
 `--address tcp://127.0.0.1:9870`.
 
-**Can I run it on my Microduck today?** `--transport jsonrpc` speaks the verified
+**Can I run it on my Microduck today?** `--robot microduck:jsonrpc` speaks the verified
 `duck-ipc-proto` v16 vocabulary but has never touched hardware. Start with `--dry-run`,
 read [transport-status.md](transport-status.md), and tell us what happened.
 

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Toward 0.4.0, from "a brain for the Microduck" to "a brain for any small robot". The
+thesis does not change: the LLM picks verbs, the robot's own controllers move, quackd
+enforces the contract. Design: `docs/design/multi-robot.md`.
+
+### Added
+
+- **Robot adapters and manifests** (`quackd/adapters/`): every robot is an adapter that
+  returns a `RobotManifest` from `connect()`, and the verb registry is built from that
+  manifest rather than hardcoded. A verb that is not in the manifest does not exist. The
+  Microduck is the first adapter and wraps the four existing transports with zero
+  behaviour change; `manifest.schema.json` is generated and drift-tested. (ADR-0017)
+- **Core verbs and aliases**: `observe`, `report_state`, `stop`, `say`, `move`, `go_to`,
+  `search_scan` and `approach_and` exist on any robot that meets their requirements;
+  `get_frame`, `walk_to` and `walk` are permanent aliases, listed once in
+  `quackd/verbs/aliases.py`. `search_scan` sweeps the head on a robot that can only look.
+  Preconditions are named in the manifest and supplied by the adapter; the executor spells
+  none. (ADR-0018)
+- **`.duck` v1**: `requires`, `robots`, `flock.roles` and `flock.frame_hints`; v0 files
+  parse unchanged. `quackd validate --robot <adapter>:<backend>` checks a task against a
+  robot's manifest with field-level errors such as `requires kick, but reachy-01
+  (reachy-mini) does not provide it`. (ADR-0019)
+- **`--robot <adapter>:<backend>`** on `run`, `validate`, `serve-mcp`, `doctor` and
+  `list-verbs`; `--robots name=spec,...` on `run` and `validate`; `quackd list-adapters`;
+  `doctor --robot` shows one manifest; a `.duck` may declare its default robot.
+- Transcripts: `verb` events carry `canonical`; `run_start` and `summary.json` carry the
+  robot's manifest and id. `duck_list_verbs` entries gain `canonical`, `aliases` and
+  `core`; `duck_get_state` gains `robot`.
+- Goldens recorded from 0.3.0 (`tests/golden/`) prove seeded worlds, the starter ducks and
+  a `flock-kick` conversation are unchanged; CI runs both seeded sweeps at 10 of 10
+  (`QUACKD_STRICT_SEEDS=1`).
+
+### Changed
+
+- `default_registry()` is the Microduck manifest's registry; its names are canonical
+  (`move`, `go_to`, `observe`) and every entry point accepts the old spellings. The
+  bundled starter ducks keep their 0.3 spellings and stay at `duck: 0`.
+- The agent loop connects before writing `run_start`, because the vocabulary comes from
+  the connected robot.
+
+### Deprecated
+
+- `--transport X` is an alias of `--robot microduck:X` that prints one warning per
+  process; it is removed in 0.5. The `quackd.transport` package is not deprecated: it is
+  the Microduck backend layer.
+
 ## [0.3.0] — 2026-08-31
 
 Multiple simulated Microducks cooperate: split the search, hold an auction, the closest
