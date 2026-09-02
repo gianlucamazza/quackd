@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from quackd.verbs.aliases import canonical
+
 DUCK_SPEC_VERSION = 0
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -39,19 +41,26 @@ class VerbsSection(BaseModel):
     @classmethod
     def _unique_names(cls, names: list[str]) -> list[str]:
         seen: set[str] = set()
+        by_canonical: dict[str, str] = {}
         for name in names:
             if not _NAME_RE.match(name.replace("_", "-")):
                 raise ValueError(f"{name!r} is not a valid verb name")
             if name in seen:
                 raise ValueError(f"duplicate verb {name!r}")
             seen.add(name)
+            other = by_canonical.setdefault(canonical(name), name)
+            if other != name:
+                raise ValueError(f"{other!r} and {name!r} are the same verb; list one of them")
         return names
 
     @model_validator(mode="after")
     def _confirm_subset_of_allow(self) -> VerbsSection:
-        extra = [v for v in self.confirm if v not in self.allow]
+        allowed = {canonical(v) for v in self.allow}
+        extra = [v for v in self.confirm if canonical(v) not in allowed]
         if extra:
             raise ValueError(f"confirm lists verbs that are not allowed: {extra}")
+        if "stop" in self.confirm:
+            raise ValueError("stop can never be confirm-gated; it is the kill switch's verb")
         return self
 
 

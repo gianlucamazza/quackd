@@ -7,6 +7,7 @@ confirmations) lives here — that is `quackd.safety`.
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from quackd.perception.base import Detector
 from quackd.transport.base import DuckState, DuckTransport
+from quackd.verbs.aliases import ALIASES
 
 SafetyClass = Literal["safe", "confirm", "dangerous"]
 VerbKind = Literal["builtin", "composite", "learned", "meta"]
@@ -109,6 +111,14 @@ class VerbNotFound(KeyError):
 
 
 class VerbRegistry:
+    """Verbs are stored under their canonical name; every lookup accepts an alias too.
+
+    `get("walk")` returns the `move` verb once `move` is registered, and `view("walk")`
+    returns that same verb *named as the caller spelled it*, which is what the tool list
+    and the system prompt show. A registry that has no `move` still resolves `walk` to a
+    directly registered `walk`, so nothing changes until a canonical verb exists.
+    """
+
     def __init__(self) -> None:
         self._verbs: dict[str, Verb] = {}
 
@@ -118,27 +128,55 @@ class VerbRegistry:
         self._verbs[verb.name] = verb
         return verb
 
+    def canonical(self, name: str) -> str:
+        """The name this registry files `name` under: itself if registered, else its alias
+        target, else `name` unchanged (so unknown names stay unknown, not remapped)."""
+        if name in self._verbs:
+            return name
+        target = ALIASES.get(name)
+        return target if target is not None and target in self._verbs else name
+
     def get(self, name: str) -> Verb:
         try:
-            return self._verbs[name]
+            return self._verbs[self.canonical(name)]
         except KeyError:
             raise VerbNotFound(name) from None
 
+    def view(self, name: str) -> Verb:
+        """The verb as the caller named it: identical, except `.name` is the alias used."""
+        verb = self.get(name)
+        return verb if verb.name == name else dataclasses.replace(verb, name=name)
+
     def __contains__(self, name: str) -> bool:
-        return name in self._verbs
+        return self.canonical(name) in self._verbs
 
     def names(self) -> list[str]:
         return list(self._verbs)
+
+    def aliases(self) -> dict[str, str]:
+        """Alias -> canonical, for the aliases whose canonical verb is present."""
+        return {a: c for a, c in ALIASES.items() if c in self._verbs and a not in self._verbs}
 
     def verbs(self) -> list[Verb]:
         return list(self._verbs.values())
 
     def tool_schemas(self, allow: list[str] | None = None) -> list[dict[str, Any]]:
         names = allow if allow is not None else self.names()
-        return [self.get(n).tool_schema() for n in names]
+        return [self.view(n).tool_schema() for n in names]
 
     def unknown(self, names: list[str]) -> list[str]:
-        return [n for n in names if n not in self._verbs]
+        return [n for n in names if n not in self]
+
+    def same_verb(self, names: list[str]) -> list[tuple[str, str]]:
+        """Pairs in `names` that resolve to one verb, e.g. `("walk", "move")`."""
+        seen: dict[str, str] = {}
+        pairs: list[tuple[str, str]] = []
+        for n in names:
+            c = self.canonical(n)
+            if c in seen and seen[c] != n:
+                pairs.append((seen[c], n))
+            seen.setdefault(c, n)
+        return pairs
 
 
 def default_registry() -> VerbRegistry:

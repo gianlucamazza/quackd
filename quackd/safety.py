@@ -128,11 +128,19 @@ class Executor:
         return [v.name for v in self.registry.verbs() if v.safety_class != "dangerous"]
 
     def is_allowed(self, name: str) -> bool:
-        return name in self.allowed or name == "stop"
+        """Alias-aware: a duck that allows `walk_to` also allows `go_to`, and vice versa."""
+        canonical = self.registry.canonical(name)
+        if canonical == "stop":
+            return True
+        return canonical in {self.registry.canonical(a) for a in self.allowed}
 
     def needs_confirm(self, verb: Verb) -> bool:
-        if self.contract is not None and verb.name in self.contract.verbs.confirm:
-            return True
+        if self.registry.canonical(verb.name) == "stop":
+            return False  # never gated, whatever a contract or a manifest says
+        if self.contract is not None:
+            gated = {self.registry.canonical(c) for c in self.contract.verbs.confirm}
+            if self.registry.canonical(verb.name) in gated:
+                return True
         return verb.safety_class in ("confirm", "dangerous")
 
     def context(self) -> VerbContext:
@@ -214,11 +222,12 @@ class Executor:
 
     def _record(self, name: str, params: dict[str, Any], result: VerbResult) -> VerbResult:
         self.history.append((name, params, result))
+        key = self.registry.canonical(name)  # `walk` and `move` failures count together
         if result.ok:
-            self.consecutive_failures[name] = 0
+            self.consecutive_failures[key] = 0
         else:
-            n = self.consecutive_failures.get(name, 0) + 1
-            self.consecutive_failures[name] = n
+            n = self.consecutive_failures.get(key, 0) + 1
+            self.consecutive_failures[key] = n
             limit = self.contract.repeat_failure_abort if self.contract else None
             if limit is not None and n >= limit:
                 self.abort.set()
