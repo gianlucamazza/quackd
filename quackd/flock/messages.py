@@ -51,11 +51,12 @@ class FlockTask(BaseModel):
     )
     frame_hints: bool = Field(default=False, description="Resolved by the runner (auto/on/off).")
     judge_margin_m: float = Field(
-        default=0.05,
+        default=0.15,
         ge=0,
         le=0.5,
-        description="Added to success_moved_m for the spotter's verdict: the size-based "
-        "distance estimate quantises in ~0.2 m steps beyond 1.5 m.",
+        description="Added to success_moved_m for the spotter's verdict, because the "
+        "size-based distance estimate quantises in ~0.2 m steps beyond 1.5 m. A stricter "
+        "spotter costs a re-kick; a lenient one would let the world's veto fail the run.",
     )
     judge_timeout_s: float = Field(default=6.0, gt=0, le=60)
 

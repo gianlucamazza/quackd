@@ -37,7 +37,7 @@ def assert_one_claimant(events: list[dict[str, Any]]) -> None:
         elif ev["kind"] == "miss":
             if ev["duck"] == claimant:
                 claimant = None
-        elif ev["kind"] == "verb" and ev["name"] in ("walk_to", "kick"):
+        elif ev["kind"] == "verb" and ev.get("canonical", ev["name"]) in ("go_to", "kick"):
             assert ev["duck"] == claimant, f"{ev['duck']} moved on the ball without the claim"
 
 

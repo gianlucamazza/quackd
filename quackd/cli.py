@@ -426,15 +426,20 @@ def _run_flock_impl(
     from quackd.safety import KillSwitch
     from quackd.sim2d.recorder import FrameRecorder
 
-    if any(spec.key != "microduck:sim2d" for spec in specs):
+    if any(spec.backend != "sim2d" for spec in specs):
         _fail(
             "flock mode is simulator only in 0.4 (docs/flock.md); "
-            "every member must be microduck:sim2d"
+            "every member must be an <adapter>:sim2d robot"
         )
         return
     if duck.frontmatter.verbs.confirm and not yes:
         _fail("a flock cannot prompt y/N per duck: empty verbs.confirm or pass --yes")
         return
+    roles = duck.frontmatter.flock.roles if duck.frontmatter.flock is not None else None
+    if n_override is not None and roles:
+        _fail("--flock N cannot be combined with flock.roles; the task file names its members")
+        return
+    robots = {spec.name: spec.key for spec in specs if spec.name} or None
     try:
         llm = make_provider(
             provider,
@@ -467,12 +472,22 @@ def _run_flock_impl(
 
         def on_event(kind: str, data: dict[str, Any]) -> None:
             if kind == "claim":
-                rec.set_focus(names.index(data["kicker"]))
-                rec.set_caption(f"CLAIM {data['kicker']} ({data['dist']:.2f} m)")
+                entity = data.get("entity")
+                if entity:
+                    rec.set_focus(entity[1], entity[0])
+                else:
+                    rec.set_focus(names.index(data["kicker"]))
+                spotter = f", spotter {data['spotter']}" if data.get("spotter") else ""
+                rec.set_caption(f"CLAIM {data['kicker']} ({data['dist']:.2f} m){spotter}")
             elif kind == "auction":
                 rec.set_caption(f"AUCTION first bid {data['first_bid']} {data['dist']:.2f} m")
             elif kind == "miss":
                 rec.set_caption(f"MISS {data['duck']}, re-searching")
+            elif kind == "kick_done":
+                rec.set_caption(f"KICKED by {data['kicker']}, the spotter judges")
+            elif kind == "verdict":
+                moved = f" {data['moved_m']:.2f} m" if data.get("moved_m") is not None else ""
+                rec.set_caption(f"VERDICT {data['verdict']}{moved} by {data['spotter']}")
 
         coordinator.on_event = on_event
 
@@ -503,8 +518,12 @@ def _run_flock_impl(
                 gif_size=gif_size,
                 on_recorder=on_ready,
                 log=log,
+                robots=robots,
             )
         )
+    except ValueError as e:
+        _fail(str(e))
+        return
     finally:
         if "ks" in holder:
             holder["ks"].uninstall()
@@ -514,8 +533,9 @@ def _run_flock_impl(
         result.outcome, "red"
     )
     console.print(f"[{colour}]{result.outcome.upper()}[/{colour}] — {result.reason}")
+    spotter = f"spotter={result.spotter} " if result.spotter else ""
     console.print(
-        f"kicker={result.kicker} auctions={result.auctions} bids={result.bids} "
+        f"{spotter}kicker={result.kicker} auctions={result.auctions} bids={result.bids} "
         f"ball moved {result.ball_displacement_m:.2f} m in {result.sim_elapsed_s:.1f}s sim"
     )
     console.print(

@@ -53,7 +53,10 @@ def default_task(duck: DuckFile, task_id: str) -> FlockTask:
     target = "person" if "person" in duck.name else "ball"
     flock = duck.frontmatter.flock
     restart_s = flock.search.restart_s if flock is not None else 8.0
-    return FlockTask(task_id=task_id, name=duck.name, goal=goal, target=target, restart_s=restart_s)
+    roles = dict(flock.roles or {}) if flock is not None else {}
+    return FlockTask(
+        task_id=task_id, name=duck.name, goal=goal, target=target, restart_s=restart_s, roles=roles
+    )
 
 
 async def plan_flock_task(
@@ -62,16 +65,23 @@ async def plan_flock_task(
     provider: LLMProvider,
     task_id: str,
     log: Any = lambda *_: None,
+    wedge_members: list[str] | None = None,
 ) -> tuple[FlockTask, dict[str, Wedge], Usage, int, bool]:
-    """Returns (task, wedges, usage, llm_calls, fallback_used)."""
-    wedges = equal_wedges(members)
+    """Returns (task, wedges, usage, llm_calls, fallback_used). Wedges are split over the
+    members that can move (`wedge_members`); a stationary head sweeps its whole range."""
+    wedges = equal_wedges(wedge_members or members)
     task = default_task(duck, task_id)
     if provider.name == "fake":
         return task, wedges, Usage(), 0, False
+    roles = ""
+    if task.roles:
+        parts = [f"{name} requires {', '.join(r.requires)}" for name, r in task.roles.items()]
+        roles = f" Roles are fixed by the task file ({'; '.join(parts)}); you tune parameters only."
     prompt = (
-        "You are planning a task for a flock of small duck robots in a 2 m square arena. "
+        "You are planning a task for a flock of small robots in a 2 m square arena. "
         f"Members: {', '.join(sorted(members))}. Each will search its own heading sector, "
-        "the closest sighting wins an auction, and the winner approaches and kicks.\n\n"
+        "the closest sighting wins an auction, and the winner approaches and kicks."
+        f"{roles}\n\n"
         f"Task file '{duck.name}':\n{duck.body}\n\n"
         "Call plan_flock_task once with your chosen parameters (omit any you would keep "
         "at the defaults)."

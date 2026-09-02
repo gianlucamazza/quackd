@@ -49,6 +49,7 @@ def test_bundled_list() -> None:
         "fetch",
         "flock-kick",
         "reachy-spotter",
+        "reachy-spots-duck-kicks",
     }
 
 

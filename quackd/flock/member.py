@@ -1,10 +1,14 @@
-"""One duck in a flock: a role-driven state machine, not an LLM loop.
+"""One robot in a flock: a role-driven state machine, not an LLM loop.
 
-The member owns its duck's `Executor`, so the `.duck` allowlist, budgets, machine-enforced
-abort rules and per-duck transcript apply exactly as in a solo run. Roles arrive over the
-bus (SEARCH a wedge, KICK, YIELD, STOP); a role change *preempts* an in-flight composite
-verb via `FlockPreempted`, which subclasses `SafetyStop` so the executor re-raises it
-without recording a failure — being retasked is not a mistake.
+The member owns its robot's `Executor`, so the `.duck` allowlist, budgets, machine-enforced
+abort rules and per-robot transcript apply exactly as in a solo run. Roles arrive over the
+bus (SEARCH a wedge, KICK, YIELD, STOP; with 0.4 roles also SPOT and JUDGE); a role change
+*preempts* an in-flight composite verb via `FlockPreempted`, which subclasses `SafetyStop`
+so the executor re-raises it without recording a failure — being retasked is not a mistake.
+
+A member spells the verbs its robot has: `_pick("walk_to", "go_to")` keeps flock-kick's
+transcript byte-identical on a Microduck and finds `go_to` on any other body. A robot that
+cannot move never pre-turns and never retreats; a robot that can only look sweeps its head.
 """
 
 from __future__ import annotations
@@ -16,13 +20,17 @@ from typing import TYPE_CHECKING, Any
 from quackd.adapters.manifest import RobotManifest
 from quackd.duckfile.schema import DuckFrontmatter
 from quackd.flock.bus import Bus
+from quackd.flock.capability import eligible_roles
 from quackd.flock.messages import (
     BidMsg,
     FlockMessage,
     FlockTask,
     HbMsg,
+    Hint,
+    HintMsg,
     ResultMsg,
     RoleMsg,
+    VerdictMsg,
 )
 from quackd.perception.base import Detector
 from quackd.safety import (
@@ -34,7 +42,6 @@ from quackd.safety import (
     SafetyStop,
     allow_all,
 )
-from quackd.transport.sim2d import Sim2DTransport
 from quackd.verbs.registry import VerbResult, default_registry, registry_from_manifest
 
 if TYPE_CHECKING:
@@ -42,6 +49,9 @@ if TYPE_CHECKING:
 
 MEMBER_TICK_S = 0.05
 TURN_RATE = 1.0  # rad/s, matches the composite verbs' scanning rate
+JUDGE_OFFSETS_DEG = (0.0, 15.0, -15.0, 30.0, -30.0, 45.0, -45.0, 60.0, -60.0)
+SIDESTEP_VY = 0.15
+SIDESTEP_S = 1.5
 
 
 class FlockPreempted(SafetyStop):
@@ -53,7 +63,7 @@ class FlockMember:
         self,
         name: str,
         contract: DuckFrontmatter,
-        transport: Sim2DTransport,
+        transport: Any,
         detector: Detector,
         bus: Bus,
         transcript: FlockTranscript,
@@ -87,6 +97,8 @@ class FlockMember:
         self.sub = bus.subscribe(name)
         transport.post_sleep = self._control_check
         self.flock_transcript = transcript
+        self.mobile = getattr(transport, "mobility", "legged") != "none"
+        self.provides: list[str] = []
         self.role: RoleMsg | None = None
         self._pending: list[FlockMessage] = []
         self._preempt = False
@@ -94,6 +106,10 @@ class FlockMember:
         self._acted_for_role = False
         self._searched_at: float | None = None
         self._bid: BidMsg | None = None
+        self._ref: tuple[float, float] | None = None
+        """The target's body-frame point at this robot's FIRST sighting (the judge's reference)."""
+        self._sighting_deg: float | None = None
+        self._hint: Hint | None = None
         self._last_hb = -1e9
         self.steps = 0
         self.verbs_failed = 0
@@ -110,12 +126,15 @@ class FlockMember:
 
     def _ingest(self) -> None:
         for msg in [*self._pending, *self.sub.drain()]:
+            if msg.kind == "HINT" and msg.src != self.name:
+                self._hint = msg.hint
             if msg.kind == "ROLE" and msg.duck == self.name:
                 is_new = (
                     self.role is None
                     or msg.role != self.role.role
                     or msg.wedge != self.role.wedge
                     or msg.retreat != self.role.retreat
+                    or msg.seq != self.role.seq
                 )
                 # a repeated retreat order is always actionable: we are still too close
                 if is_new or msg.retreat:
@@ -172,6 +191,7 @@ class FlockMember:
                 # an adapter: this member's vocabulary is its own robot's (ADR-0017)
                 self.executor.registry = registry_from_manifest(manifest, self.transport)
                 self.executor.manifest = manifest
+            self.provides = sorted(self.executor.registry.names())
             self.heartbeat.start()
             self.budget.start()
             while not self._done:
@@ -225,7 +245,7 @@ class FlockMember:
         )
 
     def _pick(self, *names: str) -> str | None:
-        """The first of `names` this duck has and may use: flock-kick keeps spelling
+        """The first of `names` this robot has and may use: flock-kick keeps spelling
         `walk_to`, a robot that only knows `go_to` gets that, a robot with neither, None."""
         for name in names:
             if name in self.executor.registry and self.executor.is_allowed(name):
@@ -254,6 +274,38 @@ class FlockMember:
         )
         return result
 
+    # ── geometry: every judgement is in THIS robot's own body frame ─────────────────
+
+    async def _body_bearing(self, camera_bearing_deg: float) -> float:
+        state = await self.transport.get_state()
+        head_yaw = float(state.extras.get("head_yaw_deg") or 0.0)
+        return head_yaw + camera_bearing_deg
+
+    @staticmethod
+    def _point(body_deg: float, dist: float) -> tuple[float, float]:
+        rad = math.radians(body_deg)
+        return dist * math.cos(rad), dist * math.sin(rad)
+
+    async def _arena_hint(self, body_deg: float, dist: float, bearing: float) -> HintMsg | None:
+        """The target in the ARENA frame from this robot's pose, sim only (no pose, no hint)."""
+        state = await self.transport.get_state()
+        if state.x is None or state.y is None or state.theta is None:
+            return None
+        heading = state.theta + math.radians(body_deg)
+        return HintMsg(
+            t=self.transport.now(),
+            src=self.name,
+            task_id=self.task.task_id,
+            hint=Hint(
+                target=self.task.target,
+                x_m=round(state.x + dist * math.cos(heading), 3),
+                y_m=round(state.y + dist * math.sin(heading), 3),
+                by=self.name,
+                est_dist_m=round(dist, 3),
+                bearing_deg=round(bearing, 1),
+            ),
+        )
+
     # ── roles ───────────────────────────────────────────────────────────────────────
 
     async def _act(self) -> None:
@@ -264,10 +316,34 @@ class FlockMember:
             await self._act_search(role)
         elif role.role == "KICK":
             self._acted_for_role = True
-            await self._act_kick()
+            await self._act_kick(role)
         elif role.role == "YIELD":
             self._acted_for_role = True
             await self._act_yield(role)
+        elif role.role == "SPOT":
+            self._acted_for_role = True
+            await self._act_spot()
+        elif role.role == "JUDGE":
+            self._acted_for_role = True
+            await self._act_judge(role)
+
+    async def _pre_turn(self, target_deg: float) -> None:
+        turn_verb = self._pick("walk", "move")
+        if not self.mobile or turn_verb is None:
+            return
+        state = await self.transport.get_state()
+        theta = state.theta or 0.0
+        target = math.radians(target_deg)
+        dtheta = math.atan2(math.sin(target - theta), math.cos(target - theta))
+        if abs(dtheta) > 0.1:
+            await self._verb(
+                turn_verb,
+                {
+                    "vx": 0.0,
+                    "wz": TURN_RATE if dtheta >= 0 else -TURN_RATE,
+                    "duration_s": min(abs(dtheta) / TURN_RATE, 6.5),
+                },
+            )
 
     async def _act_search(self, role: RoleMsg) -> None:
         now = self.transport.now()
@@ -279,21 +355,18 @@ class FlockMember:
         self._acted_for_role = True
         self._searched_at = now
         wedge = role.wedge
-        turn_verb = self._pick("walk", "move")
-        if wedge is not None and turn_verb is not None:
-            state = await self.transport.get_state()
-            theta = state.theta or 0.0
-            target = math.radians(wedge.start_deg)
-            dtheta = math.atan2(math.sin(target - theta), math.cos(target - theta))
-            if abs(dtheta) > 0.1:
-                await self._verb(
-                    turn_verb,
-                    {
-                        "vx": 0.0,
-                        "wz": TURN_RATE if dtheta >= 0 else -TURN_RATE,
-                        "duration_s": min(abs(dtheta) / TURN_RATE, 6.5),
-                    },
-                )
+        hint = self._hint if self.task.frame_hints else None
+        if wedge is not None and self.mobile:
+            if hint is not None:
+                state = await self.transport.get_state()
+                if state.x is not None and state.y is not None:
+                    await self._pre_turn(
+                        math.degrees(math.atan2(hint.y_m - state.y, hint.x_m - state.x))
+                    )
+                else:
+                    await self._pre_turn(wedge.start_deg)
+            else:
+                await self._pre_turn(wedge.start_deg)
             max_steps = max(1, min(16, math.ceil(wedge.width_deg / self.task.step_deg)))
         else:
             max_steps = 8
@@ -301,28 +374,51 @@ class FlockMember:
             "search_scan",
             {"target": self.task.target, "step_deg": self.task.step_deg, "max_steps": max_steps},
         )
-        if result.ok:
-            detections = result.data.get("detections") or []
-            dist = detections[0].get("est_distance_m") if detections else None
-            bearing = detections[0].get("bearing_deg") if detections else None
-            # only a role preemption may be swallowed here: Aborted/BudgetExceeded must
-            # propagate so a dying duck ends with a RESULT instead of placing a bid
-            voice = self._pick("quack", "say")
-            if voice is not None:
-                with contextlib.suppress(FlockPreempted):
-                    await self._verb(voice, {"text": "quack! ball!"})  # the theatrical sighting
+        if not result.ok:
+            self._result("search_empty", result.summary)
+            return
+        detections = result.data.get("detections") or []
+        dist = detections[0].get("est_distance_m") if detections else None
+        bearing = detections[0].get("bearing_deg") if detections else None
+        dist_f = float(dist) if dist is not None else 9.9
+        bearing_f = float(bearing) if bearing is not None else 0.0
+        body_deg = await self._body_bearing(bearing_f)
+        self._sighting_deg = body_deg
+        if self._ref is None and dist is not None:
+            self._ref = self._point(body_deg, dist_f)
+        # only a role preemption may be swallowed here: Aborted/BudgetExceeded must
+        # propagate so a dying duck ends with a RESULT instead of placing a bid
+        voice = self._pick("quack", "say")
+        if voice is not None:
+            with contextlib.suppress(FlockPreempted):
+                await self._verb(voice, {"text": "quack! ball!"})  # the theatrical sighting
+        if not self.task.roles:
             self._bid = BidMsg(
                 t=self.transport.now(),
                 src=self.name,
                 task_id=self.task.task_id,
-                ball_dist_m=float(dist) if dist is not None else 9.9,
-                bearing_deg=float(bearing) if bearing is not None else 0.0,
+                ball_dist_m=dist_f,
+                bearing_deg=bearing_f,
             )
             self._publish(self._bid)
-        else:
-            self._result("search_empty", result.summary)
+            return
+        for role_name in eligible_roles(self.task.roles, self.provides):
+            self._bid = BidMsg(
+                t=self.transport.now(),
+                src=self.name,
+                task_id=self.task.task_id,
+                ball_dist_m=dist_f,
+                bearing_deg=bearing_f,
+                role=role_name,
+                provides=self.provides,
+            )
+            self._publish(self._bid)
+        if self.task.frame_hints and dist is not None:
+            hint_msg = await self._arena_hint(body_deg, dist_f, bearing_f)
+            if hint_msg is not None:
+                self._publish(hint_msg)
 
-    async def _act_kick(self) -> None:
+    async def _act_kick(self, role: RoleMsg) -> None:
         approach = await self._verb(
             self._pick("walk_to", "go_to") or "walk_to",
             {"target": self.task.target, "stop_distance": self.task.stop_distance},
@@ -332,6 +428,14 @@ class FlockMember:
             return
         kick = await self._verb("kick", {"leg": self.task.kick_leg})
         moved = kick.data.get("ball_moved_m")
+        if self.task.roles:
+            # the actor never evaluates success: step out of the spotter's line and report
+            side = self._pick("walk", "move")
+            if side is not None:
+                with contextlib.suppress(FlockPreempted):
+                    await self._verb(side, {"vx": 0.0, "vy": SIDESTEP_VY, "duration_s": SIDESTEP_S})
+            self._result("kick_done", kick.summary, ball_moved_m=moved)
+            return
         state = await self.transport.get_state()
         total = float(state.extras.get("ball_displacement_m") or 0.0)
         # the contract's criterion is total displacement, so a rally of short kicks counts
@@ -349,6 +453,79 @@ class FlockMember:
         # as blind courtesy when our own last ball estimate was inside the ring
         if role.retreat or (self._bid is not None and self._bid.ball_dist_m < role.min_sep_m):
             back = self._pick("walk", "move")
-            if back is not None:
+            if back is not None and self.mobile:
                 await self._verb(back, {"vx": -0.1, "duration_s": 1.5})
             self._bid = None
+
+    async def _gaze_to(self, body_deg: float) -> None:
+        if self._pick("gaze") is None:
+            return
+        yaw = max(-90.0, min(90.0, body_deg))  # within every robot's gaze range
+        with contextlib.suppress(FlockPreempted):
+            await self._verb("gaze", {"bearing_deg": yaw})
+
+    async def _look(self) -> tuple[float, float] | None:
+        """One fresh frame: the target's body-frame point, or None if not seen."""
+        observe = self._pick("observe", "get_frame")
+        if observe is None:
+            return None
+        result = await self._verb(observe, {})
+        dets = [
+            d for d in (result.data.get("detections") or []) if d.get("label") == self.task.target
+        ]
+        if not dets or dets[0].get("est_distance_m") is None:
+            return None
+        body_deg = await self._body_bearing(float(dets[0].get("bearing_deg") or 0.0))
+        self._sighting_deg = body_deg
+        return self._point(body_deg, float(dets[0]["est_distance_m"]))
+
+    async def _act_spot(self) -> None:
+        """Keep the target in view; the reference frame was fixed at the first sighting."""
+        if self._sighting_deg is not None:
+            await self._gaze_to(self._sighting_deg)
+        point = await self._look()
+        if point is not None and self._ref is None:
+            self._ref = point
+
+    async def _act_judge(self, role: RoleMsg) -> None:
+        """Judge the kick from this robot's own fresh frames: zero LLM, detector arithmetic."""
+        threshold = self.task.success_moved_m + self.task.judge_margin_m
+        base = self._sighting_deg if self._sighting_deg is not None else 0.0
+        best: float | None = None
+        seen: tuple[float, float] | None = None
+        frames = 0
+        for offset in JUDGE_OFFSETS_DEG:
+            await self._gaze_to(base + offset)
+            point = await self._look()
+            frames += 1
+            if point is not None and self._ref is not None:
+                moved = math.hypot(point[0] - self._ref[0], point[1] - self._ref[1])
+                if best is None or moved > best:
+                    best, seen = moved, point
+                if moved >= threshold:
+                    break
+            await self.transport.sleep(0.1)  # fresh frames, and a heartbeat opportunity
+        if self._ref is None or best is None:
+            verdict = "lost"
+        elif best >= threshold:
+            verdict = "moved"
+        else:
+            verdict = "not_moved"
+        self._publish(
+            VerdictMsg(
+                t=self.transport.now(),
+                src=self.name,
+                task_id=self.task.task_id,
+                target=self.task.target,
+                kicker=role.kicker or "",
+                verdict=verdict,  # type: ignore[arg-type]
+                moved_m=round(best, 3) if best is not None else None,
+                ref={"x_m": round(self._ref[0], 3), "y_m": round(self._ref[1], 3)}
+                if self._ref is not None
+                else {},
+                seen={"x_m": round(seen[0], 3), "y_m": round(seen[1], 3)} if seen else None,
+                frames=frames,
+            )
+        )
+        if seen is not None:
+            self._sighting_deg = math.degrees(math.atan2(seen[1], seen[0]))
