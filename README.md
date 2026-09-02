@@ -39,7 +39,7 @@ Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **
 
 ```bash
 uvx quackd run find-and-kick --provider fake                                        # no key: the scripted pilot
-uvx --from "quackd[anthropic]" quackd run find-and-kick --provider anthropic --transport sim2d   # needs ANTHROPIC_API_KEY
+uvx --from "quackd[anthropic]" quackd run find-and-kick --provider anthropic --robot microduck:sim2d   # needs ANTHROPIC_API_KEY
 uvx --from "quackd[openai]" quackd run find-and-kick --provider ollama --model qwen3:8b          # local model, no key
 open runs/*/run.gif                                                                 # every run leaves a GIF and a transcript
 ```
@@ -144,8 +144,8 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
 | Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 not yet exercised against a live server by us, transcripts welcome |
 | Flock mode (multiple cooperating ducks, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |
-| Real robot over JSON RPC (`--transport jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
-| WebSocket agent gateway (`--transport websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
+| Real robot over JSON RPC (`--robot microduck:jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
+| WebSocket agent gateway (`--robot microduck:websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
 Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
@@ -272,11 +272,12 @@ The four cloud providers see the camera frame as an image. Local models get the 
 
 | Command | What it does |
 |---|---|
-| `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--transport`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size`, `--flock N` |
-| `quackd validate ducks/*.duck` | Check task files against the spec and the verb registry. Exits 1 with field level errors |
-| `quackd serve-mcp` | Expose the duck as MCP tools over stdio |
-| `quackd doctor` | Keys, extras, transports, and every upstream assumption on this machine |
-| `quackd list-verbs` | The vocabulary with parameters and safety classes |
+| `quackd run <duck>` or `quackd run --goal "..."` | Run a task. `--provider`, `--robot <adapter>:<backend>`, `--model`, `--seed`, `--max-steps`, `--dry-run`, `--yes`, `--live`, `--gif-size`, `--flock N`. `--transport X` still works as `--robot microduck:X` for one release |
+| `quackd validate ducks/*.duck` | Check task files against the spec and a robot's verbs (`--robot`). Exits 1 with field level errors |
+| `quackd serve-mcp` | Expose the robot as MCP tools over stdio |
+| `quackd doctor` | Keys, extras, adapters, and every upstream assumption on this machine |
+| `quackd list-verbs` | The vocabulary with parameters and safety classes (`--robot` for another robot) |
+| `quackd list-adapters` | The robot adapters this build knows, their backends and status |
 | `quackd record <duck>` | `run` on the simulator that always writes a GIF |
 
 ### The `.duck` file
@@ -317,7 +318,7 @@ Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks
 ### Pilot it from Claude (MCP)
 
 ```bash
-claude mcp add quackd -- uvx quackd serve-mcp --transport sim2d
+claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d
 ```
 
 Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`. Config for both clients, the eight `duck_*` tools, and a two minute script: [docs/mcp.md](docs/mcp.md).
@@ -354,7 +355,7 @@ The interesting part is not the kick, it is the talking. The ducks coordinate ov
 | Budgets | in the `.duck`. `--max-steps` overrides for one run |
 | Human in the loop | `verbs.confirm` in the `.duck` prompts y/N. `--yes` auto accepts. MCP refuses gated verbs unless started with `--yes` |
 | Dry run | `--dry-run` logs every intent and sends nothing |
-| Real robot | `--transport jsonrpc --address unix:///run/robotd.sock` on the robot, or `tcp://127.0.0.1:9870` after `ssh -L 9870:/run/robotd.sock <robot>` |
+| Real robot | `--robot microduck:jsonrpc --address unix:///run/robotd.sock` on the robot, or `tcp://127.0.0.1:9870` after `ssh -L 9870:/run/robotd.sock <robot>` |
 
 <br>
 

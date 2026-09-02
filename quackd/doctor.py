@@ -18,6 +18,8 @@ from rich.console import Console
 from rich.table import Table
 
 from quackd import __version__
+from quackd.adapters.base import AdapterError
+from quackd.adapters.factory import describe, list_adapters, parse_robot_spec
 from quackd.agent.providers.factory import DEFAULT_MODELS, KEY_ENV, LOCAL_NAMES, PROVIDER_NAMES
 from quackd.agent.providers.local import PRESETS
 from quackd.duckfile.parser import list_bundled_ducks
@@ -68,7 +70,7 @@ def _probe_models(base_url: str, timeout_s: float = 1.5) -> str:
     return f"[green]up[/green] · {shown}{more}" if ids else "[green]up[/green] · no models loaded"
 
 
-def run_doctor(console: Console) -> bool:
+def run_doctor(console: Console, robot: str | None = None) -> bool:
     ok = True
     console.print(
         f"[bold]quackd {__version__}[/bold] · Python {platform.python_version()} · "
@@ -128,7 +130,41 @@ def run_doctor(console: Console) -> bool:
         t.add_row(preset, url, _probe_models(url))
     console.print(t)
 
-    t = Table(title="transports")
+    t = Table(title="adapters (--robot <adapter>:<backend>)")
+    t.add_column("adapter")
+    t.add_column("backends")
+    t.add_column("status")
+    t.add_column("extra")
+    for row in list_adapters():
+        extra = row["extra"]
+        if extra != "built-in":
+            extra += (
+                " [green]installed[/green]" if row["installed"] else " [dim]not installed[/dim]"
+            )
+        t.add_row(row["name"], " · ".join(row["backends"]), row["status"], extra)
+    console.print(t)
+    if robot is not None:
+        try:
+            manifest = describe(parse_robot_spec(robot))
+        except AdapterError as e:
+            console.print(f"[red]{e}[/red]")
+            ok = False
+        else:
+            t = Table(title=f"{robot}: {manifest.summary()}")
+            t.add_column("verb")
+            t.add_column("core")
+            t.add_column("safety")
+            t.add_column("preconditions")
+            for spec in manifest.verbs:
+                t.add_row(
+                    spec.name,
+                    "core" if spec.core else "",
+                    spec.safety_class,
+                    ", ".join(manifest.preconditions.get(spec.name, [])),
+                )
+            console.print(t)
+
+    t = Table(title="transports (Microduck backends; --transport X is --robot microduck:X)")
     t.add_column("name")
     t.add_column("status")
     t.add_column("notes")

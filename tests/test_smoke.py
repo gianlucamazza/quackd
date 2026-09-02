@@ -13,7 +13,15 @@ def test_version_string() -> None:
 def test_cli_help() -> None:
     result = CliRunner().invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("run", "validate", "doctor", "serve-mcp", "list-verbs", "record"):
+    for command in (
+        "run",
+        "validate",
+        "doctor",
+        "serve-mcp",
+        "list-verbs",
+        "list-adapters",
+        "record",
+    ):
         assert command in result.output
 
 

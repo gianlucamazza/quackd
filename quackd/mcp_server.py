@@ -265,15 +265,19 @@ def build_server(
 
 
 def serve(
-    transport: str = "sim2d",
+    transport: str | None = None,
     duckfile: str | None = None,
     seed: int | None = None,
     address: str | None = None,
     dry_run: bool = False,
     yes: bool = False,
+    *,
+    robot: str | None = None,
+    warn: Any = None,
 ) -> None:
-    from quackd.transport.factory import make_transport
+    from quackd.adapters.factory import make_adapter, resolve_robot
 
+    default = None
     if duckfile:
         probe = load_duck(duckfile)
         if probe.frontmatter.flock is not None:
@@ -281,13 +285,14 @@ def serve(
                 "flock ducks are not available over MCP yet (the MCP client is one pilot, "
                 "a flock needs a coordinator). Run it with: quackd run " + duckfile
             )
+        if isinstance(probe.frontmatter.robots, str):
+            default = probe.frontmatter.robots
+    spec = resolve_robot(robot, transport, duck_default=default, warn=warn)
     logging.basicConfig(
         stream=sys.stderr, level=logging.INFO, format="quackd-mcp %(levelname)s %(message)s"
     )
-    duck_transport = make_transport(
-        transport, seed=seed if seed is not None else 0, address=address
-    )
-    mcp, _session = build_server(duck_transport, duckfile=duckfile, dry_run=dry_run, yes=yes)
+    adapter = make_adapter(spec, seed=seed if seed is not None else 0, address=address)
+    mcp, _session = build_server(adapter, duckfile=duckfile, dry_run=dry_run, yes=yes)
     mcp.run(transport="stdio")
 
 

@@ -170,10 +170,46 @@ class MicroduckAdapter:
         self.transport.post_sleep = hook  # type: ignore[attr-defined]
 
 
+# ── what the factory calls (the same four names on every adapter package) ───────────────
+
+
+def describe(backend: str, robot_id: str = "microduck") -> RobotManifest:
+    return microduck_manifest(backend, robot_id)
+
+
+def implementations() -> dict[str, Verb]:
+    return dict(MICRODUCK_VERBS)
+
+
+def conditions() -> dict[str, Precondition]:
+    return microduck_conditions()
+
+
+def make(
+    backend: str,
+    *,
+    robot_id: str = "microduck",
+    seed: int | None = None,
+    address: str | None = None,
+    live: bool = False,
+    camera_url: str | None = None,
+) -> MicroduckAdapter:
+    from quackd.transport.factory import make_transport
+
+    transport = make_transport(
+        backend, seed=seed, address=address, live=live, camera_url=camera_url
+    )
+    return MicroduckAdapter(transport, robot_id=robot_id)
+
+
 __all__ = [
     "BACKENDS",
     "MICRODUCK_VERBS",
     "MicroduckAdapter",
+    "conditions",
+    "describe",
+    "implementations",
+    "make",
     "microduck_conditions",
     "microduck_manifest",
 ]
