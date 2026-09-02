@@ -162,13 +162,16 @@ class RoleAuction:
         }
 
     def complete(self, excluded: set[str]) -> bool:
-        """Every unfilled role has at least one eligible bidder on the table."""
-        taken = set(self.held.values())
-        return all(self._candidates(role, excluded, taken) for role in self.unfilled())
+        """Could every unfilled role be filled right now (one member per role)? A dry run
+        of `decide`, so a lone robot bidding for two roles keeps the window open."""
+        return self._assign({}, excluded) is not None
 
     def decide(self, prev: Mapping[str, str], excluded: set[str]) -> RoleDecision | None:
         """Close the auction and fill every unfilled role, or None if one cannot be filled."""
         self.opened_at = None
+        return self._assign(prev, excluded)
+
+    def _assign(self, prev: Mapping[str, str], excluded: set[str]) -> RoleDecision | None:
         assignments = dict(self.held)
         taken = set(self.held.values())
         costs: dict[str, float] = {}
