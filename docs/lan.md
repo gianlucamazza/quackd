@@ -1,0 +1,99 @@
+# Robots on a LAN: discovery and the MQTT bus
+
+Both ship in 0.4 behind one extra and are imported lazily, so the default install never
+loads them and the test suite runs on fakes with no network and no broker
+([ADR-0021](adr/0021-lan-discovery-and-mqtt-bus.md)).
+
+```bash
+uv pip install 'quackd[lan]'     # zeroconf + paho-mqtt
+```
+
+## Discovery (`_quackd._tcp.local.`)
+
+A quackd instance can advertise the robot it fronts, and another can list what answers:
+
+```bash
+quackd announce --robot reachy_mini:sdk --name reachy-01      # until Ctrl-C (or --for 30)
+quackd discover --timeout 3                                   # a table of what answered
+```
+
+`announce` advertises a **static** manifest's identity and holds no robot connection. The
+TXT record carries identity only; a manifest is never squeezed into TXT, it is obtained
+out of band (for now: `quackd list-verbs --robot <spec> --json`, or the adapter's
+`describe()`) and verified against the advertised digest.
+
+| TXT key | Meaning |
+|---|---|
+| `v` | record version, `1` |
+| `mid` | manifest id (`reachy-01`, `duck`, ...) |
+| `sha` | manifest digest: sha256 of the canonical sorted-key JSON excluding `id` and `backend`, first 16 hex, a capability fingerprint |
+| `adp` | adapter name (`microduck`, `reachy_mini`, ...) |
+| `vend`, `mdl`, `emb` | vendor, model, embodiment |
+| `nverbs` | how many verbs the manifest lists |
+
+Every pair is checked under 200 bytes before zeroconf sees it (the protocol caps a pair at
+255 and the library does not check). These keys are wire protocol once shipped.
+
+From Python:
+
+```python
+from quackd.adapters.factory import RobotSpec, describe
+from quackd.lan.announce import announce
+from quackd.lan.discover import discover
+
+ann = announce(describe(RobotSpec("microduck", "sim2d", "duck")), adapter="microduck")
+for robot in discover(timeout_s=3.0):
+    print(robot.manifest_id, robot.adapter, robot.addresses, robot.matches(some_manifest))
+ann.close()
+```
+
+`announce(..., zc=, info_factory=)` and `discover(..., zc=, browse=)` take fakes, which is
+how the tests run. The Reachy Mini daemon advertises itself separately as
+`_reachy-mini._tcp.local.`; quackd does not rename it, it advertises the quackd side.
+
+**Status.** The record format and both commands are tested on fakes in the suite. The real
+zeroconf path was exercised once by us on one Windows 11 machine between two processes
+(announce a `reachy_mini:mock` manifest in a child, discover it from the parent, digest
+matched); it has not been exercised between two machines.
+
+## The MQTT flock bus
+
+`quackd.flock.mqtt_bus.MqttBus` implements the same two-method `Bus` protocol as the
+in-process bus (`publish`, `subscribe`) over a broker, and keeps the flock's one hard rule:
+nobody ever awaits the bus. paho runs its own network thread; `publish` is a synchronous
+local fan-out plus a non-blocking hand-off; members still `drain()` between sim sleeps.
+
+| | |
+|---|---|
+| Topics | `quackd/<flock_id>/ctl` (TASK, BID, CLAIM, ROLE, RESULT, HINT, VERDICT) at QoS 1, `quackd/<flock_id>/hb` (HB) at QoS 0, `retain=False` everywhere |
+| Payload | the pydantic `FlockMessage` JSON, exactly what `flock.jsonl` records |
+| Echo | a broker sends your own publications back; a message whose `src` is one of this node's subscribers is dropped and counted |
+| Duplicates | QoS 1 is at least once; the coordinator's handlers are idempotent (minimum bid per source, maximum exclusion, idempotent heartbeats), so a duplicate changes no decision, and a test pins that |
+| Threads | remote messages are marshalled onto the event loop with `call_soon_threadsafe` before they are tapped and pushed, because the transcript writer is not thread-safe |
+| Tap | fires exactly once per message per node: on publish for local messages, on receive for remote ones, so `flock.jsonl` on the node that owns the run directory carries every message once |
+
+Library-only in 0.4:
+
+```python
+from quackd.flock.mqtt_bus import MqttBus
+from quackd.flock.runner import run_flock
+
+result = await run_flock(
+    duck,
+    provider=provider,
+    bus_factory=lambda tap: MqttBus("desk-1", host="broker.local", tap=tap),
+)
+```
+
+The runner starts the bus inside its event loop and closes it at the end of the run. There
+is no `--bus` flag on purpose: a distributed flock also needs a distributed clock (today's
+flock runs on one lockstep simulator clock), which is out of scope, and a flag would imply
+otherwise. `MqttBus(..., client=)` takes a fake client, which is how the tests run: two
+nodes on a synchronous fake broker with zero sockets.
+
+**Status.** Round-trips of every message kind, echo, duplicates, threading and a full
+`flock-kick` run over the bus are tested on a fake broker in the suite. The real path was
+exercised once by us: two `MqttBus` nodes with real paho 2.1 clients against an `amqtt`
+0.12 broker on `localhost:1883` (one Windows 11 machine), all eight message kinds
+delivered in order, echo dropped, tap once per node. It has not carried a flock between
+two machines, because nothing distributes the clock yet.

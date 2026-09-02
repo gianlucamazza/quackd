@@ -753,5 +753,94 @@ def serve_mcp(
         _fail(str(e))
 
 
+# ── lan (quackd[lan]) ───────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def discover(
+    timeout: float = typer.Option(3.0, "--timeout", help="Seconds to listen for answers."),
+    as_json: bool = typer.Option(False, "--json", help="One JSON object per robot."),
+) -> None:
+    """List the quackd robots answering on the LAN (zeroconf, needs quackd[lan])."""
+    import json
+
+    from rich.table import Table
+
+    from quackd.lan import LanNotInstalled
+    from quackd.lan import discover as lan_discover
+
+    try:
+        robots = lan_discover.discover(timeout)
+    except LanNotInstalled as e:
+        _fail(str(e))
+    if as_json:
+        for robot in robots:
+            print(json.dumps(robot.row()))
+        return
+    if not robots:
+        console.print(f"[dim]no quackd robots answered in {timeout:g} s[/dim]")
+        return
+    t = Table(title=f"quackd robots on the LAN ({len(robots)})")
+    for column in ("manifest id", "adapter", "model", "embodiment", "verbs", "address", "digest"):
+        t.add_column(column)
+    for robot in robots:
+        t.add_row(
+            robot.manifest_id,
+            robot.adapter,
+            robot.model,
+            robot.embodiment,
+            str(robot.n_verbs),
+            ", ".join(robot.addresses) or robot.host,
+            robot.digest,
+        )
+    console.print(t)
+
+
+@app.command()
+def announce(
+    robot: str = typer.Option(
+        ..., "--robot", "-r", help="<adapter>:<backend> to advertise (static manifest, no robot)."
+    ),
+    name: str | None = typer.Option(
+        None, "--name", help="Manifest id to advertise (default: the adapter's own)."
+    ),
+    port: int = typer.Option(0, "--port", help="Service port to advertise; 0 = identity only."),
+    for_s: float | None = typer.Option(
+        None, "--for", help="Seconds to stay announced (default: until Ctrl-C)."
+    ),
+) -> None:
+    """Advertise a robot's identity on the LAN (zeroconf, needs quackd[lan])."""
+    import time
+
+    from quackd.adapters.base import AdapterError
+    from quackd.adapters.factory import RobotSpec, describe, parse_robot_spec
+    from quackd.lan import LanNotInstalled
+    from quackd.lan import announce as lan_announce
+
+    try:
+        parsed = parse_robot_spec(robot)
+        spec = RobotSpec(parsed.adapter, parsed.backend, name)
+        manifest = describe(spec)
+        ann = lan_announce.announce(manifest, adapter=spec.adapter, port=port)
+    except (AdapterError, LanNotInstalled, ValueError) as e:
+        _fail(str(e))
+    console.print(
+        f"announcing {ann.record.name} ({manifest.summary()}) at "
+        f"{', '.join(ann.record.addresses)} · digest {manifest.digest()}"
+    )
+    try:
+        if for_s is None:
+            console.print("[dim]Ctrl-C to withdraw[/dim]")
+            while True:
+                time.sleep(1.0)
+        else:
+            time.sleep(for_s)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        ann.close()
+        console.print("withdrawn")
+
+
 if __name__ == "__main__":
     app()

@@ -33,6 +33,8 @@ EXTRAS = {
     "yolo": ("ultralytics", "quackd[yolo]"),
     "live": ("pygame", "quackd[live]"),
     "reachy": ("reachy_mini", "quackd[reachy]"),
+    "lan (zeroconf)": ("zeroconf", "quackd[lan]"),
+    "lan (mqtt)": ("paho.mqtt.client", "quackd[lan]"),
 }
 # Robot SDKs are looked up by distribution metadata only: importing reachy_mini pulls
 # onnxruntime and GStreamer into a diagnostics command, which is exactly what doctor is not.
@@ -49,7 +51,7 @@ def _installed(module: str) -> str | None:
         importlib.import_module(module)
     except Exception:
         return None
-    dist = {"google.genai": "google-genai"}.get(module, module)
+    dist = {"google.genai": "google-genai", "paho.mqtt.client": "paho-mqtt"}.get(module, module)
     try:
         return md.version(dist)
     except md.PackageNotFoundError:
@@ -196,8 +198,8 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
         t.add_row(name, status, note)
     console.print(t)
     console.print(
-        "[dim]flock mode (--flock): sim2d only in v0.3, in-process bus. "
-        "A LAN bus for real ducks is future work (docs/flock.md).[/dim]"
+        "[dim]flock mode (--flock, flock.roles): sim2d only, in-process bus by default. "
+        "The MQTT bus (quackd[lan]) is library-only in 0.4 (docs/lan.md).[/dim]"
     )
 
     t = Table(title="optional extras", show_header=False)

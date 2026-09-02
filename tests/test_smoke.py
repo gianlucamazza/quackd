@@ -21,6 +21,8 @@ def test_cli_help() -> None:
         "list-verbs",
         "list-adapters",
         "record",
+        "discover",
+        "announce",
     ):
         assert command in result.output
 
