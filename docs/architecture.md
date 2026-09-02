@@ -53,7 +53,7 @@ sequenceDiagram
 |---|---|
 | `quackd/cli.py` | The front door: `run · validate · doctor · serve-mcp · list-verbs · list-adapters · record`. `--robot <adapter>:<backend>` everywhere; `--transport` is a deprecated alias. |
 | `quackd/duckfile/` | The `.duck` contract (v0 and v1): strict pydantic frontmatter, parser, generated `schema.json`, `validate.py` (a task against one or more manifests). |
-| `quackd/adapters/` | `RobotManifest` (data: what a robot is and can do), the `RobotAdapter` protocol, the factory behind `--robot`, and one package per robot: `microduck/` wraps the four transports and declares its manifest and extension verbs. |
+| `quackd/adapters/` | `RobotManifest` (data: what a robot is and can do), the `RobotAdapter` protocol, the factory behind `--robot`, and one package per robot: `microduck/` wraps the four transports and declares its manifest and extension verbs; `reachy_mini/` is a stationary head (`sim2d`, `mock`, `sdk`) with its own `upstream_api.py` ([adapters/reachy_mini.md](adapters/reachy_mini.md)). |
 | `quackd/verbs/` | `core.py`: the verbs any robot can carry and what each requires; `aliases.py`: the one alias table; `registry.py`: built from a manifest at connect time; `learned.py`: the v2 interface. |
 | `quackd/safety.py` | The layer that does not trust the LLM: `Executor`, `Budget`, `Heartbeat`, `KillSwitch`. Preconditions arrive from the adapter; the executor spells none. |
 | `quackd/transport/` | The Microduck backend layer: the `DuckTransport` protocol; `sim2d`, `mock`, `jsonrpc` (experimental), `websocket` (stub); `upstream_api.py` is the only file allowed to spell a Microduck upstream method. |

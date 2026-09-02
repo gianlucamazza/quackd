@@ -37,6 +37,21 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
 - Goldens recorded from 0.3.0 (`tests/golden/`) prove seeded worlds, the starter ducks and
   a `flock-kick` conversation are unchanged; CI runs both seeded sweeps at 10 of 10
   (`QUACKD_STRICT_SEEDS=1`).
+- **Reachy Mini adapter** (`--robot reachy_mini:sim2d | mock | sdk`, extra `quackd[reachy]`
+  for the SDK): a stationary head with a camera, a 180° neck, expressions and a speaker.
+  Its manifest carries `observe`, `report_state`, `stop`, `say`, `search_scan` (a gaze
+  sweep), `gaze`, `express`, `play_sound` and a confirm-gated `wake_up`; no locomotion
+  verbs exist on it. `say(text)` is voiced as the closest expressive sound because the SDK
+  has no text-to-speech; `stop` is `cancel_move` and `disable_motors` is never sent. Every
+  SDK name is VERIFIED in `quackd/adapters/reachy_mini/upstream_api.py` against a pinned
+  commit and the 1.10.0 wheel; the `sdk` backend has never been run on a robot.
+  (ADR-0022, ADR-0023)
+- **`StationaryHead`** in `sim2d`: a fixed camera on a wall with zero RNG draws, so every
+  world without a head is byte-identical to 0.3; the recorder and the live window can
+  focus a head camera.
+- **`reachy-spotter` starter duck** (`duck: 1`, `robots: reachy_mini:sim2d`): find the
+  ball with your gaze and say where it is; 10 of 10 seeds with the scripted pilot, judged
+  by ground truth.
 
 ### Changed
 

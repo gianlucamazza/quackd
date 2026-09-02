@@ -16,7 +16,18 @@ runner = CliRunner()
 def test_validate_starter_ducks() -> None:
     result = runner.invoke(app, ["validate", *[str(p) for p in sorted(DUCKS.glob("*.duck"))]])
     assert result.exit_code == 0, result.output
-    assert "6 file(s) valid" in result.output
+    assert "7 file(s) valid" in result.output
+
+
+def test_run_a_reachy_duck_by_its_own_default_robot(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["run", "reachy-spotter", "--provider", "fake", "--seed", "1", "--runs-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "robot=reachy_mini:sim2d" in result.output and "SUCCESS" in result.output
+    run_dir = next(tmp_path.iterdir())
+    assert (run_dir / "run.gif").exists()  # the head cam pane, from the duck's own default robot
 
 
 def test_validate_expands_globs_itself() -> None:

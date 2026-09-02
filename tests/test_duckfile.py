@@ -40,7 +40,7 @@ def test_starter_ducks_parse(path: Path) -> None:
     assert duck.frontmatter.learned_verbs == []
 
 
-def test_bundled_list_has_six() -> None:
+def test_bundled_list() -> None:
     assert {p.stem for p in list_bundled_ducks()} == {
         "hello-world",
         "find-and-kick",
@@ -48,6 +48,7 @@ def test_bundled_list_has_six() -> None:
         "follow-me",
         "fetch",
         "flock-kick",
+        "reachy-spotter",
     }
 
 

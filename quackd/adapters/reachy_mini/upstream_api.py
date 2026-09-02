@@ -83,10 +83,10 @@ DAEMON_STATUS = UpstreamRef(
     "hardware_id, face_target",
 )
 DAEMON_STATE = UpstreamRef(
-    "not_initialized | starting | running | stopping | stopped | error",
+    "DaemonState: not_initialized, starting, running, stopping, stopped, error",
     "VERIFIED",
     src(_PROTOCOL, 51),
-    "DaemonState enum; quackd's heartbeat needs 'running'",
+    "the daemon state enum; quackd's heartbeat needs 'running'",
 )
 STATE_SNAPSHOT = UpstreamRef(
     "StateSnapshot",
@@ -305,7 +305,7 @@ THREAD_SAFETY = UpstreamRef(
     "one lock with a per-call timeout",
 )
 LOOK_AT_WORLD_BLOCKS = UpstreamRef(
-    "look_at_world blocks for `duration`",
+    "look_at_world blocks for its duration",
     "UNVERIFIED",
     src(_SDK, 830),
     "goto_target waits for task completion; we assume look_at_world(duration) does too",

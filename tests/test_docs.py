@@ -19,6 +19,15 @@ def test_transport_status_lists_every_upstream_ref() -> None:
     assert not missing, f"docs/transport-status.md is missing: {missing}"
 
 
+def test_reachy_doc_lists_every_sdk_ref() -> None:
+    from quackd.adapters.reachy_mini import upstream_api as reachy
+
+    doc = (REPO / "docs" / "adapters" / "reachy_mini.md").read_text(encoding="utf-8")
+    missing = [ref.name for ref in reachy.all_refs() if ref.name not in doc]
+    assert not missing, f"docs/adapters/reachy_mini.md is missing: {missing}"
+    assert reachy.PIN[:7] in doc and "never" in doc.lower()  # the honesty label
+
+
 def test_readme_promises() -> None:
     for needle in (
         "not affiliated with or endorsed by Pollen Robotics",

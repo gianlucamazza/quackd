@@ -134,6 +134,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 - Local and open source models through Ollama, vLLM, llama.cpp, LM Studio or any OpenAI compatible server, with no API key, model discovery from the server, and a JSON text fallback for models that cannot call tools natively.
 - Real model code paths for Claude, OpenAI, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.
 - Run a flock: multiple simulated ducks coordinate over a message bus and a deterministic auction, each duck acting only through the verbs it already has. One choreography ships today, `flock-kick`, 10 of 10 seeds with the scripted pilot, and every message lands in `flock.jsonl`.
+- Drive a second body. Robots are adapters that declare a manifest, and the verbs come from the manifest. A Reachy Mini head runs `reachy-spotter` in the simulator on 10 of 10 seeds, and `quackd validate --robot` tells you which verbs a task needs that a robot does not have.
 
 **Going (see [Roadmap](#roadmap)):** the same five tasks on the real robot once it ships, upstream's WebSocket agent surface, and *learned verbs*, new skills trained from LLM written rewards that register as one more verb. Eventually, a small robot in a real room that you can ask to find, fetch, follow and check on things.
 
@@ -146,6 +147,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | Flock mode (multiple cooperating ducks, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |
 | Real robot over JSON RPC (`--robot microduck:jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
 | WebSocket agent gateway (`--robot microduck:websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
+| Reachy Mini adapter (`--robot reachy_mini:sim2d`, `mock`, `sdk`) | ✅ sim2d and mock, `reachy-spotter` 10 of 10 seeds, 🧪 sdk with every SDK name verified against a pinned commit, never run on a robot ([docs/adapters/reachy_mini.md](docs/adapters/reachy_mini.md)) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
 Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
@@ -312,6 +314,7 @@ Find the ball and kick it.
 | `follow-me` | keep a person in view and follow at 0.5 m | |
 | `fetch` | scoop the ball up and bring it back | **experimental**, the scoop is open loop and fails about 40 % of the time in sim, by design |
 | `flock-kick` | multiple ducks split the search, the closest one kicks | **flock mode**, cooperation over a bus and an auction |
+| `reachy-spotter` | find the ball with your gaze and say where it is | **Reachy Mini** (`--robot reachy_mini:sim2d` is its default), a stationary head with no legs |
 
 Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks/).
 
