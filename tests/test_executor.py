@@ -177,7 +177,8 @@ async def test_no_contract_allows_safe_verbs_only(
 ) -> None:
     registry.register(Verb("nuke", "dangerous", lambda c, p: None, safety_class="dangerous"))  # type: ignore[arg-type]
     ex = Executor(registry, mock_transport, contract=None, confirm=allow_all)
-    assert "walk" in ex.allowed and "nuke" not in ex.allowed
+    assert "move" in ex.allowed and "nuke" not in ex.allowed
+    assert ex.is_allowed("walk") and not ex.is_allowed("nuke")
 
 
 async def test_walk_feeds_the_deadman(

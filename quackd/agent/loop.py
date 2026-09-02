@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from PIL import Image
 
+from quackd.adapters.base import adapter_name, backend_name
+from quackd.adapters.manifest import RobotManifest
 from quackd.agent.prompts import (
     META_TOOL_NAMES,
     META_TOOLS,
@@ -46,7 +48,12 @@ from quackd.safety import (
     deny_all,
 )
 from quackd.transport.base import DuckTransport
-from quackd.verbs.registry import VerbRegistry, VerbResult, default_registry
+from quackd.verbs.registry import (
+    VerbRegistry,
+    VerbResult,
+    default_registry,
+    registry_from_manifest,
+)
 
 Outcome = Literal["success", "failure", "budget", "aborted", "error"]
 
@@ -56,7 +63,9 @@ class RunConfig:
     duck: DuckFile
     provider: LLMProvider
     transport: DuckTransport
-    registry: VerbRegistry = field(default_factory=default_registry)
+    registry: VerbRegistry | None = None
+    """None means: build it from the manifest the transport returns on connect (an adapter),
+    or fall back to the Microduck vocabulary (a bare transport)."""
     detector: Detector | None = None
     dry_run: bool = False
     confirm: ConfirmFn = deny_all
@@ -98,8 +107,9 @@ class AgentLoop:
         self.run_dir = cfg.run_dir or new_run_dir(cfg.runs_dir, self.fm.name)
         self.transcript = Transcript(self.run_dir)
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
+        self.registry = cfg.registry or default_registry()
         self.executor = Executor(
-            registry=cfg.registry,
+            registry=self.registry,
             transport=cfg.transport,
             contract=self.fm,
             budget=self.budget,
@@ -167,9 +177,23 @@ class AgentLoop:
 
     async def run(self) -> RunResult:
         cfg = self.cfg
-        tools = cfg.registry.tool_schemas(self.fm.verbs.allow) + META_TOOLS
+        # connect FIRST: an adapter answers with its manifest, and the vocabulary (tools,
+        # prompt, allowlist universe) is built from that, not hardcoded (ADR-0017)
+        connected = await cfg.transport.connect()
+        manifest = connected if isinstance(connected, RobotManifest) else None
+        if manifest is not None:
+            if cfg.registry is None:
+                self.registry = registry_from_manifest(manifest, cfg.transport)
+                self.executor.registry = self.registry
+            self.executor.manifest = manifest
+        registry = self.registry
+        allow = self.fm.verbs.allow
+        tools = registry.tool_schemas(allow) + META_TOOLS
         system = build_system_prompt(
-            self.duck, [cfg.registry.get(n) for n in self.fm.verbs.allow], cfg.transport.name
+            self.duck,
+            [registry.view(n) for n in allow],
+            backend_name(cfg.transport),
+            manifest=manifest,
         )
         system += getattr(cfg.provider, "prompt_hint", "") or ""  # e.g. the local JSON fallback
         self.transcript.write(
@@ -178,7 +202,9 @@ class AgentLoop:
             duck_path=self.duck.path,
             provider=cfg.provider.name,
             model=cfg.provider.model,
-            transport=cfg.transport.name,
+            transport=backend_name(cfg.transport),
+            adapter=adapter_name(cfg.transport),
+            robot=manifest.model_dump(mode="json") if manifest is not None else None,
             dry_run=cfg.dry_run,
             contract=self.fm.model_dump(),
             system_prompt=system,
@@ -190,7 +216,6 @@ class AgentLoop:
         last_result: VerbResult | None = None
         retry_prompted = False
 
-        await cfg.transport.connect()
         self.budget.start()
         self.heartbeat.start()
         try:
@@ -281,6 +306,7 @@ class AgentLoop:
                     "verb",
                     step=self.budget.steps,
                     name=call.name,
+                    canonical=registry.canonical(call.name),
                     params=call.arguments,
                     ok=last_result.ok,
                     summary=last_result.summary,
@@ -311,7 +337,8 @@ class AgentLoop:
                 "usage": self.usage.model_dump(),
                 "provider": cfg.provider.name,
                 "model": cfg.provider.model,
-                "transport": cfg.transport.name,
+                "transport": backend_name(cfg.transport),
+                "robot": manifest.id if manifest is not None else None,
                 "dry_run": cfg.dry_run,
                 "final_state": final_state,
             }

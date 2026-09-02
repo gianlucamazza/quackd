@@ -1,9 +1,9 @@
-"""Built-in verbs: one per behaviour the robot actually ships.
+"""The Microduck's own verbs: one per behaviour the robot actually ships.
 
 Each maps to an intent the transport understands (and, on hardware, to a VERIFIED upstream
-method — see `transport/upstream_api.py`). The `walk` verb re-sends its velocity every
-100 ms because upstream's deadman zeroes a velocity that stops arriving; that is a feature
-we keep, not a quirk we hide.
+method; see `transport/upstream_api.py`). These are the 0.3 built-ins that are not core
+verbs, moved here unchanged, plus the Microduck's `say`: upstream has seven duck sounds and
+no TTS, so text is mapped to the tone that fits the mood.
 """
 
 from __future__ import annotations
@@ -13,26 +13,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from quackd.perception.base import summarize_detections
 from quackd.transport.base import DuckState, Intent
-from quackd.verbs.registry import NoParams, Verb, VerbContext, VerbRegistry, VerbResult
-
-MOVE_RESEND_S = 0.1
-MAX_VX = 0.3
-MAX_WZ = 1.5
-
-
-class WalkParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    vx: float = Field(
-        default=0.15, ge=-MAX_VX, le=MAX_VX, description="Forward m/s (negative = back)."
-    )
-    vy: float = Field(default=0.0, ge=-0.2, le=0.2, description="Left m/s (negative = right).")
-    wz: float = Field(default=0.0, ge=-MAX_WZ, le=MAX_WZ, description="Turn rate rad/s (+ = left).")
-    duration_s: float = Field(
-        default=1.0, gt=0, le=10, description="How long to hold this velocity."
-    )
+from quackd.verbs.core import SayParams, send_or_fail
+from quackd.verbs.registry import NoParams, Precondition, Verb, VerbContext, VerbResult
 
 
 class KickParams(BaseModel):
@@ -66,6 +49,9 @@ class GazeParams(BaseModel):
     )
 
 
+# ── preconditions the manifest references by name ───────────────────────────────────────
+
+
 def _not_fallen(state: DuckState) -> str | None:
     return "the duck has fallen; run stand_up first" if state.fallen else None
 
@@ -78,39 +64,18 @@ def _standing(state: DuckState) -> str | None:
     return None
 
 
-async def _send(ctx: VerbContext, intent: Intent) -> VerbResult | None:
-    """Send an intent; return a failure result if the duck refused it."""
-    ack = await ctx.transport.send_intent(intent)
-    if not ack.accepted:
-        return VerbResult.fail(f"{intent.kind} refused: {ack.reason or 'no reason given'}")
-    return None
+def microduck_conditions() -> dict[str, Precondition]:
+    return {"not_fallen": _not_fallen, "standing": _standing}
 
 
-async def walk(ctx: VerbContext, p: WalkParams) -> VerbResult:
-    slices = max(1, round(p.duration_s / MOVE_RESEND_S))
-    step = p.duration_s / slices
-    for _ in range(slices):
-        if (fail := await _send(ctx, Intent.move(p.vx, p.vy, p.wz))) is not None:
-            await ctx.transport.stop()
-            return fail
-        await ctx.transport.sleep(step)
-    await ctx.transport.stop()
-    return VerbResult.success(
-        f"walked vx={p.vx:.2f} vy={p.vy:.2f} wz={p.wz:.2f} for {p.duration_s:.1f}s",
-        duration_s=p.duration_s,
-    )
-
-
-async def stop(ctx: VerbContext, _: NoParams) -> VerbResult:
-    await ctx.transport.stop()
-    return VerbResult.success("stopped (velocity zeroed)")
+# ── the verbs ───────────────────────────────────────────────────────────────────────────
 
 
 async def _sit_toggle(ctx: VerbContext, want: Literal["sitting", "standing"]) -> VerbResult:
     state = await ctx.transport.get_state()
     if state.posture == want:
         return VerbResult.success(f"already {want}")
-    if (fail := await _send(ctx, Intent.do("sit_toggle"))) is not None:
+    if (fail := await send_or_fail(ctx, Intent.do("sit_toggle"))) is not None:
         return fail
     await ctx.transport.sleep(2.0)
     state = await ctx.transport.get_state()
@@ -143,7 +108,7 @@ async def kick(ctx: VerbContext, p: KickParams) -> VerbResult:
 
 
 async def grab(ctx: VerbContext, _: NoParams) -> VerbResult:
-    if (fail := await _send(ctx, Intent.do("ground_pick"))) is not None:
+    if (fail := await send_or_fail(ctx, Intent.do("ground_pick"))) is not None:
         return fail
     await ctx.transport.sleep(3.0)
     state = await ctx.transport.get_state()
@@ -155,7 +120,7 @@ async def grab(ctx: VerbContext, _: NoParams) -> VerbResult:
 
 
 async def stand_up(ctx: VerbContext, _: NoParams) -> VerbResult:
-    if (fail := await _send(ctx, Intent.enable(True))) is not None:
+    if (fail := await send_or_fail(ctx, Intent.enable(True))) is not None:
         return fail
     await ctx.transport.sleep(3.0)
     state = await ctx.transport.get_state()
@@ -186,10 +151,18 @@ def quack_tag_for(text: str | None) -> str:
 
 async def quack(ctx: VerbContext, p: QuackParams) -> VerbResult:
     tag = quack_tag_for(p.text)
-    if (fail := await _send(ctx, Intent.sound(tag, p.text))) is not None:
+    if (fail := await send_or_fail(ctx, Intent.sound(tag, p.text))) is not None:
         return fail
     shown = f" ({p.text!r})" if p.text else ""
     return VerbResult.success(f"quacked [{tag}]{shown}", tag=tag, text=p.text)
+
+
+async def say(ctx: VerbContext, p: SayParams) -> VerbResult:
+    """The Microduck's `say`: the same seven tones as `quack`, text required."""
+    tag = quack_tag_for(p.text)
+    if (fail := await send_or_fail(ctx, Intent.sound(tag, p.text))) is not None:
+        return fail
+    return VerbResult.success(f"said {p.text!r} as [{tag}]", tag=tag, text=p.text)
 
 
 async def gaze(ctx: VerbContext, p: GazeParams) -> VerbResult:
@@ -200,60 +173,18 @@ async def gaze(ctx: VerbContext, p: GazeParams) -> VerbResult:
         pitch = {"up": 0.25, "down": -0.15}.get(p.direction, 0.0)
     rad = math.radians(bearing)
     point = (math.cos(rad), math.sin(rad), pitch)
-    if (fail := await _send(ctx, Intent.look(*point))) is not None:
+    if (fail := await send_or_fail(ctx, Intent.look(*point))) is not None:
         return fail
     return VerbResult.success(
         f"looking {p.direction if p.bearing_deg is None else f'{bearing:+.0f}°'}"
     )
 
 
-async def get_frame(ctx: VerbContext, _: NoParams) -> VerbResult:
-    img = await ctx.transport.get_frame()
-    if img is None:
-        return VerbResult.fail("this transport has no camera")
-    ctx.on_frame(img, "get_frame")
-    detections = ctx.detector.detect(img) if ctx.detector else []
-    return VerbResult.success(
-        f"frame captured; {summarize_detections(detections)}",
-        detections=[d.model_dump() for d in detections],
-    )
-
-
-def register_builtins(registry: VerbRegistry) -> None:
-    registry.register(
-        Verb(
-            "walk",
-            "Walk with a velocity for a duration. Use small values; the robot is 25 cm tall.",
-            walk,
-            WalkParams,
-            timeout_s=15,
-            preconditions=[_standing],
-            done_condition="the duration has elapsed and the duck has stopped.",
-        )
-    )
-    registry.register(
-        Verb(
-            "stop",
-            "Stop moving immediately (zero velocity). Always allowed.",
-            stop,
-            NoParams,
-            timeout_s=5,
-        )
-    )
-    registry.register(
-        Verb("sit", "Sit down.", sit, NoParams, timeout_s=10, preconditions=[_not_fallen])
-    )
-    registry.register(
-        Verb(
-            "stand",
-            "Stand up from sitting.",
-            stand,
-            NoParams,
-            timeout_s=10,
-            preconditions=[_not_fallen],
-        )
-    )
-    registry.register(
+MICRODUCK_VERBS: dict[str, Verb] = {
+    v.name: v
+    for v in (
+        Verb("sit", "Sit down.", sit, NoParams, timeout_s=10),
+        Verb("stand", "Stand up from sitting.", stand, NoParams, timeout_s=10),
         Verb(
             "kick",
             "Kick forward with one leg. Only connects if the ball is < 0.3 m away and "
@@ -261,11 +192,8 @@ def register_builtins(registry: VerbRegistry) -> None:
             kick,
             KickParams,
             timeout_s=10,
-            preconditions=[_standing],
             done_condition="the kick animation finished; the result says whether the ball moved.",
-        )
-    )
-    registry.register(
+        ),
         Verb(
             "grab",
             "Scoop at the floor with the beak (open-loop). Works only with the object right "
@@ -273,39 +201,26 @@ def register_builtins(registry: VerbRegistry) -> None:
             grab,
             NoParams,
             timeout_s=10,
-            preconditions=[_standing],
             done_condition="the scoop finished; the result says whether the beak holds something.",
-        )
-    )
-    registry.register(
-        Verb("stand_up", "Recover to standing after a fall.", stand_up, NoParams, timeout_s=15)
-    )
-    registry.register(
+        ),
+        Verb("stand_up", "Recover to standing after a fall.", stand_up, NoParams, timeout_s=15),
         Verb(
             "quack",
             "Make a duck sound, optionally with text (mapped to a tone).",
             quack,
             QuackParams,
             timeout_s=5,
-        )
-    )
-    registry.register(
+        ),
         Verb(
-            "gaze",
-            "Point the head in a direction or at a bearing.",
-            gaze,
-            GazeParams,
+            "gaze", "Point the head in a direction or at a bearing.", gaze, GazeParams, timeout_s=5
+        ),
+        Verb(
+            "say",
+            "Say something: the text is mapped to one of the robot's seven duck tones.",
+            say,
+            SayParams,
             timeout_s=5,
-            preconditions=[_not_fallen],
-        )
+            core=True,
+        ),
     )
-    registry.register(
-        Verb(
-            "get_frame",
-            "Capture a camera frame and report what is detected in it.",
-            get_frame,
-            NoParams,
-            timeout_s=10,
-            read_only=True,
-        )
-    )
+}

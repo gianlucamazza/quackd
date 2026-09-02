@@ -13,6 +13,7 @@ import contextlib
 import math
 from typing import TYPE_CHECKING, Any
 
+from quackd.adapters.manifest import RobotManifest
 from quackd.duckfile.schema import DuckFrontmatter
 from quackd.flock.bus import Bus
 from quackd.flock.messages import (
@@ -34,7 +35,7 @@ from quackd.safety import (
     allow_all,
 )
 from quackd.transport.sim2d import Sim2DTransport
-from quackd.verbs.registry import VerbResult, default_registry
+from quackd.verbs.registry import VerbResult, default_registry, registry_from_manifest
 
 if TYPE_CHECKING:
     from quackd.flock.transcript import FlockTranscript
@@ -166,6 +167,11 @@ class FlockMember:
             # inside the try: a failed connect must still hit the finally below, or a
             # half-registered duck would freeze the lockstep clock for the whole flock
             await self.transport.connect()
+            manifest = getattr(self.transport, "manifest", None)
+            if isinstance(manifest, RobotManifest):
+                # an adapter: this member's vocabulary is its own robot's (ADR-0017)
+                self.executor.registry = registry_from_manifest(manifest, self.transport)
+                self.executor.manifest = manifest
             self.heartbeat.start()
             self.budget.start()
             while not self._done:
@@ -218,6 +224,14 @@ class FlockMember:
             )
         )
 
+    def _pick(self, *names: str) -> str | None:
+        """The first of `names` this duck has and may use: flock-kick keeps spelling
+        `walk_to`, a robot that only knows `go_to` gets that, a robot with neither, None."""
+        for name in names:
+            if name in self.executor.registry and self.executor.is_allowed(name):
+                return name
+        return None
+
     async def _verb(self, name: str, params: dict[str, Any]) -> VerbResult:
         from quackd.safety import ConfirmDenied, VerbNotAllowed
 
@@ -233,6 +247,7 @@ class FlockMember:
             "verb",
             duck=self.name,
             name=name,
+            canonical=self.executor.registry.canonical(name),
             params=params,
             ok=result.ok,
             summary=result.summary,
@@ -264,14 +279,15 @@ class FlockMember:
         self._acted_for_role = True
         self._searched_at = now
         wedge = role.wedge
-        if wedge is not None and self.executor.is_allowed("walk"):
+        turn_verb = self._pick("walk", "move")
+        if wedge is not None and turn_verb is not None:
             state = await self.transport.get_state()
             theta = state.theta or 0.0
             target = math.radians(wedge.start_deg)
             dtheta = math.atan2(math.sin(target - theta), math.cos(target - theta))
             if abs(dtheta) > 0.1:
                 await self._verb(
-                    "walk",
+                    turn_verb,
                     {
                         "vx": 0.0,
                         "wz": TURN_RATE if dtheta >= 0 else -TURN_RATE,
@@ -291,8 +307,10 @@ class FlockMember:
             bearing = detections[0].get("bearing_deg") if detections else None
             # only a role preemption may be swallowed here: Aborted/BudgetExceeded must
             # propagate so a dying duck ends with a RESULT instead of placing a bid
-            with contextlib.suppress(FlockPreempted):
-                await self._verb("quack", {"text": "quack! ball!"})  # the theatrical sighting
+            voice = self._pick("quack", "say")
+            if voice is not None:
+                with contextlib.suppress(FlockPreempted):
+                    await self._verb(voice, {"text": "quack! ball!"})  # the theatrical sighting
             self._bid = BidMsg(
                 t=self.transport.now(),
                 src=self.name,
@@ -306,7 +324,8 @@ class FlockMember:
 
     async def _act_kick(self) -> None:
         approach = await self._verb(
-            "walk_to", {"target": self.task.target, "stop_distance": self.task.stop_distance}
+            self._pick("walk_to", "go_to") or "walk_to",
+            {"target": self.task.target, "stop_distance": self.task.stop_distance},
         )
         if not approach.ok:
             self._result("miss", f"approach failed: {approach.summary}")
@@ -329,5 +348,7 @@ class FlockMember:
         # back off on a coordinator retreat order (measured from world ground truth), or
         # as blind courtesy when our own last ball estimate was inside the ring
         if role.retreat or (self._bid is not None and self._bid.ball_dist_m < role.min_sep_m):
-            await self._verb("walk", {"vx": -0.1, "duration_s": 1.5})
+            back = self._pick("walk", "move")
+            if back is not None:
+                await self._verb(back, {"vx": -0.1, "duration_s": 1.5})
             self._bid = None

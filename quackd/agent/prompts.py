@@ -8,12 +8,17 @@ stated here *and* enforced by the loop; saying it is not the same as trusting it
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from quackd.duckfile.schema import DuckFile
 from quackd.perception.base import Detection, summarize_detections
 from quackd.transport.base import DuckState
 from quackd.verbs.registry import Verb, VerbResult
+
+if TYPE_CHECKING:
+    from quackd.adapters.manifest import RobotManifest
+
+DUCK_BLURB = "a small biped duck robot (25 cm, 800 g)"
 
 DECLARE_SUCCESS = {
     "name": "declare_success",
@@ -46,8 +51,21 @@ META_TOOLS = [DECLARE_SUCCESS, DECLARE_FAILURE]
 META_TOOL_NAMES = {t["name"] for t in META_TOOLS}
 
 
-def build_system_prompt(duck: DuckFile, verbs: list[Verb], transport_name: str) -> str:
+def build_system_prompt(
+    duck: DuckFile,
+    verbs: list[Verb],
+    transport_name: str,
+    manifest: RobotManifest | None = None,
+) -> str:
     fm = duck.frontmatter
+    blurb = manifest.blurb if manifest is not None and manifest.blurb else DUCK_BLURB
+    names = {v.name for v in verbs}
+    if "walk_to" in names:
+        loop_verb = "walk_to"
+    elif "go_to" in names or manifest is None or manifest.provides("go_to"):
+        loop_verb = "go_to" if "go_to" in names or manifest is not None else "walk_to"
+    else:
+        loop_verb = "search_scan"
     verb_lines = "\n".join(f"- `{v.name}`: {v.description}" for v in verbs)
     success = "\n".join(f"- {s}" for s in fm.success)
     advisory = fm.advisory_abort_conditions
@@ -61,9 +79,9 @@ def build_system_prompt(duck: DuckFile, verbs: list[Verb], transport_name: str) 
         if transport_name == "sim2d"
         else ""
     )
-    return f"""You are the brain of a small biped duck robot (25 cm, 800 g). You are a high-level pilot:
+    return f"""You are the brain of {blurb}. You are a high-level pilot:
 you choose ONE verb per turn; the robot's own controllers handle balance and gait, and composite
-verbs like `walk_to` close their own loops on the camera. Do not micro-manage.
+verbs like `{loop_verb}` close their own loops on the camera. Do not micro-manage.
 
 ## Rules (enforced by the executor — not optional)
 - Call exactly one tool per turn. Never zero, never two.

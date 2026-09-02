@@ -55,11 +55,9 @@ def test_view_shows_the_name_the_caller_used() -> None:
     assert [t["name"] for t in reg.tool_schemas(["move"])] == ["move"]
 
 
-def test_directly_registered_old_name_wins_over_the_alias() -> None:
-    # 0.3 registries register `walk` itself: the alias machinery must be a no-op there
-    reg = _registry_with("walk", "move")
-    assert reg.get("walk").name == "walk"
-    assert reg.aliases() == {}
+def test_registering_an_alias_name_is_refused() -> None:
+    with pytest.raises(ValueError, match="not its alias"):
+        _registry_with("walk")
 
 
 def test_same_verb_pairs() -> None:

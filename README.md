@@ -93,11 +93,12 @@ The verbs the model can pick from are real, existing capabilities and nothing mo
 
 | Kind | Verbs | What they are |
 |---|---|---|
-| Built in | `walk` `sit` `stand` `stand_up` `stop` `kick` `grab` `gaze` `quack` `get_frame` | one each per behaviour the robot ships with, each an *intent* the robot's own controllers execute |
-| Composite | `search_scan` `walk_to` `approach_and` | plain Python over built in verbs and the camera, the steering loop |
+| Core | `observe` `report_state` `stop` `say` `move` `go_to` `search_scan` `approach_and` | on any robot whose manifest satisfies their requirements (a camera, a twist intent, a sound intent). `go_to` and `search_scan` are plain Python over the camera, the steering loop |
+| Microduck | `sit` `stand` `stand_up` `kick` `grab` `gaze` `quack` | one each per behaviour the robot ships with, each an *intent* the robot's own controllers execute |
+| Aliases | `get_frame` `walk_to` `walk` | the 0.3 names of `observe`, `go_to` and `move`. They keep working in every `.duck` file |
 | Learned | *(none yet)* | v2: policies trained from LLM written rewards, registered like any other verb |
 
-`walk_to` deserves a mention. It is a small closed loop written in plain Python that steers toward whatever the camera sees, ten times a second, without asking the model. The LLM says *"go to the ball"*. It never has to say *"turn 4° left"*.
+`go_to` (still spelled `walk_to` in the starter files) deserves a mention. It is a small closed loop written in plain Python that steers toward whatever the camera sees, ten times a second, without asking the model. The LLM says *"go to the ball"*. It never has to say *"turn 4° left"*.
 
 <br>
 
@@ -128,7 +129,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 **Today (v0.3, simulator):**
 
 - Run a goal end to end in the bundled 2D simulator with any of five providers. `find-and-kick` succeeds on 10 of 10 seeds with the scripted pilot, in about 2 s of wall clock per run, with a GIF and a full transcript every time.
-- Thirteen verbs (ten built in, three composite), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
+- Fifteen verbs (eight core, seven Microduck extensions), a strict `.duck` task file format with a validator, and a safety layer that enforces allowlists, budgets, confirmation gates, a heartbeat and a kill switch.
 - Drive the duck interactively from Claude Code or Claude Desktop over MCP, under the same rules.
 - Local and open source models through Ollama, vLLM, llama.cpp, LM Studio or any OpenAI compatible server, with no API key, model discovery from the server, and a JSON text fallback for models that cannot call tools natively.
 - Real model code paths for Claude, OpenAI, Gemini and Grok are implemented and tested offline. The hero GIF is the scripted pilot because this repo was built without an API key.

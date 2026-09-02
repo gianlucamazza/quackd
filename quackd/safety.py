@@ -18,7 +18,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import ValidationError
 
@@ -26,6 +26,9 @@ from quackd.duckfile.schema import Budgets, DuckFrontmatter
 from quackd.perception.base import Detector
 from quackd.transport.base import DuckState, DuckTransport
 from quackd.verbs.registry import Verb, VerbContext, VerbNotFound, VerbRegistry, VerbResult
+
+if TYPE_CHECKING:
+    from quackd.adapters.manifest import RobotManifest
 
 Source = Literal["agent", "mcp", "cli"]
 
@@ -117,6 +120,8 @@ class Executor:
     abort: asyncio.Event = field(default_factory=asyncio.Event)
     consecutive_failures: dict[str, int] = field(default_factory=dict)
     history: list[tuple[str, dict[str, Any], VerbResult]] = field(default_factory=list)
+    manifest: RobotManifest | None = None
+    """The connected robot's manifest, handed to verbs so composites can pick a strategy."""
 
     # ── policy ──────────────────────────────────────────────────────────────────────
 
@@ -151,6 +156,7 @@ class Executor:
             log=self.log,
             on_frame=self.on_frame,
             run_verb=lambda name, params: self.run_verb(name, params, source="agent", nested=True),
+            manifest=self.manifest,
         )
 
     # ── the one entry point ─────────────────────────────────────────────────────────

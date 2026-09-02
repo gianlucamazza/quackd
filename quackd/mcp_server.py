@@ -19,6 +19,8 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver import Image
 
 from quackd import __version__
+from quackd.adapters.base import backend_name
+from quackd.adapters.manifest import RobotManifest
 from quackd.agent.transcript import png_bytes
 from quackd.duckfile.parser import DuckParseError, load_duck
 from quackd.duckfile.schema import DuckFile
@@ -35,7 +37,13 @@ from quackd.safety import (
     deny_all,
 )
 from quackd.transport.base import DuckTransport
-from quackd.verbs.registry import VerbRegistry, VerbResult, default_registry
+from quackd.verbs.registry import (
+    Verb,
+    VerbRegistry,
+    VerbResult,
+    default_registry,
+    registry_from_manifest,
+)
 
 log = logging.getLogger("quackd.mcp")
 
@@ -55,9 +63,19 @@ class DuckSession:
     heartbeat: Heartbeat
     detector: Detector | None = None
     duck: DuckFile | None = None
+    manifest: RobotManifest | None = None
+    """Set in the lifespan when the transport is an adapter that describes itself."""
     frames: int = 0
     calls: int = 0
     log_lines: list[str] = field(default_factory=list)
+
+    def shown_name(self, verb: Verb) -> str:
+        """The name a client sees: the loaded contract's own spelling when it used an alias."""
+        if self.duck is not None:
+            for spelled in self.executor.allowed:
+                if spelled != verb.name and self.registry.canonical(spelled) == verb.name:
+                    return spelled
+        return verb.name
 
     def adopt(self, duck: DuckFile) -> None:
         self.duck = duck
@@ -102,8 +120,9 @@ def build_server(
     detector: Detector | None = None,
     heartbeat_period_s: float = 0.5,
 ) -> tuple[MCPServer, DuckSession]:
+    explicit_registry = registry is not None
     registry = registry or default_registry()
-    if detector is None and transport.name == "sim2d":
+    if detector is None and backend_name(transport) == "sim2d":
         from quackd.perception.color_blob import ColorBlobDetector
 
         detector = ColorBlobDetector()
@@ -131,9 +150,16 @@ def build_server(
 
     @contextlib.asynccontextmanager
     async def lifespan(_server: MCPServer) -> AsyncIterator[DuckSession]:
-        await transport.connect()
+        connected = await transport.connect()
+        if isinstance(connected, RobotManifest):
+            # an adapter: the vocabulary is the manifest's, not the Microduck default
+            session.manifest = connected
+            executor.manifest = connected
+            if not explicit_registry:
+                session.registry = registry_from_manifest(connected, transport)
+                executor.registry = session.registry
         session.heartbeat.start()
-        log.info("quackd MCP server up: transport=%s dry_run=%s", transport.name, dry_run)
+        log.info("quackd MCP server up: transport=%s dry_run=%s", backend_name(transport), dry_run)
         try:
             yield session
         finally:
@@ -147,19 +173,24 @@ def build_server(
 
     @mcp.tool(description="List every verb: params, safety class, and whether it is allowed now.")
     async def duck_list_verbs() -> dict[str, Any]:
-        allowed = set(session.executor.allowed)
+        reg = session.registry
+        aliases = reg.aliases()
         return {
             "contract": session.duck.name if session.duck else None,
+            "robot": session.manifest.id if session.manifest else None,
             "verbs": [
                 {
-                    "name": v.name,
+                    "name": session.shown_name(v),
+                    "canonical": v.name,
+                    "aliases": [a for a, c in aliases.items() if c == v.name],
+                    "core": v.core,
                     "kind": v.kind,
                     "safety_class": v.safety_class,
-                    "allowed": v.name in allowed or v.name == "stop",
+                    "allowed": session.executor.is_allowed(v.name),
                     "description": v.description,
                     "params": v.tool_schema()["input_schema"],
                 }
-                for v in registry.verbs()
+                for v in reg.verbs()
             ],
         }
 
@@ -183,7 +214,8 @@ def build_server(
     async def duck_get_state() -> dict[str, Any]:
         state = (await transport.get_state()).model_dump()
         state["budget"] = session.executor.budget.status() if session.executor.budget else None
-        state["transport"] = transport.name
+        state["transport"] = backend_name(transport)
+        state["robot"] = session.manifest.id if session.manifest else None
         state["dry_run"] = dry_run
         return state
 

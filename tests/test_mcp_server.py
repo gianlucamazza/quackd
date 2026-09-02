@@ -63,7 +63,9 @@ async def test_tools_and_basic_calls() -> None:
         assert {t.name for t in tools.tools} == TOOLS
         verbs = _data(await client.call_tool("duck_list_verbs", {}))
         names = {v["name"] for v in verbs["verbs"]}
-        assert {"walk", "kick", "walk_to", "quack"} <= names
+        assert {"move", "kick", "go_to", "quack"} <= names
+        aliases = {v["name"]: v["aliases"] for v in verbs["verbs"]}
+        assert aliases["move"] == ["walk"] and aliases["go_to"] == ["walk_to"]
         assert verbs["contract"] is None
 
         quack = _data(await client.call_tool("duck_quack", {"text": "hello there"}))

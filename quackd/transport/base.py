@@ -14,7 +14,7 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 Posture = Literal["standing", "sitting", "fallen", "unknown"]
-IntentKind = Literal["move", "stop", "do", "look", "sound", "enable", "pose"]
+IntentKind = Literal["move", "stop", "do", "look", "sound", "enable", "pose", "joint", "gripper"]
 
 # Neutral skill vocabulary. These strings are upstream's own (`duck-ipc-proto` `Skill` enum);
 # see `upstream_api.SKILLS`. The sim interprets the same names.
@@ -85,8 +85,18 @@ class Intent(BaseModel):
         return cls(kind="stop")
 
     @classmethod
-    def do(cls, skill: Skill) -> Intent:
+    def do(cls, skill: str) -> Intent:
+        """A named skill. On the Microduck one of `Skill`; other adapters name their own."""
         return cls(kind="do", params={"skill": skill})
+
+    @classmethod
+    def joint(cls, positions: dict[str, float], duration_s: float = 1.0) -> Intent:
+        """Joint targets for an arm (0.4). The Microduck never receives this kind."""
+        return cls(kind="joint", params={"positions": positions, "duration_s": duration_s})
+
+    @classmethod
+    def gripper(cls, open: bool) -> Intent:
+        return cls(kind="gripper", params={"open": open})
 
     @classmethod
     def look(cls, x: float, y: float, z: float) -> Intent:
@@ -113,7 +123,10 @@ class DuckTransport(Protocol):
 
     name: str
 
-    async def connect(self) -> None: ...
+    async def connect(self) -> Any:
+        """Open the link. An adapter (0.4) returns its `RobotManifest`; a bare transport
+        returns None and the caller falls back to the Microduck vocabulary."""
+        ...
 
     async def close(self) -> None: ...
 

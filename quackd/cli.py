@@ -135,14 +135,26 @@ def list_verbs() -> None:
     """List every registered verb with its params and safety class."""
     from quackd.verbs.registry import default_registry
 
+    registry = default_registry()
+    aliases: dict[str, list[str]] = {}
+    for alias, target in registry.aliases().items():
+        aliases.setdefault(target, []).append(alias)
     table = Table(title="verbs")
     table.add_column("name", style="bold")
+    table.add_column("aliases")
     table.add_column("kind")
     table.add_column("safety")
     table.add_column("params")
     table.add_column("description")
-    for v in default_registry().verbs():
-        table.add_row(v.name, v.kind, v.safety_class, v.param_summary(), v.description)
+    for v in registry.verbs():
+        table.add_row(
+            v.name,
+            ", ".join(aliases.get(v.name, [])),
+            f"{v.kind}{' (core)' if v.core else ''}",
+            v.safety_class,
+            v.param_summary(),
+            v.description,
+        )
     console.print(table)
 
 

@@ -9,15 +9,18 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from quackd.perception.base import Detector
 from quackd.transport.base import DuckState, DuckTransport
 from quackd.verbs.aliases import ALIASES
+
+if TYPE_CHECKING:
+    from quackd.adapters.manifest import RobotManifest
 
 SafetyClass = Literal["safe", "confirm", "dangerous"]
 VerbKind = Literal["builtin", "composite", "learned", "meta"]
@@ -56,6 +59,8 @@ class VerbContext:
     on_frame: Callable[[Any, str], None] = lambda _img, _caption: None
     run_verb: Callable[[str, dict[str, Any]], Awaitable[VerbResult]] | None = None
     """Composites call other verbs through the executor, so allowlists still apply."""
+    manifest: RobotManifest | None = None
+    """The connected robot's manifest, so composite verbs can pick a strategy (0.4)."""
 
 
 Precondition = Callable[[DuckState], str | None]
@@ -78,6 +83,8 @@ class Verb:
     """Read-only verbs (get_frame) still run under --dry-run."""
     done_condition: str = ""
     """Human-readable: what 'done' means. Shown to the LLM after the description."""
+    core: bool = False
+    """A core verb (the same on every robot) rather than one robot's extension."""
 
     def tool_schema(self) -> dict[str, Any]:
         """Provider-neutral tool definition: name, description, JSON schema."""
@@ -123,6 +130,8 @@ class VerbRegistry:
         self._verbs: dict[str, Verb] = {}
 
     def register(self, verb: Verb, *, replace: bool = False) -> Verb:
+        if verb.name in ALIASES:
+            raise ValueError(f"register {ALIASES[verb.name]!r}, not its alias {verb.name!r}")
         if verb.name in self._verbs and not replace:
             raise ValueError(f"verb {verb.name!r} already registered")
         self._verbs[verb.name] = verb
@@ -179,12 +188,62 @@ class VerbRegistry:
         return pairs
 
 
-def default_registry() -> VerbRegistry:
-    """Built-ins plus composites. Learned verbs are added by whoever has one (v2)."""
-    from quackd.verbs.builtin import register_builtins
-    from quackd.verbs.composite import register_composites
+class ManifestError(ValueError):
+    """A manifest names a verb or a precondition that no code implements."""
 
+
+def registry_from_manifest(
+    manifest: RobotManifest,
+    adapter: Any = None,
+    *,
+    implementations: Mapping[str, Verb] | None = None,
+    conditions: Mapping[str, Precondition] | None = None,
+) -> VerbRegistry:
+    """The manifest decides WHICH verbs exist and how they are gated; code decides HOW they
+    run. Implementations come from the adapter first, then from `verbs/core.py`."""
+    from quackd.verbs.core import CORE
+
+    if implementations is None:
+        implementations = adapter.implementations() if adapter is not None else {}
+    if conditions is None:
+        conditions = adapter.preconditions() if adapter is not None else {}
+    templates: dict[str, Verb] = {**CORE, **implementations}
     registry = VerbRegistry()
-    register_builtins(registry)
-    register_composites(registry)
+    for spec in manifest.verbs:
+        template = templates.get(spec.name)
+        if template is None:
+            raise ManifestError(f"{manifest.id}: verb {spec.name!r} has no implementation")
+        preconditions: list[Precondition] = []
+        for condition in manifest.preconditions.get(spec.name, []):
+            predicate = conditions.get(condition)
+            if predicate is None:
+                raise ManifestError(
+                    f"{manifest.id}: precondition {condition!r} of {spec.name} has no predicate"
+                )
+            preconditions.append(predicate)
+        registry.register(
+            dataclasses.replace(
+                template,
+                description=spec.description or template.description,
+                safety_class="safe" if spec.name == "stop" else spec.safety_class,
+                timeout_s=spec.timeout_s if spec.timeout_s is not None else template.timeout_s,
+                preconditions=preconditions,
+                core=spec.core,
+            )
+        )
+    if "stop" not in registry:  # the manifest validator already inserted it; belt and braces
+        registry.register(CORE["stop"])
     return registry
+
+
+def default_registry() -> VerbRegistry:
+    """The Microduck's vocabulary without a connection: tests, `validate` and `list-verbs`
+    without `--robot`, the MCP server before its lifespan, flock members before connect.
+    Learned verbs are added by whoever has one (v2)."""
+    from quackd.adapters.microduck import MICRODUCK_VERBS, microduck_conditions, microduck_manifest
+
+    return registry_from_manifest(
+        microduck_manifest("sim2d"),
+        implementations=MICRODUCK_VERBS,
+        conditions=microduck_conditions(),
+    )
