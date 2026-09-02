@@ -52,6 +52,18 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
 - **`reachy-spotter` starter duck** (`duck: 1`, `robots: reachy_mini:sim2d`): find the
   ball with your gaze and say where it is; 10 of 10 seeds with the scripted pilot, judged
   by ground truth.
+- **Heterogeneous flocks** (ADR-0020): members are adapters sharing one arena and one
+  lockstep clock; bids carry a capability term so a robot bids only for a role its
+  manifest can fill; one auction fills every role (most constrained first, lowest own
+  distance, member-name tie-break, per-role hysteresis; the spotter is held for the run).
+  With roles the kicker reports `kick_done` and the spotter judges from its own fresh
+  frames (`VERDICT`); only `moved` is a success and the ground-truth veto stays on top.
+  Frame hints (`HINT`, arena frame, sim only) choose the kicker's pre-turn; the
+  frame-of-reference limitation is documented in `docs/flock.md`. `run --robots
+  name=<adapter>:<backend>,...`.
+- **`reachy-spots-duck-kicks` starter duck**: a Reachy Mini head spots the ball, a
+  Microduck kicks it, the head judges the kick. 10 of 10 seeds with scripted pilots,
+  every message in `flock.jsonl`, zero planner calls with the fake provider.
 
 ### Changed
 

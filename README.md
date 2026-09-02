@@ -148,6 +148,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | Real robot over JSON RPC (`--robot microduck:jsonrpc`) | 🧪 experimental, method names verified against upstream `duck-ipc-proto` v16, never run on hardware |
 | WebSocket agent gateway (`--robot microduck:websocket`) | ⏳ stub tracking upstream's draft ([architecture.md §5.3](https://github.com/pollen-robotics/microduck/blob/main/docs/design/architecture.md)) |
 | Reachy Mini adapter (`--robot reachy_mini:sim2d`, `mock`, `sdk`) | ✅ sim2d and mock, `reachy-spotter` 10 of 10 seeds, 🧪 sdk with every SDK name verified against a pinned commit, never run on a robot ([docs/adapters/reachy_mini.md](docs/adapters/reachy_mini.md)) |
+| Heterogeneous flock (a Reachy Mini head and a Microduck, sim2d) | ✅ `reachy-spots-duck-kicks` 10 of 10 seeds, capability aware auction, the spotter judges from its own frames, ground truth vetoes, 🧪 simulator only |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
 Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
@@ -315,6 +316,7 @@ Find the ball and kick it.
 | `fetch` | scoop the ball up and bring it back | **experimental**, the scoop is open loop and fails about 40 % of the time in sim, by design |
 | `flock-kick` | multiple ducks split the search, the closest one kicks | **flock mode**, cooperation over a bus and an auction |
 | `reachy-spotter` | find the ball with your gaze and say where it is | **Reachy Mini** (`--robot reachy_mini:sim2d` is its default), a stationary head with no legs |
+| `reachy-spots-duck-kicks` | a Reachy Mini head spots the ball, a Microduck kicks it, the head judges the kick | **heterogeneous flock**, two bodies under one contract, the spotter judges and the world vetoes |
 
 Full spec: [docs/duck-spec.md](docs/duck-spec.md). Add yours to [`ducks/`](ducks/).
 
@@ -343,6 +345,12 @@ uvx quackd run flock-kick --provider fake --seed 3
 </p>
 
 The interesting part is not the kick, it is the talking. The ducks coordinate over an in process bus (TASK, BID, CLAIM, ROLE, HB and RESULT messages, every one logged in `flock.jsonl`), and a deterministic Contract Net auction decides which duck acts, from each duck's own camera distance estimate. Every action goes through verbs the duck already has, so the machinery is task agnostic and what a flock can do is bounded by its skills, not by the ball. The kick is simply the first choreography written on top: split the search, auction, one actor, with the target label configurable. The LLM contributes **at most one** planning call per run, and each duck still enforces the `.duck` contract on itself. The outcome is judged from sim ground truth, not from a model's claim. Add a `flock:` block to any `.duck` or pass `--flock N`. Simulator only for now, and the per duck pilots are deterministic rules, on purpose. Details: [docs/flock.md](docs/flock.md).
+
+Since 0.4 a flock can mix bodies. In `reachy-spots-duck-kicks` a Reachy Mini head that can look but not walk and a Microduck that can walk and kick share one contract: bids carry a capability term, so each robot bids only for a role its manifest can fill, the head takes the spotter role and the duck the kicker role, the duck kicks and reports that it kicked, and the head judges from its own fresh frames whether the ball moved. Success needs the spotter's verdict and the simulator's ground truth to agree. Ten of ten seeds with the scripted pilots.
+
+```bash
+uvx quackd run reachy-spots-duck-kicks --provider fake --seed 3
+```
 
 <br>
 

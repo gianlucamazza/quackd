@@ -30,8 +30,10 @@ from its own fresh frames, never claimed by the actor.
   `not_moved`, `lost`) with its own displacement estimate against its first sighting.
   `moved` is success, anything else is a miss and a re-auction (a rally keeps the same
   reference). The runner's ground-truth veto from ADR-0015 stays: a wrong `moved` is a
-  failure, never a success. The judge applies a 0.05 m margin on top of `success_moved_m`,
-  the measured quantization of the size-based distance estimate beyond 1.5 m.
+  failure, never a success. The judge applies a 0.15 m margin on top of `success_moved_m`
+  (the size-based distance estimate quantizes in about 0.2 m steps beyond 1.5 m; with a
+  0.05 m margin one seed's spotter called a 0.25 m kick "moved" and the veto failed the
+  run, so the spotter is stricter and re-kicks instead).
 - **Frame hints are arena-frame estimates, optional, on in sim and off on hardware.** A
   hint expressed in the receiver's frame cannot be computed by the spotter (it does not
   know the receiver's pose), so a hint is the spotter's arena-frame estimate of the target
