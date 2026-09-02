@@ -32,10 +32,19 @@ EXTRAS = {
     "gemini": ("google.genai", "quackd[gemini]"),
     "yolo": ("ultralytics", "quackd[yolo]"),
     "live": ("pygame", "quackd[live]"),
+    "reachy": ("reachy_mini", "quackd[reachy]"),
 }
+# Robot SDKs are looked up by distribution metadata only: importing reachy_mini pulls
+# onnxruntime and GStreamer into a diagnostics command, which is exactly what doctor is not.
+_METADATA_ONLY = {"reachy_mini": "reachy-mini"}
 
 
 def _installed(module: str) -> str | None:
+    if module in _METADATA_ONLY:
+        try:
+            return md.version(_METADATA_ONLY[module])
+        except md.PackageNotFoundError:
+            return None
     try:
         importlib.import_module(module)
     except Exception:
@@ -209,5 +218,23 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
     console.print(
         f"[dim]upstream contract: duck-ipc-proto API v{up.API_VERSION.name} · "
         f"VERIFIED refs: {len(up.refs_by_status('VERIFIED'))}[/dim]"
+    )
+
+    from quackd.adapters.reachy_mini import upstream_api as reachy
+
+    unverified = reachy.refs_by_status("UNVERIFIED")
+    t = Table(
+        title=f"reachy_mini assumptions (UNVERIFIED: {len(unverified)}) — "
+        "see docs/adapters/reachy_mini.md"
+    )
+    t.add_column("what")
+    t.add_column("note")
+    for ref in unverified:
+        t.add_row(ref.name, ref.note)
+    console.print(t)
+    console.print(
+        f"[dim]reachy_mini SDK pinned at {reachy.PIN[:7]} (read {reachy.READ_ON}, wheel "
+        f"{reachy.SDK_VERSION_READ}) · VERIFIED refs: {len(reachy.refs_by_status('VERIFIED'))} · "
+        "the sdk backend has never been run against a robot[/dim]"
     )
     return bool(ok)

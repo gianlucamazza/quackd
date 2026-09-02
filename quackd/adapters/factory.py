@@ -30,6 +30,12 @@ _ADAPTERS: dict[str, tuple[tuple[str, ...], str, str | None, str | None]] = {
         None,
         None,
     ),
+    "reachy_mini": (
+        ("sim2d", "mock", "sdk"),
+        "✅ built-in: sim2d, mock · 🧪 sdk (verified names, never run on a robot)",
+        "quackd[reachy]",
+        "reachy_mini",
+    ),
 }
 ADAPTER_NAMES = tuple(_ADAPTERS)
 BACKENDS = {name: info[0] for name, info in _ADAPTERS.items()}
@@ -51,8 +57,9 @@ class RobotSpec:
         return f"{self.adapter}:{self.backend}"
 
     @property
-    def robot_id(self) -> str:
-        return self.name or self.adapter
+    def robot_id(self) -> str | None:
+        """The manifest id to ask for: the fleet name, or the adapter's own default."""
+        return self.name
 
 
 def parse_robot_spec(text: str) -> RobotSpec:

@@ -156,7 +156,8 @@ class Executor:
             log=self.log,
             on_frame=self.on_frame,
             run_verb=lambda name, params: self.run_verb(name, params, source="agent", nested=True),
-            manifest=self.manifest,
+            # an adapter carries its manifest after connect; a bare transport has none
+            manifest=self.manifest or getattr(self.transport, "manifest", None),
         )
 
     # ── the one entry point ─────────────────────────────────────────────────────────

@@ -173,8 +173,8 @@ class MicroduckAdapter:
 # ── what the factory calls (the same four names on every adapter package) ───────────────
 
 
-def describe(backend: str, robot_id: str = "microduck") -> RobotManifest:
-    return microduck_manifest(backend, robot_id)
+def describe(backend: str, robot_id: str | None = None) -> RobotManifest:
+    return microduck_manifest(backend, robot_id or "microduck")
 
 
 def implementations() -> dict[str, Verb]:
@@ -188,7 +188,7 @@ def conditions() -> dict[str, Precondition]:
 def make(
     backend: str,
     *,
-    robot_id: str = "microduck",
+    robot_id: str | None = None,
     seed: int | None = None,
     address: str | None = None,
     live: bool = False,
@@ -199,7 +199,7 @@ def make(
     transport = make_transport(
         backend, seed=seed, address=address, live=live, camera_url=camera_url
     )
-    return MicroduckAdapter(transport, robot_id=robot_id)
+    return MicroduckAdapter(transport, robot_id=robot_id or "microduck")
 
 
 __all__ = [
