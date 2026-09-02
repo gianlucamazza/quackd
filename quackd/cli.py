@@ -224,8 +224,9 @@ def list_adapters_cmd() -> None:
     table.add_column("status")
     table.add_column("extra")
     for row in list_adapters():
-        extra = row["extra"]
-        if extra != "built-in":
+        # escape: an extra reads quackd[reachy], which Rich would eat as markup
+        extra = escape(row["extra"])
+        if row["extra"] != "built-in":
             extra += (
                 " [green]installed[/green]" if row["installed"] else " [dim]not installed[/dim]"
             )

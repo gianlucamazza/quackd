@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from quackd import __version__
@@ -126,7 +127,7 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
             )
         t.add_row(
             name,
-            f"[green]{ver}[/green]" if ver else f"[yellow]missing[/yellow] ({extra})",
+            f"[green]{ver}[/green]" if ver else f"[yellow]missing[/yellow] ({escape(extra)})",
             key_cell,
             model,
         )
@@ -150,8 +151,9 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
     t.add_column("status")
     t.add_column("extra")
     for row in list_adapters():
-        extra = row["extra"]
-        if extra != "built-in":
+        # escape: an extra reads quackd[reachy], which Rich would eat as markup
+        extra = escape(row["extra"])
+        if row["extra"] != "built-in":
             extra += (
                 " [green]installed[/green]" if row["installed"] else " [dim]not installed[/dim]"
             )
@@ -208,7 +210,10 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
     t = Table(title="optional extras", show_header=False)
     for label, (module, extra) in EXTRAS.items():
         ver = _installed(module)
-        t.add_row(label, f"[green]{ver}[/green]" if ver else f"[dim]not installed ({extra})[/dim]")
+        t.add_row(
+            label,
+            f"[green]{ver}[/green]" if ver else f"[dim]not installed ({escape(extra)})[/dim]",
+        )
     console.print(t)
 
     unverified = up.refs_by_status("UNVERIFIED")
