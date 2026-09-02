@@ -86,6 +86,23 @@ enforces the contract. Design: `docs/design/multi-robot.md`.
   against a local `amqtt` broker with paho 2.1 (all eight kinds, one machine).
   `Subscription.drain()` is now an atomic `popleft` loop. `doctor` lists both LAN
   libraries.
+- **LeRobot adapter** (`--robot lerobot:mock|real`, ADR-0022): an SO-101 class desktop arm
+  with `move_joints`, `gripper`, `place` and, when a policy is available, `pick` as one
+  skill intent that the arm's own learned policy executes. No locomotion, no voice, no
+  gaze in its manifest. `real` sits behind `quackd[lerobot]` (Python 3.12 or newer, torch
+  never imported on the default path), passes `calibrate=False`, refuses an uncalibrated
+  arm, holds position on stop and never disables torque; every LeRobot name is pinned
+  and line-linked in `quackd/adapters/lerobot/upstream_api.py`; never run on an arm.
+- **rosbridge adapter** (`--robot rosbridge:mock|ws`): any wheeled base that takes a
+  `geometry_msgs/msg/Twist` over `rosbridge_server`. The address carries the topics
+  (`ws://host:9090?cmd_vel=/cmd_vel&odom=/odom&image=/camera/compressed`); with an image
+  topic the base also gets `observe`, `go_to`, `search_scan` and `approach_and`. There is
+  no deadman: quackd re-sends the Twist at 10 Hz and zeroes it on stop, and the manifest
+  says so. `ws` sits behind `quackd[rosbridge]` (roslibpy 2.x); every roslibpy, rosbridge
+  protocol and message name is pinned and line-linked; never run against a bridge.
+- **Speed limits come from the manifest**: `move`, `go_to` and the turn used by
+  `search_scan` clamp to `limits.max_vx/max_vy/max_wz` when a manifest names them; the
+  Microduck's limits equal the old schema bounds, so its runs are unchanged.
 
 ### Changed
 

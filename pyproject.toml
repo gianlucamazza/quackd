@@ -53,6 +53,9 @@ live = ["pygame>=2.5"]
 reachy = ["reachy-mini>=1.10,<2"]
 # LAN: zeroconf discovery and the MQTT flock bus (docs/lan.md). Never imported by default.
 lan = ["zeroconf>=0.132", "paho-mqtt>=2,<3"]
+# LeRobot needs Python 3.12 and pulls torch; the marker keeps the lock solvable on 3.11.
+lerobot = ["lerobot>=0.6; python_version >= '3.12'"]
+rosbridge = ["roslibpy>=2,<3"]
 dev = [
   "pytest>=8.2",
   "pytest-asyncio>=0.23",

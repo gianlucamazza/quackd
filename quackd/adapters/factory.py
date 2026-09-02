@@ -36,6 +36,18 @@ _ADAPTERS: dict[str, tuple[tuple[str, ...], str, str | None, str | None]] = {
         "quackd[reachy]",
         "reachy_mini",
     ),
+    "lerobot": (
+        ("mock", "real"),
+        "✅ built-in: mock · 🧪 real (verified names, never run on an arm; Python 3.12+)",
+        "quackd[lerobot]",
+        "lerobot",
+    ),
+    "rosbridge": (
+        ("mock", "ws"),
+        "✅ built-in: mock · 🧪 ws via roslibpy (verified names, never run against a bridge)",
+        "quackd[rosbridge]",
+        "roslibpy",
+    ),
 }
 ADAPTER_NAMES = tuple(_ADAPTERS)
 BACKENDS = {name: info[0] for name, info in _ADAPTERS.items()}

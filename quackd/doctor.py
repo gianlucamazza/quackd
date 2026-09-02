@@ -35,10 +35,13 @@ EXTRAS = {
     "reachy": ("reachy_mini", "quackd[reachy]"),
     "lan (zeroconf)": ("zeroconf", "quackd[lan]"),
     "lan (mqtt)": ("paho.mqtt.client", "quackd[lan]"),
+    "lerobot": ("lerobot", "quackd[lerobot]"),
+    "rosbridge": ("roslibpy", "quackd[rosbridge]"),
 }
 # Robot SDKs are looked up by distribution metadata only: importing reachy_mini pulls
-# onnxruntime and GStreamer into a diagnostics command, which is exactly what doctor is not.
-_METADATA_ONLY = {"reachy_mini": "reachy-mini"}
+# onnxruntime and GStreamer, and lerobot pulls torch, into a diagnostics command, which is
+# exactly what doctor is not.
+_METADATA_ONLY = {"reachy_mini": "reachy-mini", "lerobot": "lerobot"}
 
 
 def _installed(module: str) -> str | None:
@@ -222,21 +225,28 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
         f"VERIFIED refs: {len(up.refs_by_status('VERIFIED'))}[/dim]"
     )
 
+    from quackd.adapters.lerobot import upstream_api as lerobot_api
     from quackd.adapters.reachy_mini import upstream_api as reachy
+    from quackd.adapters.rosbridge import upstream_api as rosbridge_api
 
-    unverified = reachy.refs_by_status("UNVERIFIED")
-    t = Table(
-        title=f"reachy_mini assumptions (UNVERIFIED: {len(unverified)}) — "
-        "see docs/adapters/reachy_mini.md"
-    )
-    t.add_column("what")
-    t.add_column("note")
-    for ref in unverified:
-        t.add_row(ref.name, ref.note)
-    console.print(t)
-    console.print(
-        f"[dim]reachy_mini SDK pinned at {reachy.PIN[:7]} (read {reachy.READ_ON}, wheel "
-        f"{reachy.SDK_VERSION_READ}) · VERIFIED refs: {len(reachy.refs_by_status('VERIFIED'))} · "
-        "the sdk backend has never been run against a robot[/dim]"
-    )
+    for name, api, backend, target in (
+        ("reachy_mini", reachy, "sdk", "a robot"),
+        ("lerobot", lerobot_api, "real", "an arm"),
+        ("rosbridge", rosbridge_api, "ws", "a bridge"),
+    ):
+        unverified = api.refs_by_status("UNVERIFIED")
+        t = Table(
+            title=f"{name} assumptions (UNVERIFIED: {len(unverified)}) — "
+            f"see docs/adapters/{name}.md"
+        )
+        t.add_column("what")
+        t.add_column("note")
+        for ref in unverified:
+            t.add_row(ref.name, ref.note)
+        console.print(t)
+        console.print(
+            f"[dim]{name} upstream pinned at {api.PIN[:7]} (read {api.READ_ON}) · "
+            f"VERIFIED refs: {len(api.refs_by_status('VERIFIED'))} · "
+            f"the {backend} backend has never been run against {target}[/dim]"
+        )
     return bool(ok)

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 from pathlib import Path
+
+import pytest
 
 from quackd.transport import upstream_api as up
 from quackd.verbs.registry import default_registry
@@ -19,13 +22,13 @@ def test_transport_status_lists_every_upstream_ref() -> None:
     assert not missing, f"docs/transport-status.md is missing: {missing}"
 
 
-def test_reachy_doc_lists_every_sdk_ref() -> None:
-    from quackd.adapters.reachy_mini import upstream_api as reachy
-
-    doc = (REPO / "docs" / "adapters" / "reachy_mini.md").read_text(encoding="utf-8")
-    missing = [ref.name for ref in reachy.all_refs() if ref.name not in doc]
-    assert not missing, f"docs/adapters/reachy_mini.md is missing: {missing}"
-    assert reachy.PIN[:7] in doc and "never" in doc.lower()  # the honesty label
+@pytest.mark.parametrize("adapter", ["reachy_mini", "lerobot", "rosbridge"])
+def test_adapter_doc_lists_every_upstream_ref(adapter: str) -> None:
+    api = importlib.import_module(f"quackd.adapters.{adapter}.upstream_api")
+    doc = (REPO / "docs" / "adapters" / f"{adapter}.md").read_text(encoding="utf-8")
+    missing = [ref.name for ref in api.all_refs() if ref.name not in doc]
+    assert not missing, f"docs/adapters/{adapter}.md is missing: {missing}"
+    assert api.PIN[:7] in doc and "never" in doc.lower()  # the honesty label
 
 
 def test_readme_promises() -> None:

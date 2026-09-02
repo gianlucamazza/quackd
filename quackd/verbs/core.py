@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 MOVE_RESEND_S = 0.1
 MAX_VX = 0.3
+MAX_VY = 0.2
 MAX_WZ = 1.5
 TICK_S = 0.1
 TURN_RATE = 1.0  # rad/s used for scanning
@@ -110,10 +111,31 @@ async def _see(
     return img, [d for d in dets if d.label == label]
 
 
+def speed_limits(manifest: RobotManifest | None) -> tuple[float, float, float]:
+    """(max_vx, max_vy, max_wz): the manifest's `limits` when it names them, else the
+    schema bounds, which are the Microduck's, so its runs stay byte-identical."""
+    limits = manifest.limits if manifest is not None else {}
+    return (
+        float(limits.get("max_vx", MAX_VX)),
+        float(limits.get("max_vy", MAX_VY)),
+        float(limits.get("max_wz", MAX_WZ)),
+    )
+
+
+def _clamped(ctx: VerbContext, vx: float, vy: float, wz: float) -> tuple[float, float, float]:
+    max_vx, max_vy, max_wz = speed_limits(ctx.manifest)
+    return (
+        max(-max_vx, min(max_vx, vx)),
+        max(-max_vy, min(max_vy, vy)),
+        max(-max_wz, min(max_wz, wz)),
+    )
+
+
 async def _turn(ctx: VerbContext, radians: float) -> None:
     """Rotate in place by `radians`, feeding the deadman every tick."""
-    wz = TURN_RATE if radians >= 0 else -TURN_RATE
-    duration = abs(radians) / TURN_RATE
+    rate = min(TURN_RATE, speed_limits(ctx.manifest)[2])
+    wz = rate if radians >= 0 else -rate
+    duration = abs(radians) / rate
     ticks = max(1, round(duration / TICK_S))
     for _ in range(ticks):
         await ctx.transport.send_intent(Intent.move(0.0, 0.0, wz))
@@ -155,16 +177,19 @@ async def say(ctx: VerbContext, p: SayParams) -> VerbResult:
 
 
 async def move(ctx: VerbContext, p: MoveParams) -> VerbResult:
+    vx, vy, wz = _clamped(ctx, p.vx, p.vy, p.wz)  # the manifest's limits, if any
     slices = max(1, round(p.duration_s / MOVE_RESEND_S))
     step = p.duration_s / slices
     for _ in range(slices):
-        if (fail := await send_or_fail(ctx, Intent.move(p.vx, p.vy, p.wz))) is not None:
+        if (fail := await send_or_fail(ctx, Intent.move(vx, vy, wz))) is not None:
             await ctx.transport.stop()
             return fail
         await ctx.transport.sleep(step)
     await ctx.transport.stop()
+    clamped = (vx, vy, wz) != (p.vx, p.vy, p.wz)
     return VerbResult.success(
-        f"walked vx={p.vx:.2f} vy={p.vy:.2f} wz={p.wz:.2f} for {p.duration_s:.1f}s",
+        f"walked vx={vx:.2f} vy={vy:.2f} wz={wz:.2f} for {p.duration_s:.1f}s"
+        + (" (clamped to this robot's limits)" if clamped else ""),
         duration_s=p.duration_s,
     )
 
@@ -280,7 +305,7 @@ async def go_to(ctx: VerbContext, p: GoToParams) -> VerbResult:
                 return VerbResult.fail(f"lost the {p.target}; try search_scan")
             # turn toward where it was last seen
             wz = 0.8 if last_bearing >= 0 else -0.8
-            await ctx.transport.send_intent(Intent.move(0.0, 0.0, wz))
+            await ctx.transport.send_intent(Intent.move(*_clamped(ctx, 0.0, 0.0, wz)))
             await ctx.transport.sleep(TICK_S)
             continue
         lost = 0
@@ -301,7 +326,7 @@ async def go_to(ctx: VerbContext, p: GoToParams) -> VerbResult:
         vx = 0.2 if abs(bearing) < 25 else 0.05
         if dist is not None and dist < p.stop_distance + 0.15:
             vx = min(vx, 0.1)  # creep in
-        await ctx.transport.send_intent(Intent.move(vx, 0.0, wz))
+        await ctx.transport.send_intent(Intent.move(*_clamped(ctx, vx, 0.0, wz)))
         await ctx.transport.sleep(TICK_S)
     await ctx.transport.stop()
     return VerbResult.fail(
