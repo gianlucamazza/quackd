@@ -155,7 +155,7 @@ The same thing as a conversation, through MCP in Claude Code or Claude Desktop:
 | MQTT flock bus (`MqttBus`, library only) | ✅ every message kind, echo, duplicates and a full flock run on a fake broker, 🧪 one real round trip against a local `amqtt` broker, never a flock across machines (no distributed clock yet) |
 | Learned verbs | 🗺️ v2, interface and docs only ([docs/learned-verbs.md](docs/learned-verbs.md)) |
 
-Everything quackd assumes about the robot's API, and how sure we are: [docs/transport-status.md](docs/transport-status.md). `quackd doctor` prints the same list for your machine.
+Everything quackd assumes about each robot's API, and how sure we are: [docs/adapter-status.md](docs/adapter-status.md). `quackd doctor` prints the same lists for your machine. Adding a body of your own takes a manifest and a mock: [docs/adapters.md](docs/adapters.md), with the manifest fields in [docs/manifest-spec.md](docs/manifest-spec.md).
 
 <br>
 

@@ -52,7 +52,25 @@ is POSIX-only; forward it with `ssh -L 9870:/run/robotd.sock <robot>` and use
 
 **Can I run it on my Microduck today?** `--robot microduck:jsonrpc` speaks the verified
 `duck-ipc-proto` v16 vocabulary but has never touched hardware. Start with `--dry-run`,
-read [transport-status.md](transport-status.md), and tell us what happened.
+read [adapter-status.md](adapter-status.md), and tell us what happened.
+
+**Can quackd drive something that is not a duck?** Since 0.4, yes: a robot is an adapter
+that returns a manifest, and the verbs come from the manifest. `quackd list-adapters`
+shows the four that ship (Microduck, Reachy Mini, a LeRobot arm, any base over
+rosbridge), `quackd list-verbs --robot reachy_mini:sim2d` shows what one of them can do,
+and `quackd validate your.duck --robot lerobot:mock` tells you, field by field, whether
+your task fits that body. The rule never bends: a verb that is not in the manifest does
+not exist on that robot. Writing one: [adapters.md](adapters.md).
+
+**Why does `validate` say "requires kick, but reachy-01 (reachy-mini) does not provide
+it"?** Because it is true. A `.duck` lists what it needs (`requires`, or for a `duck: 0`
+file its whole allowlist) and a head has no legs. Either pick a body that has the verb,
+or write a task for the body you have; `reachy-spotter` is the head's own starter.
+
+**Can two different robots share a task?** In the simulator, yes: `reachy-spots-duck-kicks`
+puts a Reachy Mini head and a Microduck under one contract, the head spots and judges,
+the duck kicks ([flock.md](flock.md)). On hardware, not yet: a flock across machines
+needs a clock across machines, and nothing multi-robot has run on hardware.
 
 **Why "quackd"?** Upstream names its daemons `robotd`, `mediad`, `padd`, `tofd`… the brain
 daemon was missing. ([ADR-0002](adr/0002-name.md))

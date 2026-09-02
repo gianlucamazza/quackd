@@ -74,6 +74,8 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
 - ⏸ First transcript from a live local server (Ollama, vLLM, llama.cpp) — none available on the dev machine
 - ✅ v0.3.0 (2026-08-31): flock mode — multi-duck sim, lockstep clock, in-process bus, Contract Net auction, one planner LLM call, 10/10 seeded acceptance (ADR-0015/0016); hardened by a 69-agent adversarial review, 24 confirmed findings fixed pre-release
-- ⏸ Flock future work: MQTT/LAN bus behind the same Bus protocol, hardware flocks when Microducks ship, real-provider planner recording
+- ⏸ Flock future work: hardware flocks when Microducks ship, real-provider planner recording
+- ✅ v0.4.0 (2026-09-02): "a brain for any small robot" — robot adapters and manifests (ADR-0017/0018), `.duck` v1 with `requires` and `robots` (ADR-0019), the Reachy Mini adapter (ADR-0023), heterogeneous flocks with `reachy-spots-duck-kicks` 10/10 (ADR-0020), multi-robot MCP (`--robots`, six `robot_*` tools), zeroconf discovery and an MQTT bus behind `quackd[lan]` (ADR-0021), LeRobot and rosbridge adapters (ADR-0022); 303 → 400+ tests, still offline
+- ⏸ Only a human can: run `reachy_mini:sdk` against a Reachy Mini (or `reachy-mini-daemon --mockup-sim`), `lerobot:real` against an SO-101, `rosbridge:ws` against a bridge, `microduck:jsonrpc` against a robotd; a flock across two machines needs a distributed clock first; flip rows in `docs/adapter-status.md` only after
 - ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)

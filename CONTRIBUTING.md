@@ -53,13 +53,26 @@ your.duck --robot <adapter>:<backend>` passes for the robot you mean.
    and supplied by the adapter's `conditions()`.
 4. Add a test: on `MockTransport` for intent sequences, on `Sim2DTransport` for behaviour.
 5. If the verb needs an upstream method we have not verified, add it to the adapter's
-   `upstream_api.py` as `UNVERIFIED` with a note and a row in the status doc. Never
-   invent one.
+   `upstream_api.py` as `UNVERIFIED` with a note and a row in that adapter's page under
+   `docs/adapters/` (the Microduck's table is in `docs/adapter-status.md`). Never invent
+   one.
 6. Mention it in `docs/architecture.md`, the README verb table (a test checks every
    registry name is backticked there) and `CHANGELOG.md` (Unreleased).
 
 Renaming a verb is not a rename: add the new name and keep the old one in
 `quackd/verbs/aliases.py`, the only file that may spell an alias.
+
+## Add an adapter
+
+A robot joins quackd as a package under `quackd/adapters/<name>/` that declares a
+`RobotManifest` and moves the body through intents its own controllers execute. The
+recipe, the rules the manifest enforces and the checklist are in
+[docs/adapters.md](docs/adapters.md); the honesty rules are
+[ADR-0022](docs/adr/0022-per-adapter-upstream-refs.md). In short: write `mock` first; put
+every SDK name in the package's `upstream_api.py` with a pinned link and a row in
+`tests/test_upstream_api.py`; import the SDK inside `connect()` behind an extra; never
+send the SDK's "go limp" call; write `docs/adapters/<name>.md` listing every ref; and
+arrive 🧪 in the status tables until someone runs it against the real thing.
 
 ## Working agreements
 

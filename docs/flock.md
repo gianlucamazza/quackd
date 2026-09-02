@@ -182,5 +182,5 @@ the real data). Two choreographies ship: `flock-kick` (ducks) and
 and ground truth checks. An MQTT bus implementing the same `Bus` protocol exists since 0.4
 ([lan.md](lan.md)), library only and tested on a fake broker; a flock across machines
 also needs a clock across machines, which is future work, as are hardware flocks once
-Microducks ship. See [transport-status.md](transport-status.md) for the wider honesty
+Microducks ship. See [adapter-status.md](adapter-status.md) for the wider honesty
 table.
