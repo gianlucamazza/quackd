@@ -1,8 +1,9 @@
 """The command line is the product's front door.
 
-`uvx quackd run ducks/find-and-kick.duck --provider anthropic --transport sim2d` is the
+`uvx quackd run find-and-kick --provider anthropic --robot microduck:sim2d` is the
 north-star demo; every command here exists to make that line, and the debugging around it,
 boring. Commands are thin: they parse, load `.env`, wire objects together, and hand off.
+`--transport X` still works as `--robot microduck:X` for one release (ADR-0017).
 """
 
 from __future__ import annotations
@@ -59,6 +60,30 @@ def _fail(msg: str, code: int = 1) -> None:
     raise typer.Exit(code=code)
 
 
+def _deprecated(msg: str) -> None:
+    err_console.print(f"[yellow]{escape(msg)}[/yellow]")
+
+
+def _robot_specs(robot: str | None, robots: str | None, transport: str | None, duck: Any) -> list:
+    """The robots a command talks about: --robots, else --robot/--transport, else the duck's
+    own `robots:` default, else the Microduck simulator."""
+    from quackd.adapters.factory import RobotSpec, parse_robot_spec, parse_robots, resolve_robot
+
+    if robots:
+        return parse_robots(robots)
+    default = duck.frontmatter.robots if duck is not None else None
+    if isinstance(default, dict):
+        if robot or transport:
+            return [resolve_robot(robot, transport, warn=_deprecated)]
+        # the member names become the robot ids, as `--robots name=spec` would make them
+        specs = []
+        for name, text in default.items():
+            parsed = parse_robot_spec(text)
+            specs.append(RobotSpec(parsed.adapter, parsed.backend, name))
+        return specs
+    return [resolve_robot(robot, transport, duck_default=default, warn=_deprecated)]
+
+
 # ── validate ────────────────────────────────────────────────────────────────────────────
 
 
@@ -66,9 +91,24 @@ def _fail(msg: str, code: int = 1) -> None:
 def validate(
     duckfiles: list[str] = typer.Argument(..., help=".duck files, globs, or bundled names."),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Only print failures."),
+    robot: list[str] | None = typer.Option(
+        None,
+        "--robot",
+        "-r",
+        help="Check the files against this robot's manifest (<adapter>:<backend>; repeatable).",
+    ),
+    robots: str | None = typer.Option(
+        None, "--robots", help="Check against a fleet: name=<adapter>:<backend>,..."
+    ),
+    transport: str | None = typer.Option(
+        None, "--transport", "-t", help="DEPRECATED: alias for --robot microduck:<backend>."
+    ),
 ) -> None:
-    """Validate .duck files against the spec and the verb registry. Exits 1 on any failure."""
+    """Validate .duck files against the spec and a robot's verbs. Exits 1 on any failure."""
+    from quackd.adapters.base import AdapterError
+    from quackd.adapters.factory import describe, parse_robot_spec
     from quackd.duckfile.parser import DuckParseError, load_duck
+    from quackd.duckfile.validate import validate_duck
     from quackd.verbs.registry import default_registry
 
     registry = default_registry()
@@ -78,40 +118,41 @@ def validate(
     table.add_column("verbs", justify="right")
     table.add_column("result")
     failures = 0
+    details: list[str] = []  # one plain line per problem, so long messages survive any width
     for path in _expand(duckfiles):
         try:
             duck = load_duck(path)
         except DuckParseError as e:
             failures += 1
-            table.add_row(path, "—", "—", f"[red]✗ {e.reason}[/red]")
+            table.add_row(path, "—", "—", f"[red]✗ {escape(e.reason)}[/red]")
+            details.append(f"{path}: {e.reason}")
             continue
-        unknown = registry.unknown(duck.frontmatter.verbs.allow)
-        if unknown:
+        try:
+            if robot or robots or transport:
+                specs = (
+                    [parse_robot_spec(r) for r in robot]
+                    if robot
+                    else _robot_specs(None, robots, transport, duck)
+                )
+            elif duck.frontmatter.robots is not None:
+                specs = _robot_specs(None, None, None, duck)
+            else:
+                specs = []
+            manifests = [describe(spec) for spec in specs]
+        except AdapterError as e:
+            failures += 1
+            table.add_row(path, duck.name, "—", f"[red]✗ {escape(str(e))}[/red]")
+            continue
+        problems = validate_duck(duck, manifests, registry=registry)
+        if problems:
             failures += 1
             table.add_row(
                 path,
                 duck.name,
                 str(len(duck.frontmatter.verbs.allow)),
-                f"[red]✗ unknown verbs: {', '.join(unknown)}[/red]",
+                "[red]✗ " + escape("; ".join(p.message for p in problems)) + "[/red]",
             )
-            continue
-        if duck.frontmatter.learned_verbs:
-            failures += 1
-            table.add_row(
-                path,
-                duck.name,
-                str(len(duck.frontmatter.verbs.allow)),
-                "[red]✗ learned_verbs must be empty in v0.1 (v2 feature)[/red]",
-            )
-            continue
-        if duck.frontmatter.flock is not None and duck.frontmatter.verbs.confirm:
-            failures += 1
-            table.add_row(
-                path,
-                duck.name,
-                str(len(duck.frontmatter.verbs.allow)),
-                "[red]✗ a flock cannot prompt y/N per duck: empty verbs.confirm[/red]",
-            )
+            details.extend(f"{path}: {p}" for p in problems)
             continue
         if not quiet:
             verdict = "[green]✓ valid[/green]"
@@ -119,10 +160,14 @@ def validate(
                 verdict = (
                     f"[green]✓ valid (flock of {len(duck.frontmatter.flock.member_names)})[/green]"
                 )
+            if manifests:
+                verdict += f" [dim]for {', '.join(m.id for m in manifests)}[/dim]"
             table.add_row(path, duck.name, str(len(duck.frontmatter.verbs.allow)), verdict)
     if not quiet or failures:
         console.print(table)
     if failures:
+        for line in details:
+            console.print(escape(line), soft_wrap=True)
         raise typer.Exit(code=1)
     console.print(f"[green]{len(_expand(duckfiles))} file(s) valid.[/green]")
 
@@ -131,19 +176,63 @@ def validate(
 
 
 @app.command("list-verbs")
-def list_verbs() -> None:
-    """List every registered verb with its params and safety class."""
+def list_verbs(
+    robot: str | None = typer.Option(
+        None, "--robot", "-r", help="A robot's vocabulary (<adapter>:<backend>); default Microduck."
+    ),
+) -> None:
+    """List every verb a robot provides, with params and safety class."""
+    from quackd.adapters.base import AdapterError
+    from quackd.adapters.factory import parse_robot_spec, registry_for
     from quackd.verbs.registry import default_registry
 
-    table = Table(title="verbs")
+    try:
+        registry = registry_for(parse_robot_spec(robot)) if robot else default_registry()
+    except AdapterError as e:
+        _fail(str(e))
+        return
+    aliases: dict[str, list[str]] = {}
+    for alias, target in registry.aliases().items():
+        aliases.setdefault(target, []).append(alias)
+    table = Table(title=f"verbs ({robot or 'microduck'})")
     table.add_column("name", style="bold")
+    table.add_column("aliases")
     table.add_column("kind")
     table.add_column("safety")
     table.add_column("params")
     table.add_column("description")
-    for v in default_registry().verbs():
-        table.add_row(v.name, v.kind, v.safety_class, v.param_summary(), v.description)
+    for v in registry.verbs():
+        table.add_row(
+            v.name,
+            ", ".join(aliases.get(v.name, [])),
+            f"{v.kind}{' (core)' if v.core else ''}",
+            v.safety_class,
+            v.param_summary(),
+            v.description,
+        )
     console.print(table)
+
+
+@app.command("list-adapters")
+def list_adapters_cmd() -> None:
+    """List the robot adapters this build knows, their backends and status."""
+    from quackd.adapters.factory import list_adapters
+
+    table = Table(title="adapters (--robot <adapter>:<backend>)")
+    table.add_column("adapter", style="bold")
+    table.add_column("backends")
+    table.add_column("status")
+    table.add_column("extra")
+    for row in list_adapters():
+        # escape: an extra reads quackd[reachy], which Rich would eat as markup
+        extra = escape(row["extra"])
+        if row["extra"] != "built-in":
+            extra += (
+                " [green]installed[/green]" if row["installed"] else " [dim]not installed[/dim]"
+            )
+        table.add_row(row["name"], " · ".join(row["backends"]), row["status"], extra)
+    console.print(table)
+    console.print("[dim]--transport <backend> still works as --robot microduck:<backend>.[/dim]")
 
 
 # ── run / record ────────────────────────────────────────────────────────────────────────
@@ -157,7 +246,7 @@ def _run_impl(
     duckfile: str | None,
     goal: str | None,
     provider: str,
-    transport: str,
+    transport: str | None,
     model: str | None,
     seed: int | None,
     dry_run: bool,
@@ -173,28 +262,32 @@ def _run_impl(
     api_key: str | None = None,
     vision: bool | None = None,
     flock: int | None = None,
+    *,
+    robot: str | None = None,
+    robots: str | None = None,
 ) -> None:
+    from quackd.adapters.factory import make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
     from quackd.agent.providers.factory import make_provider
     from quackd.duckfile.parser import DuckParseError, duck_from_goal, load_duck
     from quackd.safety import KillSwitch, allow_all
     from quackd.transport.base import TransportError
-    from quackd.transport.factory import make_transport
-    from quackd.verbs.registry import default_registry
 
     if (duckfile is None) == (goal is None):
         _fail('give either a .duck file (or bundled name) or --goal "...", not both')
         return
     try:
+        duck = load_duck(duckfile) if duckfile is not None else None
+        specs = _robot_specs(robot, robots, transport, duck)
+        spec = specs[0]
         if goal is not None:
-            safe = [v.name for v in default_registry().verbs() if v.safety_class == "safe"]
+            safe = [v.name for v in registry_for(spec).verbs() if v.safety_class == "safe"]
             duck = duck_from_goal(goal, safe)
-        else:
-            duck = load_duck(duckfile or "")
-    except DuckParseError as e:
+    except (DuckParseError, TransportError) as e:
         _fail(str(e))
         return
+    assert duck is not None
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
@@ -202,7 +295,7 @@ def _run_impl(
         _run_flock_impl(
             duck,
             provider=provider,
-            transport=transport,
+            specs=specs,
             model=model,
             seed=seed,
             dry_run=dry_run,
@@ -230,14 +323,14 @@ def _run_impl(
             api_key=api_key,
             vision=vision,
         )
-        duck_transport = make_transport(transport, seed=seed, address=address, live=live)
+        duck_transport = make_adapter(spec, seed=seed, address=address, live=live)
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
         return
 
     recorder = None
     detector = None
-    if transport == "sim2d":
+    if spec.backend == "sim2d":
         from quackd.perception.color_blob import ColorBlobDetector
 
         detector = ColorBlobDetector()
@@ -265,7 +358,7 @@ def _run_impl(
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
         f"({llm.model or 'model: first served'}) · "
-        f"transport=[cyan]{duck_transport.name}[/cyan]"
+        f"robot=[cyan]{spec.key}[/cyan]"
         + (f" · seed={seed}" if seed is not None else "")
         + (" · [yellow]DRY RUN[/yellow]" if dry_run else "")
     )
@@ -311,7 +404,7 @@ def _run_flock_impl(
     duck: Any,
     *,
     provider: str,
-    transport: str,
+    specs: list[Any],
     model: str | None,
     seed: int | None,
     dry_run: bool,
@@ -334,12 +427,20 @@ def _run_flock_impl(
     from quackd.safety import KillSwitch
     from quackd.sim2d.recorder import FrameRecorder
 
-    if transport != "sim2d":
-        _fail("flock mode is simulator only in v0.3 (docs/flock.md); drop --transport")
+    if any(spec.backend != "sim2d" for spec in specs):
+        _fail(
+            "flock mode is simulator only in 0.4 (docs/flock.md); "
+            "every member must be an <adapter>:sim2d robot"
+        )
         return
     if duck.frontmatter.verbs.confirm and not yes:
         _fail("a flock cannot prompt y/N per duck: empty verbs.confirm or pass --yes")
         return
+    roles = duck.frontmatter.flock.roles if duck.frontmatter.flock is not None else None
+    if n_override is not None and roles:
+        _fail("--flock N cannot be combined with flock.roles; the task file names its members")
+        return
+    robots = {spec.name: spec.key for spec in specs if spec.name} or None
     try:
         llm = make_provider(
             provider,
@@ -372,12 +473,22 @@ def _run_flock_impl(
 
         def on_event(kind: str, data: dict[str, Any]) -> None:
             if kind == "claim":
-                rec.set_focus(names.index(data["kicker"]))
-                rec.set_caption(f"CLAIM {data['kicker']} ({data['dist']:.2f} m)")
+                entity = data.get("entity")
+                if entity:
+                    rec.set_focus(entity[1], entity[0])
+                else:
+                    rec.set_focus(names.index(data["kicker"]))
+                spotter = f", spotter {data['spotter']}" if data.get("spotter") else ""
+                rec.set_caption(f"CLAIM {data['kicker']} ({data['dist']:.2f} m){spotter}")
             elif kind == "auction":
                 rec.set_caption(f"AUCTION first bid {data['first_bid']} {data['dist']:.2f} m")
             elif kind == "miss":
                 rec.set_caption(f"MISS {data['duck']}, re-searching")
+            elif kind == "kick_done":
+                rec.set_caption(f"KICKED by {data['kicker']}, the spotter judges")
+            elif kind == "verdict":
+                moved = f" {data['moved_m']:.2f} m" if data.get("moved_m") is not None else ""
+                rec.set_caption(f"VERDICT {data['verdict']}{moved} by {data['spotter']}")
 
         coordinator.on_event = on_event
 
@@ -408,8 +519,12 @@ def _run_flock_impl(
                 gif_size=gif_size,
                 on_recorder=on_ready,
                 log=log,
+                robots=robots,
             )
         )
+    except ValueError as e:
+        _fail(str(e))
+        return
     finally:
         if "ks" in holder:
             holder["ks"].uninstall()
@@ -419,8 +534,9 @@ def _run_flock_impl(
         result.outcome, "red"
     )
     console.print(f"[{colour}]{result.outcome.upper()}[/{colour}] — {result.reason}")
+    spotter = f"spotter={result.spotter} " if result.spotter else ""
     console.print(
-        f"kicker={result.kicker} auctions={result.auctions} bids={result.bids} "
+        f"{spotter}kicker={result.kicker} auctions={result.auctions} bids={result.bids} "
         f"ball moved {result.ball_displacement_m:.2f} m in {result.sim_elapsed_s:.1f}s sim"
     )
     console.print(
@@ -462,8 +578,23 @@ _VISION = typer.Option(
     "--vision/--no-vision",
     help="Send camera frames to the model (default: on for cloud, off for local).",
 )
+_ROBOT = typer.Option(
+    None,
+    "--robot",
+    "-r",
+    help="<adapter>:<backend>, e.g. microduck:sim2d (default) · microduck:mock · "
+    "microduck:jsonrpc. See `quackd list-adapters`.",
+)
+_ROBOTS = typer.Option(
+    None,
+    "--robots",
+    help="A flock or fleet: name=<adapter>:<backend>,... (simulator only for flocks).",
+)
 _TRANSPORT = typer.Option(
-    "sim2d", "--transport", "-t", help="sim2d · mock · jsonrpc (experimental) · websocket (stub)"
+    None,
+    "--transport",
+    "-t",
+    help="DEPRECATED (removed in 0.5): alias for --robot microduck:<backend>.",
 )
 _MODEL = typer.Option(None, "--model", "-m", help="Override the provider's model.")
 _SEED = typer.Option(None, "--seed", help="Simulator seed (deterministic runs).")
@@ -481,7 +612,9 @@ def run(
     duckfile: str | None = _DUCK_ARG,
     goal: str | None = _GOAL,
     provider: str = _PROVIDER,
-    transport: str = _TRANSPORT,
+    robot: str | None = _ROBOT,
+    robots: str | None = _ROBOTS,
+    transport: str | None = _TRANSPORT,
     model: str | None = _MODEL,
     seed: int | None = _SEED,
     dry_run: bool = _DRY,
@@ -519,6 +652,8 @@ def run(
         api_key=api_key,
         vision=vision,
         flock=flock,
+        robot=robot,
+        robots=robots,
     )
 
 
@@ -543,22 +678,23 @@ def record(
         duckfile,
         goal,
         provider,
-        "sim2d",
-        model,
-        seed,
-        False,
-        max_steps,
-        runs_dir,
-        True,
-        False,
-        None,
-        True,
-        gif_size,
-        verbose,
+        transport=None,
+        model=model,
+        seed=seed,
+        dry_run=False,
+        max_steps=max_steps,
+        runs_dir=runs_dir,
+        yes=True,
+        live=False,
+        address=None,
+        gif=True,
+        gif_size=gif_size,
+        verbose=verbose,
         base_url=base_url,
         api_key=api_key,
         vision=vision,
         flock=flock,
+        robot="microduck:sim2d",
     )
 
 
@@ -566,20 +702,30 @@ def record(
 
 
 @app.command()
-def doctor() -> None:
-    """Check the environment: keys, optional extras, transports."""
+def doctor(
+    robot: str | None = typer.Option(
+        None, "--robot", "-r", help="Also show one robot's manifest (<adapter>:<backend>)."
+    ),
+) -> None:
+    """Check the environment: keys, optional extras, adapters, upstream assumptions."""
     from quackd.doctor import run_doctor
 
-    ok = run_doctor(console)
+    ok = run_doctor(console, robot=robot)
     if not ok:
         raise typer.Exit(code=1)
 
 
 @app.command("serve-mcp")
 def serve_mcp(
-    transport: str = _TRANSPORT,
+    robot: str | None = _ROBOT,
+    robots: str | None = typer.Option(
+        None,
+        "--robots",
+        help="A fleet: name=<adapter>:<backend>,... (six robot_* tools, one executor each).",
+    ),
+    transport: str | None = _TRANSPORT,
     duckfile: str | None = typer.Option(
-        None, "--duckfile", help="Load a .duck contract at startup."
+        None, "--duckfile", help="Load a .duck contract at startup (on the default robot)."
     ),
     seed: int | None = _SEED,
     address: str | None = _ADDR,
@@ -588,12 +734,113 @@ def serve_mcp(
         False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
     ),
 ) -> None:
-    """Expose the duck as MCP tools over stdio (Claude Code / Claude Desktop)."""
+    """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
+    from quackd.adapters.base import AdapterError
     from quackd.mcp_server import serve
 
-    serve(
-        transport=transport, duckfile=duckfile, seed=seed, address=address, dry_run=dry_run, yes=yes
+    try:
+        serve(
+            robot=robot,
+            robots=robots,
+            transport=transport,
+            duckfile=duckfile,
+            seed=seed,
+            address=address,
+            dry_run=dry_run,
+            yes=yes,
+            warn=_deprecated,
+        )
+    except AdapterError as e:
+        _fail(str(e))
+
+
+# ── lan (quackd[lan]) ───────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def discover(
+    timeout: float = typer.Option(3.0, "--timeout", help="Seconds to listen for answers."),
+    as_json: bool = typer.Option(False, "--json", help="One JSON object per robot."),
+) -> None:
+    """List the quackd robots answering on the LAN (zeroconf, needs quackd[lan])."""
+    import json
+
+    from rich.table import Table
+
+    from quackd.lan import LanNotInstalled
+    from quackd.lan import discover as lan_discover
+
+    try:
+        robots = lan_discover.discover(timeout)
+    except LanNotInstalled as e:
+        _fail(str(e))
+    if as_json:
+        for robot in robots:
+            print(json.dumps(robot.row()))
+        return
+    if not robots:
+        console.print(f"[dim]no quackd robots answered in {timeout:g} s[/dim]")
+        return
+    t = Table(title=f"quackd robots on the LAN ({len(robots)})")
+    for column in ("manifest id", "adapter", "model", "embodiment", "verbs", "address", "digest"):
+        t.add_column(column)
+    for robot in robots:
+        t.add_row(
+            robot.manifest_id,
+            robot.adapter,
+            robot.model,
+            robot.embodiment,
+            str(robot.n_verbs),
+            ", ".join(robot.addresses) or robot.host,
+            robot.digest,
+        )
+    console.print(t)
+
+
+@app.command()
+def announce(
+    robot: str = typer.Option(
+        ..., "--robot", "-r", help="<adapter>:<backend> to advertise (static manifest, no robot)."
+    ),
+    name: str | None = typer.Option(
+        None, "--name", help="Manifest id to advertise (default: the adapter's own)."
+    ),
+    port: int = typer.Option(0, "--port", help="Service port to advertise; 0 = identity only."),
+    for_s: float | None = typer.Option(
+        None, "--for", help="Seconds to stay announced (default: until Ctrl-C)."
+    ),
+) -> None:
+    """Advertise a robot's identity on the LAN (zeroconf, needs quackd[lan])."""
+    import time
+
+    from quackd.adapters.base import AdapterError
+    from quackd.adapters.factory import RobotSpec, describe, parse_robot_spec
+    from quackd.lan import LanNotInstalled
+    from quackd.lan import announce as lan_announce
+
+    try:
+        parsed = parse_robot_spec(robot)
+        spec = RobotSpec(parsed.adapter, parsed.backend, name)
+        manifest = describe(spec)
+        ann = lan_announce.announce(manifest, adapter=spec.adapter, port=port)
+    except (AdapterError, LanNotInstalled, ValueError) as e:
+        _fail(str(e))
+    console.print(
+        f"announcing {ann.record.name} ({manifest.summary()}) at "
+        f"{', '.join(ann.record.addresses)} · digest {manifest.digest()}"
     )
+    try:
+        if for_s is None:
+            console.print("[dim]Ctrl-C to withdraw[/dim]")
+            while True:
+                time.sleep(1.0)
+        else:
+            time.sleep(for_s)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        ann.close()
+        console.print("withdrawn")
 
 
 if __name__ == "__main__":

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 from pathlib import Path
+
+import pytest
 
 from quackd.transport import upstream_api as up
 from quackd.verbs.registry import default_registry
@@ -13,10 +16,42 @@ REPO = Path(__file__).resolve().parents[1]
 README = (REPO / "README.md").read_text(encoding="utf-8")
 
 
-def test_transport_status_lists_every_upstream_ref() -> None:
-    doc = (REPO / "docs" / "transport-status.md").read_text(encoding="utf-8")
+def test_adapter_status_lists_every_microduck_upstream_ref() -> None:
+    doc = (REPO / "docs" / "adapter-status.md").read_text(encoding="utf-8")
     missing = [ref.name for ref in up.all_refs() if ref.name not in doc]
-    assert not missing, f"docs/transport-status.md is missing: {missing}"
+    assert not missing, f"docs/adapter-status.md is missing: {missing}"
+    from quackd.adapters.factory import BACKENDS
+
+    for adapter, backends in BACKENDS.items():
+        for backend in backends:
+            assert f"`{adapter}:{backend}`" in doc, f"adapter-status.md lacks {adapter}:{backend}"
+    # the old page is a redirect, not a stale copy
+    old = (REPO / "docs" / "transport-status.md").read_text(encoding="utf-8")
+    assert "adapter-status.md" in old and "VERIFIED (read" not in old
+
+
+def test_adapter_guide_and_manifest_spec_match_the_code() -> None:
+    from quackd.adapters.factory import ADAPTER_NAMES
+    from quackd.verbs.core import REQUIREMENTS
+
+    guide = (REPO / "docs" / "adapters.md").read_text(encoding="utf-8")
+    for name in ADAPTER_NAMES:
+        assert f"`{name}`" in guide, f"docs/adapters.md does not mention {name}"
+    for fn in ("describe", "implementations", "conditions", "make"):
+        assert f"def {fn}(" in guide
+    spec = (REPO / "docs" / "manifest-spec.md").read_text(encoding="utf-8")
+    for verb in REQUIREMENTS:
+        assert f"`{verb}`" in spec, f"docs/manifest-spec.md does not list core verb {verb}"
+    assert "manifest.schema.json" in spec and "digest()" in spec
+
+
+@pytest.mark.parametrize("adapter", ["reachy_mini", "lerobot", "rosbridge"])
+def test_adapter_doc_lists_every_upstream_ref(adapter: str) -> None:
+    api = importlib.import_module(f"quackd.adapters.{adapter}.upstream_api")
+    doc = (REPO / "docs" / "adapters" / f"{adapter}.md").read_text(encoding="utf-8")
+    missing = [ref.name for ref in api.all_refs() if ref.name not in doc]
+    assert not missing, f"docs/adapters/{adapter}.md is missing: {missing}"
+    assert api.PIN[:7] in doc and "never" in doc.lower()  # the honesty label
 
 
 def test_readme_promises() -> None:
@@ -82,6 +117,15 @@ def test_readme_images_are_absolute_and_exist() -> None:
 def test_readme_verbs_match_registry() -> None:
     for name in default_registry().names():
         assert f"`{name}`" in README, f"README does not mention verb {name}"
+
+
+def test_mcp_doc_lists_every_tool() -> None:
+    from quackd.mcp_server import TOOL_NAMES
+
+    doc = (REPO / "docs" / "mcp.md").read_text(encoding="utf-8")
+    missing = [name for name in TOOL_NAMES if f"`{name}" not in doc]
+    assert not missing, f"docs/mcp.md is missing: {missing}"
+    assert "--robots" in doc and "--robots" in README
 
 
 def test_mcp_json_is_a_stdio_server() -> None:

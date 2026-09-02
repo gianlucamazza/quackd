@@ -2,7 +2,7 @@
   "mcpServers": {
     "quackd": {
       "command": "uv",
-      "args": ["run", "quackd", "serve-mcp", "--transport", "sim2d"]
+      "args": ["run", "quackd", "serve-mcp", "--robot", "microduck:sim2d"]
     }
   }
 }

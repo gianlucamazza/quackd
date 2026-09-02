@@ -7,6 +7,7 @@ headless, in under 60 s each, and a GIF lands in the run directory.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -18,7 +19,9 @@ from quackd.sim2d.recorder import FrameRecorder
 from quackd.transport.sim2d import Sim2DTransport
 
 SEEDS = range(10)
-MIN_SUCCESSES = 8
+# CI sets QUACKD_STRICT_SEEDS=1: the shipped claim is 10 of 10, and a refactor must not
+# quietly spend the two seeds of slack the local default allows.
+MIN_SUCCESSES = 10 if os.environ.get("QUACKD_STRICT_SEEDS") == "1" else 8
 
 
 async def test_find_and_kick_acceptance(kick_duck: DuckFile, tmp_path: Path) -> None:

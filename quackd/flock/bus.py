@@ -1,7 +1,8 @@
 """The blackboard: a tiny pub/sub bus every flock message crosses exactly once.
 
-In-process only in v0.3 (the `Bus` protocol is the seam a LAN/MQTT bridge would fill
-later). One hard rule keeps the lockstep clock alive: **nobody ever awaits the bus**.
+In-process by default; `quackd.flock.mqtt_bus.MqttBus` fills the same two-method `Bus`
+protocol over a broker (0.4, library-only). One hard rule keeps the lockstep clock alive:
+**nobody ever awaits the bus**.
 Publishing is a synchronous fan-out to per-subscriber queues; consumers drain between
 sim sleeps. A participant blocked on a queue would not be asleep on the clock, and the
 whole flock's time would stop.
@@ -28,9 +29,18 @@ class Subscription:
             self._queue.append(msg)
 
     def drain(self) -> list[FlockMessage]:
-        """Everything queued, non-blocking, publish order preserved."""
-        out = list(self._queue)
-        self._queue.clear()
+        """Everything queued, non-blocking, publish order preserved.
+
+        A `popleft` loop rather than copy-then-clear: `deque.append` and `popleft` are
+        each atomic, so a producer on another thread (the MQTT bus, before a message is
+        marshalled onto the loop) can never have its message cleared unseen."""
+        out: list[FlockMessage] = []
+        queue = self._queue
+        while queue:
+            try:
+                out.append(queue.popleft())
+            except IndexError:  # emptied under us between the check and the pop
+                break
         return out
 
     def close(self) -> None:

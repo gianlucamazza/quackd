@@ -1,6 +1,6 @@
 # ADR-0004: Everything the LLM can do is a verb in one registry
 
-**Status:** accepted · **Date:** 2026-08-28
+**Status:** accepted · **Date:** 2026-08-28 · Extended by [ADR-0018](0018-core-verbs-extensions-aliases.md) (0.4: the one registry is built from a robot's manifest; `verbs/builtin.py` and `verbs/composite.py` became `verbs/core.py` plus per-adapter verb modules)
 
 ## Context
 

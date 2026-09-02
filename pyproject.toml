@@ -5,14 +5,15 @@ build-backend = "hatchling.build"
 [project]
 name = "quackd"
 dynamic = ["version"]
-description = "Give your Microduck a brain. Any LLM, one .duck file."
+description = "Give your small robot a brain. Any LLM, one .duck file. Microduck, Reachy Mini, LeRobot arms and ROS bases."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 authors = [{ name = "Rok Benko" }]
 keywords = [
-  "microduck", "robotics", "embodied-ai", "physical-ai", "llm-agents",
+  "microduck", "reachy-mini", "lerobot", "ros", "rosbridge",
+  "robotics", "embodied-ai", "physical-ai", "llm-agents",
   "mcp", "model-context-protocol", "reinforcement-learning", "sim2real",
   "claude", "openai", "ollama", "vllm", "llama-cpp", "local-llm",
 ]
@@ -48,6 +49,14 @@ grok = ["openai>=1.50"]
 all = ["anthropic>=1.0,<2", "openai>=1.50", "google-genai>=1.0"]
 yolo = ["ultralytics>=8.2"]
 live = ["pygame>=2.5"]
+# Robot SDKs are extras too: the default install never imports one. reachy-mini pulls
+# onnxruntime, FastAPI and a GStreamer bundle (read from the 1.10.0 wheel, 2026-09-02).
+reachy = ["reachy-mini>=1.10,<2"]
+# LAN: zeroconf discovery and the MQTT flock bus (docs/lan.md). Never imported by default.
+lan = ["zeroconf>=0.132", "paho-mqtt>=2,<3"]
+# LeRobot needs Python 3.12 and pulls torch; the marker keeps the lock solvable on 3.11.
+lerobot = ["lerobot>=0.6; python_version >= '3.12'"]
+rosbridge = ["roslibpy>=2,<3"]
 dev = [
   "pytest>=8.2",
   "pytest-asyncio>=0.23",

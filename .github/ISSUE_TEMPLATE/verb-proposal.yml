@@ -1,5 +1,5 @@
 name: Verb proposal
-description: Propose a new verb (built-in, composite, or learned).
+description: Propose a new verb (core, extension, or learned).
 labels: ["verb", "enhancement"]
 body:
   - type: input
@@ -13,10 +13,22 @@ body:
     id: kind
     attributes:
       label: Kind
+      description: See CONTRIBUTING.md "Add a verb". A verb not in a manifest does not exist.
       options:
-        - "built-in (maps 1:1 to a shipped robot behaviour)"
-        - "composite (plain Python over existing verbs + perception)"
+        - "core (any robot whose manifest meets its requirements, in quackd/verbs/core.py)"
+        - "extension (one body's own behaviour, in that adapter's verbs.py)"
         - "learned (ONNX policy — v2 track, see docs/learned-verbs.md)"
+    validations:
+      required: true
+  - type: input
+    id: robot
+    attributes:
+      label: Which robot provides it?
+      description: >-
+        For an extension, the adapter whose manifest will declare it (microduck, reachy_mini,
+        lerobot, rosbridge, or a new one). For a core verb, what a manifest must have for it to
+        appear (a camera, a twist intent, a sound intent).
+      placeholder: e.g. reachy_mini, or for a core verb, needs a camera and a gaze intent
     validations:
       required: true
   - type: textarea
@@ -46,4 +58,9 @@ body:
   - type: textarea
     id: upstream
     attributes:
-      label: Which upstream robotd methods does it need? (link to duck-ipc-proto if verified)
+      label: Which upstream methods does it need?
+      description: >-
+        The intent it sends and the upstream call behind it, with a link if you have read it in
+        upstream source: duck-ipc-proto for a Microduck, the reachy-mini SDK, LeRobot, or a ROS
+        message type. Unverified names ship UNVERIFIED in that adapter's upstream_api.py, never
+        guessed. See docs/adapters.md.

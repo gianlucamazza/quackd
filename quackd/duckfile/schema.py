@@ -12,14 +12,37 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-DUCK_SPEC_VERSION = 0
+from quackd.verbs.aliases import canonical
+
+DUCK_SPEC_VERSION = 1
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+_ROBOT_SPEC_RE = re.compile(r"^[a-z][a-z0-9_]*(:[a-z][a-z0-9_]*)?$")
+
+# The flock roles 0.4 has behaviour for. A requires-only role with no behaviour would be a
+# fabricated capability, so the vocabulary is closed (ADR-0019, ADR-0020).
+KNOWN_ROLES = ("spotter", "kicker")
 
 # The two `abort_when` phrasings the executor enforces itself. Anything else in the list is
 # passed to the LLM as an instruction, which is honest about what is and is not policed.
 BATTERY_ABORT_RE = re.compile(r"battery\s+(?:below|under|<)\s*(\d+(?:\.\d+)?)\s*%", re.I)
 REPEAT_FAIL_ABORT_RE = re.compile(r"same\s+verb\s+fails\s+(\d+)\s+times?\s+in\s+a\s+row", re.I)
+
+
+def _verb_list(names: list[str]) -> list[str]:
+    """Valid, unique verb names, where a verb and its alias count as one verb."""
+    seen: set[str] = set()
+    by_canonical: dict[str, str] = {}
+    for name in names:
+        if not _NAME_RE.match(name.replace("_", "-")):
+            raise ValueError(f"{name!r} is not a valid verb name")
+        if name in seen:
+            raise ValueError(f"duplicate verb {name!r}")
+        seen.add(name)
+        other = by_canonical.setdefault(canonical(name), name)
+        if other != name:
+            raise ValueError(f"{other!r} and {name!r} are the same verb; list one of them")
+    return names
 
 
 class VerbsSection(BaseModel):
@@ -38,20 +61,16 @@ class VerbsSection(BaseModel):
     @field_validator("allow", "confirm")
     @classmethod
     def _unique_names(cls, names: list[str]) -> list[str]:
-        seen: set[str] = set()
-        for name in names:
-            if not _NAME_RE.match(name.replace("_", "-")):
-                raise ValueError(f"{name!r} is not a valid verb name")
-            if name in seen:
-                raise ValueError(f"duplicate verb {name!r}")
-            seen.add(name)
-        return names
+        return _verb_list(names)
 
     @model_validator(mode="after")
     def _confirm_subset_of_allow(self) -> VerbsSection:
-        extra = [v for v in self.confirm if v not in self.allow]
+        allowed = {canonical(v) for v in self.allow}
+        extra = [v for v in self.confirm if canonical(v) not in allowed]
         if extra:
             raise ValueError(f"confirm lists verbs that are not allowed: {extra}")
+        if "stop" in self.confirm:
+            raise ValueError("stop can never be confirm-gated; it is the kill switch's verb")
         return self
 
 
@@ -140,8 +159,24 @@ class FlockSearch(BaseModel):
     )
 
 
+class FlockRole(BaseModel):
+    """A role in a heterogeneous flock (v1): who may take it is decided by capability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    requires: list[str] = Field(
+        default=..., min_length=1, description="Verbs a robot must provide to bid for this role."
+    )
+    count: Literal[1] = Field(default=1, description="Robots per role. Only 1 in 0.4.")
+
+    @field_validator("requires")
+    @classmethod
+    def _names(cls, names: list[str]) -> list[str]:
+        return _verb_list(names)
+
+
 class FlockSection(BaseModel):
-    """Cooperating ducks (v0.3, simulator only). The coordinator enforces this block."""
+    """Cooperating robots (simulator only). The coordinator enforces this block."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -152,6 +187,30 @@ class FlockSection(BaseModel):
     allocation: FlockAllocation = Field(default_factory=FlockAllocation)
     safety: FlockSafety = Field(default_factory=FlockSafety)
     search: FlockSearch = Field(default_factory=FlockSearch)
+    roles: dict[str, FlockRole] | None = Field(
+        default=None,
+        description="v1: named roles (spotter, kicker) with the verbs each requires.",
+    )
+    frame_hints: Literal["auto", "on", "off"] = Field(
+        default="auto",
+        description="v1: share arena-frame target hints between robots. auto = only when "
+        "every member runs in sim2d (there is no shared frame on hardware).",
+    )
+
+    @model_validator(mode="after")
+    def _roles_are_known_and_complete(self) -> FlockSection:
+        if self.roles is None:
+            return self
+        unknown = sorted(set(self.roles) - set(KNOWN_ROLES))
+        if unknown:
+            raise ValueError(
+                f"unknown flock role {unknown[0]!r}; 0.4 knows {', '.join(KNOWN_ROLES)}"
+            )
+        if any(role not in self.roles for role in KNOWN_ROLES):
+            raise ValueError("flock.roles needs both spotter and kicker")
+        if isinstance(self.members, int):
+            raise ValueError("name the members (a list) when flock.roles is given")
+        return self
 
     @field_validator("members")
     @classmethod
@@ -181,9 +240,13 @@ class FlockSection(BaseModel):
 class DuckFrontmatter(BaseModel):
     """The contract. This is what `schema.json` describes and what the executor enforces."""
 
-    model_config = ConfigDict(extra="forbid", title="quackd .duck v0 frontmatter")
+    model_config = ConfigDict(extra="forbid", title="quackd .duck frontmatter (v0, v1)")
 
-    duck: Literal[0] = Field(..., description="Spec version. Only 0 exists.")
+    duck: Literal[0, 1] = Field(
+        ...,
+        description="Spec version: 0 (quackd 0.1 to 0.3) or 1 (0.4: requires, robots, "
+        "flock.roles, flock.frame_hints). v0 files parse unchanged.",
+    )
     name: str = Field(..., description="Slug: lowercase letters, digits, hyphens.")
     description: str = Field(..., min_length=1, description="One line, human-facing.")
     author: str | None = None
@@ -208,7 +271,17 @@ class DuckFrontmatter(BaseModel):
     )
     flock: FlockSection | None = Field(
         default=None,
-        description="Cooperating ducks (v0.3, simulator only). Absent means a single duck.",
+        description="Cooperating robots (simulator only). Absent means a single robot.",
+    )
+    requires: list[str] = Field(
+        default_factory=list,
+        description="v1: verbs the task needs. `quackd validate --robot` checks them against "
+        "the robot's manifest. For v0 files every allowed verb is required.",
+    )
+    robots: str | dict[str, str] | None = Field(
+        default=None,
+        description="v1: default robot as <adapter>[:<backend>], or a mapping from flock "
+        "member name to such a spec, so `quackd run <duck>` needs no --robot flag.",
     )
 
     @field_validator("name")
@@ -217,6 +290,59 @@ class DuckFrontmatter(BaseModel):
         if not _NAME_RE.match(value):
             raise ValueError("name must match ^[a-z0-9][a-z0-9-]{0,63}$")
         return value
+
+    @field_validator("requires")
+    @classmethod
+    def _requires_names(cls, names: list[str]) -> list[str]:
+        return _verb_list(names)
+
+    @field_validator("robots")
+    @classmethod
+    def _robot_specs(cls, value: str | dict[str, str] | None) -> str | dict[str, str] | None:
+        specs = [value] if isinstance(value, str) else list((value or {}).values())
+        for spec in specs:
+            if not _ROBOT_SPEC_RE.match(spec):
+                raise ValueError(f"{spec!r} is not <adapter>[:<backend>]")
+        if isinstance(value, dict):
+            for member in value:
+                if not _NAME_RE.match(member):
+                    raise ValueError(f"{member!r} is not a valid member name (slug)")
+        return value
+
+    @model_validator(mode="after")
+    def _version_and_cross_field_rules(self) -> DuckFrontmatter:
+        if self.duck == 0:
+            v1_keys = {
+                "requires": bool(self.requires),
+                "robots": self.robots is not None,
+                "flock.roles": self.flock is not None and self.flock.roles is not None,
+                "flock.frame_hints": self.flock is not None
+                and "frame_hints" in self.flock.model_fields_set,
+            }
+            for key, used in v1_keys.items():
+                if used:
+                    raise ValueError(f"{key} needs duck: 1")
+        allowed = {canonical(v) for v in self.verbs.allow}
+        extra = [v for v in self.requires if canonical(v) not in allowed]
+        if extra:
+            raise ValueError(f"requires lists verbs that are not allowed: {extra}")
+        if self.flock is not None and self.flock.roles is not None:
+            for role, spec in self.flock.roles.items():
+                extra = [v for v in spec.requires if canonical(v) not in allowed]
+                if extra:
+                    raise ValueError(
+                        f"flock.roles.{role} requires verbs that are not allowed: {extra}"
+                    )
+            if isinstance(self.robots, dict):
+                unknown = sorted(set(self.robots) - set(self.flock.member_names))
+                if unknown:
+                    raise ValueError(f"robots names members the flock does not have: {unknown}")
+        return self
+
+    @property
+    def effective_requires(self) -> list[str]:
+        """What `validate --robot` checks: v1 says it; a v0 task needs everything it allows."""
+        return list(self.requires) if self.duck >= 1 else list(self.verbs.allow)
 
     # ── derived, machine-enforced abort thresholds ──────────────────────────────────
 

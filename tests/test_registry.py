@@ -10,7 +10,7 @@ from quackd.verbs.learned import LearnedVerbSpec, register_learned_verb
 from quackd.verbs.registry import VerbContext, VerbNotFound, VerbRegistry, VerbResult
 
 BUILTINS = {
-    "walk",
+    "move",
     "sit",
     "stand",
     "kick",
@@ -19,9 +19,11 @@ BUILTINS = {
     "stop",
     "quack",
     "gaze",
-    "get_frame",
+    "observe",
+    "say",
+    "report_state",
 }
-COMPOSITES = {"search_scan", "walk_to", "approach_and"}
+COMPOSITES = {"search_scan", "go_to", "approach_and"}
 
 
 def test_default_registry_contents(registry: VerbRegistry) -> None:
@@ -33,8 +35,9 @@ def test_default_registry_contents(registry: VerbRegistry) -> None:
 
 
 def test_tool_schema_shape(registry: VerbRegistry) -> None:
-    schema = registry.get("walk").tool_schema()
-    assert schema["name"] == "walk"
+    assert registry.get("walk").name == "move"  # stored canonically, resolved by alias
+    schema = registry.view("walk").tool_schema()
+    assert schema["name"] == "walk"  # shown as the .duck spelled it
     assert schema["input_schema"]["type"] == "object"
     assert set(schema["input_schema"]["properties"]) == {"vx", "vy", "wz", "duration_s"}
     assert schema["input_schema"]["additionalProperties"] is False

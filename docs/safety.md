@@ -6,7 +6,7 @@ A biped falls in 0.3 s; an LLM answers in 3 s. Everything here follows from that
 
 | Layer | Owner | What it guarantees |
 |---|---|---|
-| Body | upstream `robotd` (50 Hz, onboard) | Joint and thermal clamps, fall detection, and a **deadman**: velocity goes to zero when `robot.move` notifications stop. It is the sole safety authority; clients send intents, never motor writes. |
+| Body | the robot's own controller (the Microduck's `robotd` at 50 Hz, onboard) | Joint and thermal clamps, fall detection, and, on the Microduck, a **deadman**: velocity goes to zero when `robot.move` notifications stop. The body is the sole safety authority; clients send intents, never motor writes. What each body offers is declared in its manifest's `safety_authority` and is not the same everywhere (see "On other bodies"). |
 | Conversation | quackd `Executor` | The LLM and MCP clients can only do what the `.duck` allows, as often as the budget allows, with a human in the loop where the contract says so. |
 | Session | quackd `Heartbeat` + `KillSwitch` | A dead transport or a worried human ends in a `stop` intent. |
 
@@ -36,9 +36,16 @@ always sends `stop` and closes the transport. Works on Windows (signal handler, 
 ## Dry run
 
 `--dry-run` prints every intent a model *would* send and sends nothing. Read-only verbs
-(`get_frame`) still run. Use it the first time you point a new `.duck` at hardware.
+(`observe`, alias `get_frame`, and `report_state`) still run. Use it the first time you
+point a new `.duck` at hardware.
 
 ## On hardware
+
+Nothing here has run on hardware yet, on any body. When it does, start with `--dry-run`
+every time, then a `.duck` whose `allow` list is the smallest thing that could work, then
+widen it. **You are responsible for your robot.**
+
+**A Microduck (a 25 cm biped):**
 
 - **Run on the floor, not a table.** A 25 cm biped and a table edge do not mix.
 - **Keep pets and kids clear of `kick`** (and `grab`, and `roulade`).
@@ -47,8 +54,54 @@ always sends `stop` and closes the transport. Works on Windows (signal handler, 
   try to out-rank the pad.
 - quackd never sends `robot.relax` (torque off — the robot collapses) or `robot.init`
   (moves every joint). Use `robotctl` for those, with the robot on its stand.
-- Start with `--dry-run`, then a `.duck` whose `allow` is `[quack, gaze, stop]`, then walk.
-- **You are responsible for your robot.**
+- A good first contract: `allow: [quack, gaze, stop]`, then add walking.
+
+**A Reachy Mini (a head that exists today):**
+
+- `wake_up` moves every joint, which is why it is confirm-gated in the manifest. Give the
+  head clearance before allowing it, and keep fingers away from the neck linkage.
+- There is no deadman and no e-stop that we verified, so quackd's heartbeat and `stop`
+  (which is `cancel_move`) are the only thing that halts a move in progress.
+- The head has no battery reading, so a `Battery below N%` abort cannot fire on it.
+
+**A LeRobot arm (an SO-101 class arm on a desk):**
+
+- An arm sweeps a volume. Clear it before `move_joints`, and keep hands out of the path.
+  A gripper is a pinch hazard even at the 50 % torque cap LeRobot writes at `configure()`.
+- `pick` hands the whole arm to a learned policy for up to a minute. It is confirm-gated
+  for that reason. Watch it, and keep `stop` within reach.
+- `stop` holds position, it does not release. LeRobot's own `disconnect()` releases torque
+  at the end of a session by its default, so the arm can sag when the run ends: do not
+  leave it holding something fragile.
+- Calibration is interactive and quackd never triggers it. An uncalibrated arm is refused.
+
+**A wheeled base over rosbridge:**
+
+- No deadman was verified anywhere in that stack, so if quackd dies mid-verb the base
+  keeps its last Twist until its own driver times out, if it does at all. Test on blocks
+  with the wheels off the ground before testing on the floor.
+- quackd re-sends the Twist at 10 Hz while a verb runs and publishes a zero Twist on
+  `stop`, on close, and when the heartbeat fails. That is the entire stop authority.
+- The speed limits are quackd's caution (`limits.max_vx`, `max_wz` in the manifest), not
+  the base's capability. Lower them before the first real drive.
+
+## On other bodies
+
+Since 0.4 quackd drives more than the duck, and the honest answer to "what stops it when
+quackd goes quiet" differs per body. Each manifest says so
+(`safety_authority: {native, deadman}`), and `stop` always means stop, never collapse:
+
+| Body | Native authority | What `stop` does | Never sent |
+|---|---|---|---|
+| Microduck (`microduck:*`) | `robotd_deadman`: velocity zeroes when intents stop | `robot.stop` | `robot.relax`, `robot.init` |
+| Reachy Mini (`reachy_mini:*`) | `none`: no client deadman or e-stop was verified; quackd's heartbeat is the authority | `cancel_move` | `disable_motors` (limp) |
+| LeRobot arm (`lerobot:*`) | `torque_limit`: the gripper's torque and current caps, plus `max_relative_target` when configured; no deadman, a position-controlled arm holds its goal | re-sends the present position as the goal (hold) | `disable_torque` (LeRobot's own `disconnect()` does, by its default, at the end of a session) |
+| rosbridge base (`rosbridge:*`) | `none`: neither rosbridge nor the driver has a deadman we verified | publishes a zero Twist; quackd also re-sends the Twist at 10 Hz while a verb runs | silence |
+
+The verbs a body lacks are not gated, they do not exist: a head cannot `kick`, an arm
+cannot `move`, a base cannot `say`, and `validate --robot` says so before a run starts.
+`pick` on the arm and `wake_up` on the head are confirm-gated in their manifests because
+they move the whole body under a controller quackd does not write.
 
 ## What quackd does not protect against
 

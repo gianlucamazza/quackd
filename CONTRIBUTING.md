@@ -9,11 +9,18 @@ Thanks for taking a toy duck seriously. Two kinds of contribution matter most: *
 git clone https://github.com/rokbenko/quackd && cd quackd
 uv sync --extra dev            # add --extra anthropic etc. if you want a real provider
 uv run pre-commit install
-uv run pytest                  # ~15 s, no network, no keys
+uv run pytest                  # 360 tests, about 70 s, no network, no keys
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
 
-Windows, macOS and Linux are all first-class. Tests must never touch the network.
+Windows, macOS and Linux are all first-class. Tests must never touch the network. Most of
+those 70 seconds are the four seeded acceptance sweeps, which CI holds at 10 of 10 by setting
+`QUACKD_STRICT_SEEDS=1`; locally they pass at 8 of 10 so a slow machine does not block you.
+
+Touching `quackd/lan/` or `quackd/flock/mqtt_bus.py`? Neither imports its library at module
+level and neither is in the default install, so the tests run them on fakes: a fake zeroconf
+registrar and a synchronous fake MQTT broker, no sockets. Keep it that way, and see
+[docs/lan.md](docs/lan.md).
 
 ## Submit a `.duck`
 
@@ -26,27 +33,53 @@ Windows, macOS and Linux are all first-class. Tests must never touch the network
 4. Open a PR. In the description say what it does, which providers you tried, and what
    failed. Ducks that mostly fail are still welcome if the file says so — that is data.
 
-Checklist: `duck: 0` · slug name · `allow` lists only registered verbs (`quackd list-verbs`)
+Checklist: `duck: 0` (or `duck: 1` if you use `requires`, `robots` or `flock.roles`) ·
+slug name · `allow` lists only verbs the robot provides (`quackd list-verbs --robot ...`)
 · `confirm` ⊆ `allow` · at least one `success` line · `abort_when` uses the two enforced
-phrasings if you want them enforced · body starts with `# Task`.
+phrasings if you want them enforced · body starts with `# Task` · `quackd validate
+your.duck --robot <adapter>:<backend>` passes for the robot you mean.
 
 ## Add a verb
 
-1. Decide the kind. **Built-in** = maps 1:1 to a shipped robot behaviour (needs a VERIFIED
-   upstream method in `quackd/transport/upstream_api.py`). **Composite** = plain Python over
-   built-ins + perception, no new upstream dependency. **Learned** = v2, see
+1. Decide the kind. **Core** (`quackd/verbs/core.py`) = the same on every robot whose
+   manifest meets a requirement (a camera, a `twist` intent, a `sound` intent); add its
+   `Requirement` to `REQUIREMENTS`. **Extension** = one robot's own behaviour, in that
+   adapter's `verbs.py` (Microduck: `quackd/adapters/microduck/verbs.py`; it needs a
+   VERIFIED upstream method in the adapter's `upstream_api.py`). **Learned** = v2, see
    [docs/learned-verbs.md](docs/learned-verbs.md).
 2. Write a pydantic params model (`extra="forbid"`, ranges on every number) and an
    `async def my_verb(ctx: VerbContext, p: MyParams) -> VerbResult`. Use
-   `ctx.transport.send_intent(...)`, `ctx.transport.sleep(...)`, `ctx.detector`, and
-   `ctx.on_frame(img, caption)` for the GIF. Never call an LLM from a verb.
-3. Register it in `register_builtins` / `register_composites` with a one-line LLM-facing
-   description, a `timeout_s`, a `safety_class` (`safe` · `confirm` · `dangerous`), and a
-   `done_condition`.
+   `ctx.transport.send_intent(...)`, `ctx.transport.sleep(...)`, `ctx.detector`,
+   `ctx.manifest` (to pick a strategy per body), and `ctx.on_frame(img, caption)` for the
+   GIF. Never call an LLM from a verb.
+3. Add a `Verb(...)` template with a one-line LLM-facing description, a `timeout_s`, a
+   `safety_class` (`safe` · `confirm` · `dangerous`) and a `done_condition` to `CORE` or to
+   the adapter's verb table, then a `VerbSpec` entry in the adapter's manifest (that is
+   what makes the verb exist: a verb not in the manifest is not in the registry, the MCP
+   tool list, `.duck` validation or the prompt). Preconditions are named in the manifest
+   and supplied by the adapter's `conditions()`.
 4. Add a test: on `MockTransport` for intent sequences, on `Sim2DTransport` for behaviour.
-5. If the verb needs an upstream method we have not verified, add it to `upstream_api.py`
-   as `UNVERIFIED` with a note and a row in `docs/transport-status.md`. Never invent one.
-6. Mention it in `docs/architecture.md` and `CHANGELOG.md` (Unreleased).
+5. If the verb needs an upstream method we have not verified, add it to the adapter's
+   `upstream_api.py` as `UNVERIFIED` with a note and a row in that adapter's page under
+   `docs/adapters/` (the Microduck's table is in `docs/adapter-status.md`). Never invent
+   one.
+6. Mention it in `docs/architecture.md`, the README verb table (a test checks every
+   registry name is backticked there) and `CHANGELOG.md` (Unreleased).
+
+Renaming a verb is not a rename: add the new name and keep the old one in
+`quackd/verbs/aliases.py`, the only file that may spell an alias.
+
+## Add an adapter
+
+A robot joins quackd as a package under `quackd/adapters/<name>/` that declares a
+`RobotManifest` and moves the body through intents its own controllers execute. The
+recipe, the rules the manifest enforces and the checklist are in
+[docs/adapters.md](docs/adapters.md); the honesty rules are
+[ADR-0022](docs/adr/0022-per-adapter-upstream-refs.md). In short: write `mock` first; put
+every SDK name in the package's `upstream_api.py` with a pinned link and a row in
+`tests/test_upstream_api.py`; import the SDK inside `connect()` behind an extra; never
+send the SDK's "go limp" call; write `docs/adapters/<name>.md` listing every ref; and
+arrive 🧪 in the status tables until someone runs it against the real thing.
 
 ## Working agreements
 

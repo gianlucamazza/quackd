@@ -10,17 +10,41 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: transport
+    id: robot
     attributes:
-      label: Transport
-      options: ["sim2d", "mock", "jsonrpc (real robot, experimental)", "websocket (stub)"]
+      label: Robot
+      description: The `--robot <adapter>:<backend>` you ran. `quackd list-adapters` lists them all.
+      options:
+        - "microduck:sim2d (the default)"
+        - "microduck:mock"
+        - "microduck:jsonrpc (real robot, experimental)"
+        - "microduck:websocket (stub)"
+        - "reachy_mini:sim2d"
+        - "reachy_mini:mock"
+        - "reachy_mini:sdk (real robot, experimental)"
+        - "lerobot:mock"
+        - "lerobot:real (real arm, experimental)"
+        - "rosbridge:mock"
+        - "rosbridge:ws (real bridge, experimental)"
+        - "not robot specific (CLI, docs, validation, MCP)"
     validations:
       required: true
   - type: dropdown
     id: provider
     attributes:
       label: Provider
-      options: ["fake", "anthropic", "openai", "gemini", "grok", "MCP client (Claude Code / Desktop)"]
+      options:
+        - "fake"
+        - "anthropic"
+        - "openai"
+        - "gemini"
+        - "grok"
+        - "ollama (local)"
+        - "vllm (local)"
+        - "llamacpp (local)"
+        - "lmstudio (local)"
+        - "local (any OpenAI compatible server)"
+        - "MCP client (Claude Code / Desktop)"
   - type: textarea
     id: command
     attributes:

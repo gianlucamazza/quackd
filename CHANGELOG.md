@@ -7,6 +7,169 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.0] — 2026-09-02
+
+From "a brain for the Microduck" to "a brain for any small robot". The thesis does not
+change: the LLM picks verbs, the robot's own controllers move, quackd enforces the
+contract. Four adapters (Microduck, Reachy Mini, a LeRobot arm, any base over rosbridge),
+one `.duck` contract across bodies, a head and a duck completing one task together in the
+simulator, and nothing claimed on hardware. Design: `docs/design/multi-robot.md`.
+
+### Added
+
+- **Robot adapters and manifests** (`quackd/adapters/`): every robot is an adapter that
+  returns a `RobotManifest` from `connect()`, and the verb registry is built from that
+  manifest rather than hardcoded. A verb that is not in the manifest does not exist. The
+  Microduck is the first adapter and wraps the four existing transports with zero
+  behaviour change; `manifest.schema.json` is generated and drift-tested. (ADR-0017)
+- **Core verbs and aliases**: `observe`, `report_state`, `stop`, `say`, `move`, `go_to`,
+  `search_scan` and `approach_and` exist on any robot that meets their requirements;
+  `get_frame`, `walk_to` and `walk` are permanent aliases, listed once in
+  `quackd/verbs/aliases.py`. `search_scan` sweeps the head on a robot that can only look.
+  Preconditions are named in the manifest and supplied by the adapter; the executor spells
+  none. (ADR-0018)
+- **`.duck` v1**: `requires`, `robots`, `flock.roles` and `flock.frame_hints`; v0 files
+  parse unchanged. `quackd validate --robot <adapter>:<backend>` checks a task against a
+  robot's manifest with field-level errors such as `requires kick, but reachy-01
+  (reachy-mini) does not provide it`. (ADR-0019)
+- **`--robot <adapter>:<backend>`** on `run`, `validate`, `serve-mcp`, `doctor` and
+  `list-verbs`; `--robots name=spec,...` on `run` and `validate`; `quackd list-adapters`;
+  `doctor --robot` shows one manifest; a `.duck` may declare its default robot.
+- Transcripts: `verb` events carry `canonical`; `run_start` and `summary.json` carry the
+  robot's manifest and id. `duck_list_verbs` entries gain `canonical`, `aliases` and
+  `core`; `duck_get_state` gains `robot`.
+- Goldens recorded from 0.3.0 (`tests/golden/`) prove seeded worlds, the starter ducks and
+  a `flock-kick` conversation are unchanged; CI runs both seeded sweeps at 10 of 10
+  (`QUACKD_STRICT_SEEDS=1`).
+- **Reachy Mini adapter** (`--robot reachy_mini:sim2d | mock | sdk`, extra `quackd[reachy]`
+  for the SDK): a stationary head with a camera, a 180° neck, expressions and a speaker.
+  Its manifest carries `observe`, `report_state`, `stop`, `say`, `search_scan` (a gaze
+  sweep), `gaze`, `express`, `play_sound` and a confirm-gated `wake_up`; no locomotion
+  verbs exist on it. `say(text)` is voiced as the closest expressive sound because the SDK
+  has no text-to-speech; `stop` is `cancel_move` and `disable_motors` is never sent. Every
+  SDK name is VERIFIED in `quackd/adapters/reachy_mini/upstream_api.py` against a pinned
+  commit and the 1.10.0 wheel; the `sdk` backend has never been run on a robot.
+  (ADR-0022, ADR-0023)
+- **`StationaryHead`** in `sim2d`: a fixed camera on a wall with zero RNG draws, so every
+  world without a head is byte-identical to 0.3; the recorder and the live window can
+  focus a head camera.
+- **`reachy-spotter` starter duck** (`duck: 1`, `robots: reachy_mini:sim2d`): find the
+  ball with your gaze and say where it is; 10 of 10 seeds with the scripted pilot, judged
+  by ground truth.
+- **Heterogeneous flocks** (ADR-0020): members are adapters sharing one arena and one
+  lockstep clock; bids carry a capability term so a robot bids only for a role its
+  manifest can fill; one auction fills every role (most constrained first, lowest own
+  distance, member-name tie-break, per-role hysteresis; the spotter is held for the run).
+  With roles the kicker reports `kick_done` and the spotter judges from its own fresh
+  frames (`VERDICT`); only `moved` is a success and the ground-truth veto stays on top.
+  Frame hints (`HINT`, arena frame, sim only) choose the kicker's pre-turn; the
+  frame-of-reference limitation is documented in `docs/flock.md`. `run --robots
+  name=<adapter>:<backend>,...`.
+- **`reachy-spots-duck-kicks` starter duck**: a Reachy Mini head spots the ball, a
+  Microduck kicks it, the head judges the kick. 10 of 10 seeds with scripted pilots,
+  every message in `flock.jsonl`, zero planner calls with the fake provider.
+- **Multi-robot MCP**: `quackd serve-mcp --robots duck=microduck:sim2d,reachy=reachy_mini:mock`
+  fronts a fleet with `robot_list`, `robot_list_verbs`, `robot_run_verb`, `robot_observe`,
+  `robot_say` and `robot_load_duckfile`; every robot has its own executor, budget,
+  heartbeat and contract, and `robot_load_duckfile` checks the contract's `requires`
+  against that robot's manifest before adopting it. The eight `duck_*` tools stay as
+  aliases of the default robot (deprecated, removed in 0.5). Simulated robots over MCP
+  each get their own world; a shared arena over MCP is future work.
+- **LAN discovery** (`quackd discover`, `quackd announce`, ADR-0021): zeroconf service
+  `_quackd._tcp.local.` with an identity-only TXT record (manifest id, digest, adapter,
+  body, verb count), every pair validated under 200 bytes before zeroconf sees it. Behind
+  `quackd[lan]`, imported lazily, tested on fakes; exercised once for real between two
+  processes on one machine, never between two machines.
+- **MQTT flock bus** (`quackd.flock.mqtt_bus.MqttBus`, `run_flock(bus_factory=)`): the
+  same two-method `Bus` protocol over a broker, `quackd/<flock_id>/ctl` at QoS 1 and
+  `/hb` at QoS 0, never retained, the `FlockMessage` JSON as payload. Broker echo is
+  dropped, the tap fires exactly once per message per node, remote messages are
+  marshalled onto the event loop, and duplicates are tolerated by the coordinator's
+  idempotent handlers. Library only: a flock across machines also needs a clock across
+  machines, so there is no `--bus` flag. Tested on a fake broker; exercised once for real
+  against a local `amqtt` broker with paho 2.1 (all eight kinds, one machine).
+  `Subscription.drain()` is now an atomic `popleft` loop. `doctor` lists both LAN
+  libraries.
+- **LeRobot adapter** (`--robot lerobot:mock|real`, ADR-0022): an SO-101 class desktop arm
+  with `move_joints`, `gripper`, `place` and, when a policy is available, `pick` as one
+  skill intent that the arm's own learned policy executes. No locomotion, no voice, no
+  gaze in its manifest. `real` sits behind `quackd[lerobot]` (Python 3.12 or newer, torch
+  never imported on the default path), passes `calibrate=False`, refuses an uncalibrated
+  arm, holds position on stop and never disables torque; every LeRobot name is pinned
+  and line-linked in `quackd/adapters/lerobot/upstream_api.py`; never run on an arm.
+- **rosbridge adapter** (`--robot rosbridge:mock|ws`): any wheeled base that takes a
+  `geometry_msgs/msg/Twist` over `rosbridge_server`. The address carries the topics
+  (`ws://host:9090?cmd_vel=/cmd_vel&odom=/odom&image=/camera/compressed`); with an image
+  topic the base also gets `observe`, `go_to`, `search_scan` and `approach_and`. There is
+  no deadman: quackd re-sends the Twist at 10 Hz and zeroes it on stop, and the manifest
+  says so. `ws` sits behind `quackd[rosbridge]` (roslibpy 2.x); every roslibpy, rosbridge
+  protocol and message name is pinned and line-linked; never run against a bridge.
+- **Speed limits come from the manifest**: `move`, `go_to` and the turn used by
+  `search_scan` clamp to `limits.max_vx/max_vy/max_wz` when a manifest names them; the
+  Microduck's limits equal the old schema bounds, so its runs are unchanged.
+- **Docs**: `docs/adapters.md` (write an adapter in a day), `docs/manifest-spec.md`,
+  `docs/adapter-status.md` (every adapter's honesty table, the Microduck's rows moved
+  there unchanged), `docs/lan.md`, one page per adapter under `docs/adapters/`, and
+  ADRs 0017 to 0023. `docs/safety.md` says what stops each body; `docs/faq.md` answers
+  "can it drive something that is not a duck".
+
+### Changed
+
+- `default_registry()` is the Microduck manifest's registry; its names are canonical
+  (`move`, `go_to`, `observe`) and every entry point accepts the old spellings. The
+  bundled starter ducks keep their 0.3 spellings and stay at `duck: 0`.
+- The agent loop connects before writing `run_start`, because the vocabulary comes from
+  the connected robot.
+- `docs/transport-status.md` is a redirect to `docs/adapter-status.md`; the docs test
+  that keeps the Microduck's upstream table in sync now reads the new page.
+- **The README was rewritten for four bodies**: the tagline and intro name the other
+  robots, a new "Any small robot" section puts all four side by side with what each gets
+  and what has actually run, the verb table gains a row per body, both architecture
+  diagrams show the adapter layer, and the status table states per feature what was
+  exercised against its real target and what was not.
+- Test suite: 360 tests collected, no network and no keys, with four seeded sweeps CI holds
+  at 10 of 10 (`find-and-kick`, `flock-kick`, `reachy-spotter`, `reachy-spots-duck-kicks`).
+- Eight starter `.duck` files ship, up from six.
+
+### Deprecated
+
+- `--transport X` is an alias of `--robot microduck:X` that prints one warning per
+  process; it is removed in 0.5. The `quackd.transport` package is not deprecated: it is
+  the Microduck backend layer.
+- The eight `duck_*` MCP tools (`duck_list_verbs`, `duck_run_verb`, `duck_get_frame`,
+  `duck_get_state`, `duck_set_velocity`, `duck_stop`, `duck_quack`, `duck_load_duckfile`)
+  are aliases of the six `robot_*` tools on the default robot. Each carries a deprecation
+  note in its description and all eight are removed in 0.5.
+
+### Fixed
+
+- A role auction is complete only when every role can be filled by a *different* member,
+  so a single robot that satisfies both roles can no longer deadlock a heterogeneous
+  flock.
+- `Subscription.drain()` is an atomic `popleft` loop rather than copy-then-clear, so a
+  producer on another thread (the MQTT bus, before a message reaches the event loop)
+  cannot have its message cleared unseen.
+
+### Known limitations
+
+- **Nothing has run on hardware, on any of the four adapters.** `microduck:jsonrpc`,
+  `reachy_mini:sdk`, `lerobot:real` and `rosbridge:ws` spell every upstream name from
+  upstream source (the three new ones at pinned commits) and have only ever talked to
+  fakes. `microduck:websocket` is a stub waiting on upstream.
+- LAN discovery and the MQTT bus were each exercised once, on one machine: zeroconf
+  between two processes, MQTT against a local `amqtt` broker. Neither has crossed to a
+  second machine, and a flock across machines also needs a clock across machines, which
+  does not exist.
+- Flock mode stays simulator only, with two choreographies and exactly two roles.
+- A manifest can be smaller than the robot: `lerobot:real` claims no camera and no `pick`
+  until it connects, and `rosbridge:ws` has no camera verbs unless the address names an
+  image topic.
+- The MCP server speaks `stdio` only, so it is a local subprocess of Claude Code or
+  Claude Desktop and cannot be reached from a phone. A network transport is roadmap, not
+  shipped.
+
 ## [0.3.0] — 2026-08-31
 
 Multiple simulated Microducks cooperate: split the search, hold an auction, the closest
@@ -122,7 +285,8 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/rokbenko/quackd/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rokbenko/quackd/releases/tag/v0.1.0

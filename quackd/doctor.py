@@ -15,9 +15,12 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from quackd import __version__
+from quackd.adapters.base import AdapterError
+from quackd.adapters.factory import describe, list_adapters, parse_robot_spec
 from quackd.agent.providers.factory import DEFAULT_MODELS, KEY_ENV, LOCAL_NAMES, PROVIDER_NAMES
 from quackd.agent.providers.local import PRESETS
 from quackd.duckfile.parser import list_bundled_ducks
@@ -30,15 +33,29 @@ EXTRAS = {
     "gemini": ("google.genai", "quackd[gemini]"),
     "yolo": ("ultralytics", "quackd[yolo]"),
     "live": ("pygame", "quackd[live]"),
+    "reachy": ("reachy_mini", "quackd[reachy]"),
+    "lan (zeroconf)": ("zeroconf", "quackd[lan]"),
+    "lan (mqtt)": ("paho.mqtt.client", "quackd[lan]"),
+    "lerobot": ("lerobot", "quackd[lerobot]"),
+    "rosbridge": ("roslibpy", "quackd[rosbridge]"),
 }
+# Robot SDKs are looked up by distribution metadata only: importing reachy_mini pulls
+# onnxruntime and GStreamer, and lerobot pulls torch, into a diagnostics command, which is
+# exactly what doctor is not.
+_METADATA_ONLY = {"reachy_mini": "reachy-mini", "lerobot": "lerobot"}
 
 
 def _installed(module: str) -> str | None:
+    if module in _METADATA_ONLY:
+        try:
+            return md.version(_METADATA_ONLY[module])
+        except md.PackageNotFoundError:
+            return None
     try:
         importlib.import_module(module)
     except Exception:
         return None
-    dist = {"google.genai": "google-genai"}.get(module, module)
+    dist = {"google.genai": "google-genai", "paho.mqtt.client": "paho-mqtt"}.get(module, module)
     try:
         return md.version(dist)
     except md.PackageNotFoundError:
@@ -68,7 +85,7 @@ def _probe_models(base_url: str, timeout_s: float = 1.5) -> str:
     return f"[green]up[/green] · {shown}{more}" if ids else "[green]up[/green] · no models loaded"
 
 
-def run_doctor(console: Console) -> bool:
+def run_doctor(console: Console, robot: str | None = None) -> bool:
     ok = True
     console.print(
         f"[bold]quackd {__version__}[/bold] · Python {platform.python_version()} · "
@@ -110,7 +127,7 @@ def run_doctor(console: Console) -> bool:
             )
         t.add_row(
             name,
-            f"[green]{ver}[/green]" if ver else f"[yellow]missing[/yellow] ({extra})",
+            f"[green]{ver}[/green]" if ver else f"[yellow]missing[/yellow] ({escape(extra)})",
             key_cell,
             model,
         )
@@ -128,7 +145,42 @@ def run_doctor(console: Console) -> bool:
         t.add_row(preset, url, _probe_models(url))
     console.print(t)
 
-    t = Table(title="transports")
+    t = Table(title="adapters (--robot <adapter>:<backend>)")
+    t.add_column("adapter")
+    t.add_column("backends")
+    t.add_column("status")
+    t.add_column("extra")
+    for row in list_adapters():
+        # escape: an extra reads quackd[reachy], which Rich would eat as markup
+        extra = escape(row["extra"])
+        if row["extra"] != "built-in":
+            extra += (
+                " [green]installed[/green]" if row["installed"] else " [dim]not installed[/dim]"
+            )
+        t.add_row(row["name"], " · ".join(row["backends"]), row["status"], extra)
+    console.print(t)
+    if robot is not None:
+        try:
+            manifest = describe(parse_robot_spec(robot))
+        except AdapterError as e:
+            console.print(f"[red]{e}[/red]")
+            ok = False
+        else:
+            t = Table(title=f"{robot}: {manifest.summary()}")
+            t.add_column("verb")
+            t.add_column("core")
+            t.add_column("safety")
+            t.add_column("preconditions")
+            for spec in manifest.verbs:
+                t.add_row(
+                    spec.name,
+                    "core" if spec.core else "",
+                    spec.safety_class,
+                    ", ".join(manifest.preconditions.get(spec.name, [])),
+                )
+            console.print(t)
+
+    t = Table(title="transports (Microduck backends; --transport X is --robot microduck:X)")
     t.add_column("name")
     t.add_column("status")
     t.add_column("notes")
@@ -151,14 +203,17 @@ def run_doctor(console: Console) -> bool:
         t.add_row(name, status, note)
     console.print(t)
     console.print(
-        "[dim]flock mode (--flock): sim2d only in v0.3, in-process bus. "
-        "A LAN bus for real ducks is future work (docs/flock.md).[/dim]"
+        "[dim]flock mode (--flock, flock.roles): sim2d only, in-process bus by default. "
+        "The MQTT bus (quackd[lan]) is library-only in 0.4 (docs/lan.md).[/dim]"
     )
 
     t = Table(title="optional extras", show_header=False)
     for label, (module, extra) in EXTRAS.items():
         ver = _installed(module)
-        t.add_row(label, f"[green]{ver}[/green]" if ver else f"[dim]not installed ({extra})[/dim]")
+        t.add_row(
+            label,
+            f"[green]{ver}[/green]" if ver else f"[dim]not installed ({escape(extra)})[/dim]",
+        )
     console.print(t)
 
     unverified = up.refs_by_status("UNVERIFIED")
@@ -174,4 +229,29 @@ def run_doctor(console: Console) -> bool:
         f"[dim]upstream contract: duck-ipc-proto API v{up.API_VERSION.name} · "
         f"VERIFIED refs: {len(up.refs_by_status('VERIFIED'))}[/dim]"
     )
+
+    from quackd.adapters.lerobot import upstream_api as lerobot_api
+    from quackd.adapters.reachy_mini import upstream_api as reachy
+    from quackd.adapters.rosbridge import upstream_api as rosbridge_api
+
+    for name, api, backend, target in (
+        ("reachy_mini", reachy, "sdk", "a robot"),
+        ("lerobot", lerobot_api, "real", "an arm"),
+        ("rosbridge", rosbridge_api, "ws", "a bridge"),
+    ):
+        unverified = api.refs_by_status("UNVERIFIED")
+        t = Table(
+            title=f"{name} assumptions (UNVERIFIED: {len(unverified)}) — "
+            f"see docs/adapters/{name}.md"
+        )
+        t.add_column("what")
+        t.add_column("note")
+        for ref in unverified:
+            t.add_row(ref.name, ref.note)
+        console.print(t)
+        console.print(
+            f"[dim]{name} upstream pinned at {api.PIN[:7]} (read {api.READ_ON}) · "
+            f"VERIFIED refs: {len(api.refs_by_status('VERIFIED'))} · "
+            f"the {backend} backend has never been run against {target}[/dim]"
+        )
     return bool(ok)

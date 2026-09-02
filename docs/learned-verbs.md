@@ -32,6 +32,16 @@ spec = LearnedVerbSpec(
 verb = register_learned_verb(default_registry(), spec, runner=None)
 ```
 
+`default_registry()` is the Microduck manifest's registry, which matters since 0.4: a verb
+that is not in a robot's manifest does not exist for that robot, so registering a learned
+verb into a registry is only half the story. For it to be offered to the model, allowed by a
+`.duck`, or listed by MCP on a given body, that body's manifest has to declare it. When
+learned verbs ship for real, the spec becomes a `VerbSpec` in the owning adapter's manifest
+([adapters.md](adapters.md), [manifest-spec.md](manifest-spec.md)); until then treat the call
+above as a registry-level sketch, not a supported path on an arbitrary robot. A shipped
+example of the shape already exists in a different guise: `pick` on the LeRobot arm is one
+skill intent that the arm's own learned policy executes ([adapters/lerobot.md](adapters/lerobot.md)).
+
 - `safety_class` is always `confirm`: an unproven policy asks a human first.
 - `runner` is `async (spec, ctx) -> VerbResult`. Without one the verb explains that it is a
   v2 feature and fails cleanly (tested).
@@ -53,7 +63,7 @@ pick, kick left/right, roller, roller crouch, roulade.
    can be hot-swapped over the socket (not designed yet), or a `robotd.toml` edit + restart
    (slow, but real). Track upstream; do not guess.
 2. **A sim runner** for `sim2d` is out of scope — the cartoon has no joints. A MuJoCo
-   transport (fetching upstream's CC BY-NC-SA meshes at runtime, never vendored — see
+   backend (fetching upstream's CC BY-NC-SA meshes at runtime, never vendored — see
    [licenses.md](licenses.md)) is the honest place to run learned verbs before hardware.
 3. **Provenance.** `metadata` should carry the reward text, the training run, and the
    eval numbers, so a `.duck` author knows what they are allowing.

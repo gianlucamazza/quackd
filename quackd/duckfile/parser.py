@@ -128,7 +128,7 @@ def duck_from_goal(goal: str, allow: list[str]) -> DuckFile:
     )
     body = (
         f"# Task\n{goal}\n\n## Strategy\n"
-        "Use the available verbs. Look before you act (`get_frame` or `search_scan`), prefer "
-        "composite verbs like `walk_to`, and verify with a fresh frame before declaring success."
+        "Use the available verbs. Look before you act (`observe` or `search_scan`), prefer "
+        "composite verbs like `go_to`, and verify with a fresh frame before declaring success."
     )
     return DuckFile(frontmatter=frontmatter, body=body, path="<goal>")
