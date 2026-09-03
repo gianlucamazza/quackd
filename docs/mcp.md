@@ -64,6 +64,14 @@ claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d
 
 Then in Claude Code: *"List the duck's verbs, then find the ball and kick it."*
 
+> **If you are working on quackd itself**, this repo ships its own `.mcp.json`, and it says
+> `uv run --no-sync` rather than `uvx` on purpose: it serves the code in your working tree
+> instead of the last release, and `--no-sync` keeps the launch from re-syncing the
+> environment while the previous server still holds `Scripts/quackd.exe` open on Windows.
+> Run `uv sync --extra dev` once first. A server that is already running keeps the tools it
+> started with, so after changing a verb or upgrading quackd, restart it (`/mcp` in Claude
+> Code, or a new session) or you will be calling the old build.
+
 ## Claude Desktop
 
 Edit `claude_desktop_config.json` — Settings → Developer → *Edit Config*:

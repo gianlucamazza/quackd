@@ -129,10 +129,21 @@ def test_mcp_doc_lists_every_tool() -> None:
 
 
 def test_mcp_json_is_a_stdio_server() -> None:
+    from quackd.adapters.factory import BACKENDS
+
     cfg = json.loads((REPO / ".mcp.json").read_text(encoding="utf-8"))
     server = cfg["mcpServers"]["quackd"]
     assert "command" in server and "type" not in server
-    assert "serve-mcp" in server["args"]
+    args = server["args"]
+    assert "serve-mcp" in args
+    # the robot it names has to exist, or opening the repo greets you with a stack trace
+    adapter, _, backend = args[args.index("--robot") + 1].partition(":")
+    assert backend in BACKENDS.get(adapter, ()), f".mcp.json names {adapter}:{backend}"
+    # This is the repo's own config, so it runs the code you are editing, not the release.
+    # `uv run` alone re-syncs on launch and loses to the running server's hold on
+    # Scripts/quackd.exe on Windows, so the repo pins --no-sync. Users get `uvx` (docs/mcp.md).
+    if server["command"] == "uv" and args[0] == "run":
+        assert "--no-sync" in args, "uv run re-syncs and fights the server it is launching"
 
 
 def test_adr_links_resolve() -> None:
