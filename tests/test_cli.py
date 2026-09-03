@@ -303,3 +303,25 @@ def test_run_still_starts_when_the_duck_fits(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_a_camera_robot_that_is_not_the_simulator_still_gets_a_detector(tmp_path: Path) -> None:
+    """The detector used to be attached only for sim2d, so every hardware backend with a
+    camera ran blind: it fetched frames, detected nothing because nothing was detecting,
+    and reported that it could not see the ball."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "open-duck-scout",
+            "--provider",
+            "fake",
+            "--robot",
+            "open_duck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "SUCCESS" in result.output

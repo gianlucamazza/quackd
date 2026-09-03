@@ -255,6 +255,7 @@ def _run_impl(
     yes: bool,
     live: bool,
     address: str | None,
+    camera_url: str | None,
     gif: bool,
     gif_size: int,
     verbose: bool,
@@ -289,7 +290,8 @@ def _run_impl(
         # Refuse before connecting, with the validator's words. `serve-mcp` has always done
         # this; `run` never did, and reached the loop's tool_schemas and died on a raw
         # VerbNotFound with the robot already connected and a run directory already made.
-        problems = validate_duck(duck, [describe(s) for s in specs])
+        manifests = [describe(s) for s in specs]
+        problems = validate_duck(duck, manifests)
     except (DuckParseError, TransportError) as e:
         _fail(str(e))
         return
@@ -334,21 +336,27 @@ def _run_impl(
             api_key=api_key,
             vision=vision,
         )
-        duck_transport = make_adapter(spec, seed=seed, address=address, live=live)
+        duck_transport = make_adapter(
+            spec, seed=seed, address=address, live=live, camera_url=camera_url
+        )
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
         return
 
     recorder = None
     detector = None
-    if spec.backend == "sim2d":
+    # Any robot with a camera needs something to look at its frames with, not just the
+    # simulator. Without this every camera verb on a hardware backend runs blind: it fetches
+    # a frame, finds no detections because nothing is detecting, and reports nothing seen.
+    if "camera" in manifests[0].sensors:
         from quackd.perception.color_blob import ColorBlobDetector
 
         detector = ColorBlobDetector()
-        if gif:
-            from quackd.sim2d.recorder import FrameRecorder
+    # the recorder is sim2d only: it draws the world, and only the simulator has one
+    if spec.backend == "sim2d" and gif:
+        from quackd.sim2d.recorder import FrameRecorder
 
-            recorder = FrameRecorder(duck_transport, size=gif_size)
+        recorder = FrameRecorder(duck_transport, size=gif_size)
 
     def log(msg: str) -> None:
         if verbose:
@@ -387,7 +395,11 @@ def _run_impl(
             ks.uninstall()
 
     _ = run_duck  # imported for symmetry; AgentLoop is used directly so the kill switch can bind
-    result = asyncio.run(main())
+    try:
+        result = asyncio.run(main())
+    except TransportError as e:
+        _fail(str(e))
+        return
     if recorder is not None:
         gif_path = recorder.save_gif(result.run_dir / "run.gif")
         result.gif_path = gif_path
@@ -615,6 +627,12 @@ _RUNS = typer.Option("runs", "--runs-dir", help="Where run directories go.")
 _YES = typer.Option(False, "--yes", "-y", help="Auto-confirm gated verbs (careful on hardware).")
 _LIVE = typer.Option(False, "--live", help="sim2d: open a live pygame window (needs quackd[live]).")
 _ADDR = typer.Option(None, "--address", help="jsonrpc: unix:///run/robotd.sock or tcp://host:port")
+_CAMERA_URL = typer.Option(
+    None,
+    "--camera-url",
+    help="An HTTP snapshot to read frames from, overriding whatever the robot advertises. "
+    "Needed when you reach the robot through a tunnel and its own URL is not routable.",
+)
 _VERBOSE = typer.Option(False, "--verbose", "-v", help="Log every intent to stderr.")
 
 
@@ -634,6 +652,7 @@ def run(
     yes: bool = _YES,
     live: bool = _LIVE,
     address: str | None = _ADDR,
+    camera_url: str | None = _CAMERA_URL,
     gif: bool = typer.Option(True, "--gif/--no-gif", help="sim2d: write run.gif into the run dir."),
     gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
@@ -656,6 +675,7 @@ def run(
         yes,
         live,
         address,
+        camera_url,
         gif,
         gif_size,
         verbose,
@@ -698,6 +718,7 @@ def record(
         yes=True,
         live=False,
         address=None,
+        camera_url=None,
         gif=True,
         gif_size=gif_size,
         verbose=verbose,
@@ -740,6 +761,7 @@ def serve_mcp(
     ),
     seed: int | None = _SEED,
     address: str | None = _ADDR,
+    camera_url: str | None = _CAMERA_URL,
     dry_run: bool = _DRY,
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
@@ -757,6 +779,7 @@ def serve_mcp(
             duckfile=duckfile,
             seed=seed,
             address=address,
+            camera_url=camera_url,
             dry_run=dry_run,
             yes=yes,
             warn=_deprecated,

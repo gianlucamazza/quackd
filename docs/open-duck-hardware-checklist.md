@@ -43,11 +43,16 @@ upstream's teleop sends.
 
 ## 4. The protocol, with no robot at all
 
-On the Pi, in one terminal:
+On the Pi, in two terminals. The camera first, so the bridge has a URL to advertise:
 
 ```bash
-python /opt/quackd/quackd_duck_bridge.py serve --fake --seconds 120
+python /opt/quackd/quackd_duck_camd.py --fake --size 256 --seconds 300
+python /opt/quackd/quackd_duck_bridge.py serve --fake --seconds 120 \
+    --camera-url http://127.0.0.1:9872/snapshot.jpg
 ```
+
+`--fake` paints a duck's eye view with a ball on the floor, so `quackd run open-duck-scout`
+should complete against it. If it does, everything except the robot itself works.
 
 On your laptop, through an ssh tunnel because the bridge binds loopback:
 

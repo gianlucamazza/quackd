@@ -638,7 +638,12 @@ def build_core(args: argparse.Namespace) -> BridgeCore:
     config = read_duck_config(args.duck_config)
     caps = capabilities_from(config)
     if args.fake:
-        caps = {"camera": False, "speaker": True, "antennas": True, "microphone": False}
+        caps = {
+            "camera": bool(args.camera_url),
+            "speaker": True,
+            "antennas": True,
+            "microphone": False,
+        }
     # quackd reads frames from an HTTP snapshot, never through this socket: encoding a
     # 512 by 512 JPEG inside a 20 ms control tick is not affordable on a Pi Zero 2 W. So a
     # camera with nowhere to fetch it from is not a camera, and saying otherwise would

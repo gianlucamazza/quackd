@@ -104,18 +104,28 @@ Safety, in the order it matters:
 Try the whole thing with no robot: `python quackd_duck_bridge.py serve --fake --seconds 60`,
 then point quackd at it. Install notes: [`bridge/open_duck/README.md`](../../bridge/open_duck/README.md).
 
-### The camera is the one piece quackd does not ship
+### The camera is a second process
 
-Frames do not travel over this socket. Encoding a 512 by 512 JPEG inside a 20 ms control
-tick is not affordable on a Pi Zero 2 W, and picamzero in the walk process would cost tens
-of megabytes on a 512 MB board. So the bridge advertises an **HTTP snapshot URL** and quackd
-fetches from it directly, exactly as `--camera-url` already works for `microduck:jsonrpc`.
+Frames do not travel over the bridge's socket. Encoding a 512 by 512 JPEG inside a 20 ms
+control tick is not affordable on a Pi Zero 2 W, and picamzero in the walk process would
+cost tens of megabytes on a 512 MB board. So the camera lives in
+`quackd_duck_camd.py`, its own process with its own memory limit and an OOM score that makes
+the kernel take it before it takes the walk loop. It captures on a timer rather than on
+request, so a slow client cannot stall the capture, and serves the newest frame at
+`/snapshot.jpg` with a `/healthz` beside it. quackd fetches it directly, the way
+`--camera-url` already works for `microduck:jsonrpc`.
 
-quackd does not currently ship that snapshot server. Until it does, pass `--camera-url`
-pointing at one you run yourself. **If you do not, the bridge advertises no camera even when
-`duck_config.json` says the duck has one**, and `observe`, `go_to`, `search_scan` and
-`approach_and` simply do not exist for that duck rather than existing and failing. That is
-the same rule the whole adapter runs on, applied to ourselves.
+It reads a camera and answers GET. There is no control path in that file at all, so the
+camera port cannot move the robot even if you expose it.
+
+Start it first and point the bridge at it with `--camera-url`. **Without a URL the bridge
+advertises no camera even when `duck_config.json` says the duck has one**, and `observe`,
+`go_to`, `search_scan` and `approach_and` do not exist for that duck rather than existing
+and failing. Two processes cannot own one camera either: if `expression_features.camera` is
+true the robot's own runtime owns it and `camd` refuses to start rather than fight for the
+device. Set that flag false and let quackd serve frames.
+
+    python quackd_duck_camd.py --fake --size 256    # a duck's eye view, no camera needed
 
 ## VERIFIED (read from upstream source on 2026-09-03)
 

@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control loop rather than a timer, so a server thread that is starved, wedged or dead still
   stops the duck. Standard library plus numpy, so it installs on a 512 MB Pi, and
   `--fake` runs the whole protocol on a laptop with no robot at all.
+- **A camera server for the duck's Pi** (`bridge/open_duck/quackd_duck_camd.py`), in its
+  own process because encoding a JPEG inside a 20 ms control tick is not affordable on a Pi
+  Zero 2 W. It captures on a timer so a slow client cannot stall it, serves the newest frame
+  over HTTP, and has no control path at all: it reads a camera and answers GET. Without it
+  the bridge advertises no camera and the verbs that need one do not exist rather than exist
+  and fail. `--fake` paints a duck's eye view, so the whole chain runs with no hardware.
 - **Two starter tasks**, `open-duck-scout` (find the ball, walk up, report, 10 of 10 seeds)
   and `open-duck-lookout`, whose allowlist moves no legs at all and which exists to be the
   first thing anyone points at a physical duck.
@@ -38,6 +44,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Perception was attached only for the simulator.** Every hardware backend with a camera
+  ran blind: it fetched frames, detected nothing because nothing was detecting, and reported
+  that it could not see. The detector now follows the camera rather than the backend, which
+  also fixes `microduck:jsonrpc` and `rosbridge:ws`.
+- **A robot that reports fewer capabilities at connect than its description claims** used to
+  crash the run. `validate` checks the static manifest, which describes a fully built robot,
+  so a duck with no camera got past it and then raised a bare `VerbNotFound` when the agent
+  loop built its tools. A verb the task *requires* now refuses in the validator's words, and
+  one it merely *allows* is dropped with a line in the log, which is what a v1 task allowing
+  more than it needs is for.
 - `quackd run` now checks a `.duck` against its robot before connecting, the way
   `serve-mcp` always has. Pointing a task at a robot that lacks one of its verbs used to
   reach the agent loop and raise a bare `VerbNotFound` with the robot already connected and

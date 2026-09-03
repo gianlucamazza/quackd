@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from PIL import Image
 
-from quackd.adapters.base import adapter_name, backend_name
+from quackd.adapters.base import AdapterError, adapter_name, backend_name
 from quackd.adapters.manifest import RobotManifest
 from quackd.agent.prompts import (
     META_TOOL_NAMES,
@@ -188,6 +188,27 @@ class AgentLoop:
             self.executor.manifest = manifest
         registry = self.registry
         allow = self.fm.verbs.allow
+        # `validate` and the CLI check the STATIC manifest, which describes a fully built
+        # robot. One that reports fewer capabilities at connect (no camera, no speaker, no
+        # head) narrows its own vocabulary, and building the tool schemas would then raise a
+        # bare VerbNotFound with the robot already connected.
+        #
+        # What a task *requires* it must have, so a missing one refuses in the validator's
+        # words. What it merely *allows* is opportunistic, and a v1 task may allow more than
+        # it needs, so those are dropped with a line in the log and the run goes on.
+        missing = registry.unknown(self.fm.effective_requires)
+        if missing:
+            who = f"{manifest.id} ({manifest.model})" if manifest else "this robot"
+            raise AdapterError(
+                f"{self.duck.name} requires {', '.join(missing)}, but {who} does not provide "
+                f"{'them' if len(missing) > 1 else 'it'}. The robot reported what it was "
+                "actually built with when it connected, which is narrower than its "
+                "description. Run `quackd list-verbs` against it to see what it has."
+            )
+        dropped = [n for n in allow if n not in registry]
+        if dropped:
+            allow = [n for n in allow if n in registry]
+            cfg.log(f"this robot does not have {', '.join(dropped)}; running without")
         tools = registry.tool_schemas(allow) + META_TOOLS
         system = build_system_prompt(
             self.duck,

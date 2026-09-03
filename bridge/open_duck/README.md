@@ -38,13 +38,16 @@ upstream imports to read a gamepad, then runs upstream's own script. Three thing
 - **It binds loopback by default** and wants a token. This port walks a robot. Prefer
   `ssh -L 9871:127.0.0.1:9871 your-pi` over exposing it to a network.
 
-## What is not here yet
+## The camera is a second process
 
-**A camera snapshot server.** Frames do not travel over this socket, because encoding a
-512 by 512 JPEG inside a 20 ms tick is not affordable on this board. The bridge advertises an
-HTTP URL and quackd fetches from it, but you have to run that server yourself and pass
-`--camera-url`. Without one the bridge reports no camera, even if `duck_config.json` says
-otherwise, so the verbs that need a camera do not exist rather than exist and fail.
+`quackd_duck_camd.py` owns the camera, because encoding a JPEG inside a 20 ms tick is not
+affordable on this board. It captures on a timer, serves the newest frame at `/snapshot.jpg`,
+and has no control path at all: it reads a camera and answers GET.
+
+Start it before the bridge and point the bridge at it with `--camera-url`. Without a URL the
+bridge advertises no camera, so the verbs that need one do not exist rather than exist and
+fail. If `duck_config.json` says `expression_features.camera` is true, the robot's own
+runtime owns the camera and `camd` refuses to start: two processes cannot own one device.
 
 ## Install
 
@@ -55,8 +58,10 @@ every refusal is something to understand first. Full walkthrough:
 ## Try it with no robot at all
 
 ```bash
+python quackd_duck_camd.py --fake --size 256             # a duck's eye view, no camera
 python quackd_duck_bridge.py check                       # what this duck would advertise
-python quackd_duck_bridge.py serve --fake --seconds 60   # a synthetic 50 Hz loop
+python quackd_duck_bridge.py serve --fake --seconds 60 \
+    --camera-url http://127.0.0.1:9872/snapshot.jpg      # a synthetic 50 Hz loop
 ```
 
 Then from a laptop, against that fake:
