@@ -239,9 +239,19 @@ class OpenDuckBridge:
                 result = await self.request(STATE)
                 state = result if isinstance(result, dict) else {}
         state = state or {}
-        fallen = bool(state.get("fallen"))
+        # `fallen` is tri-state on the wire: None means the bridge cannot see falls at all.
+        # A duck nobody is watching must read as unknown, never as standing (up.FALL_SIGNAL).
+        raw_fallen = state.get("fallen")
+        detects_falls = raw_fallen is not None
+        fallen = raw_fallen is True
         running = state.get("policy_running")
-        posture: Posture = "fallen" if fallen else ("standing" if running else "unknown")
+        posture: Posture
+        if fallen:
+            posture = "fallen"
+        elif detects_falls and running:
+            posture = "standing"
+        else:
+            posture = "unknown"
         pose = state.get("pose") or {}
         return DuckState(
             t=self.now(),
@@ -255,6 +265,7 @@ class OpenDuckBridge:
             battery_percent=None,
             extras={
                 "policy_running": running,
+                "fall_detection": detects_falls,
                 "loop_hz": state.get("loop_hz"),
                 "command_age_ms": state.get("command_age_ms"),
                 "deadman_tripped": state.get("deadman_tripped"),

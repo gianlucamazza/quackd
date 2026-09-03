@@ -49,7 +49,7 @@ class FakeBridge:
         capabilities: dict[str, bool] | None = None,
         healthy: bool = True,
         loop_hz: float = 49.8,
-        fallen: bool = False,
+        fallen: bool | None = False,
     ) -> None:
         self.protocol_version = protocol_version
         self.capabilities = FULL_DUCK if capabilities is None else capabilities
@@ -337,4 +337,18 @@ async def test_head_control_is_off_unless_the_bridge_says_it_is_on() -> None:
     assert not manifest.provides("gaze") and "gaze" not in manifest.intents
     assert manifest.provides("search_scan")  # it still scans, by turning the body
     await adapter.disconnect()
+    await fake.stop()
+
+
+async def test_a_bridge_that_cannot_see_falls_reports_unknown_not_standing() -> None:
+    """A duck nobody is watching must never read as upright. Nothing upstream reports a
+    fall, so a bridge with no IMU tap sends null and quackd says it does not know."""
+    fake = FakeBridge(fallen=None)
+    await fake.start()
+    t = OpenDuckBridge(fake.address)
+    await t.connect()
+    state = await t.get_state()
+    assert state.posture == "unknown" and state.fallen is False
+    assert state.extras["fall_detection"] is False
+    await t.close()
     await fake.stop()

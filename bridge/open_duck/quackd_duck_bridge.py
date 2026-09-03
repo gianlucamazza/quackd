@@ -162,7 +162,11 @@ class BridgeCore:
         self.now = now
         self.snapshot = Snapshot(at=now())
         self.controller_built_at: float | None = None
-        self.fallen = False
+        #: None means nobody is watching. Nothing upstream reports a fall, and this
+        #: bridge does not read the IMU (that bus has one owner too), so on real
+        #: hardware this stays None and quackd reports posture unknown rather than
+        #: standing. A duck on its side must never read as upright.
+        self.fallen: bool | None = None
         self.paused = False
         self.loop_hz = 0.0
         self.ticks = 0
@@ -209,7 +213,7 @@ class BridgeCore:
         snap = self.snapshot
         stale = (now - snap.at) > self.deadman_s
         self.deadman_tripped = stale
-        if not stale and not self.fallen:
+        if not stale and self.fallen is not True:
             return Snapshot(
                 seq=snap.seq,
                 at=snap.at,
@@ -354,6 +358,7 @@ class BridgeCore:
             "seq": snap.seq,
             "policy_running": not self.paused,
             "fallen": self.fallen,
+            "fall_detection": self.fallen is not None,
             "moving": bool(snap.vx or snap.vy or snap.vyaw),
             "loop_hz": round(self.loop_hz, 1),
             "ticks": self.ticks,
@@ -366,7 +371,7 @@ class BridgeCore:
     def health(self) -> dict[str, Any]:
         healthy = self.controller_built_at is not None
         reason = None if healthy else "the walk loop never asked for a controller"
-        if self.fallen:
+        if self.fallen is True:
             healthy, reason = False, "the duck is down and this robot has no get-up policy"
         return {
             "healthy": healthy,
