@@ -3,8 +3,8 @@
 An adapter is how a robot joins quackd. It answers one question, "what is this body and
 what can it do", as a `RobotManifest`, and it moves the body through intents the robot's
 own controllers execute. Everything else (the loop, the executor, the `.duck` contract,
-the MCP server, flocks) is shared. quackd 0.4 ships four: `microduck`, `reachy_mini`,
-`lerobot`, `rosbridge`. This page is the recipe; [ADR-0017](adr/0017-robot-adapters-and-manifest.md),
+the MCP server, flocks) is shared. quackd ships five: `microduck`, `reachy_mini`,
+`lerobot`, `rosbridge` and `open_duck`. This page is the recipe; [ADR-0017](adr/0017-robot-adapters-and-manifest.md),
 [ADR-0018](adr/0018-core-verbs-extensions-aliases.md) and
 [ADR-0022](adr/0022-per-adapter-upstream-refs.md) are the reasons.
 
@@ -20,6 +20,14 @@ quackd/adapters/<name>/
 docs/adapters/<name>.md
 tests/test_<name>_adapter.py
 ```
+
+Some robots have no network API to talk to at all. The Open Duck Mini v2 is one: its
+runtime reads a local gamepad and nothing else, so the adapter needed a companion daemon
+that runs on the robot, in `bridge/<name>/`. Three rules if you find yourself there. It
+must never import quackd, because quackd's dependencies do not belong on a 512 MB board.
+It ships in the sdist and never in the wheel, so `packages` stays `["quackd"]`. And it
+should be testable with no hardware, which in practice means a `--fake` mode and a pure
+core the tests can drive directly.
 
 The four module functions, the same on every adapter package:
 
@@ -38,7 +46,14 @@ def conditions() -> dict[str, Precondition]: ...
 
 # the backend, imported lazily
 def make(
-    backend: str, *, robot_id=None, seed=None, address=None, live=False, camera_url=None
+    backend: str,
+    *,
+    robot_id=None,
+    seed=None,
+    address=None,
+    live=False,
+    camera_url=None,
+    token=None,
 ) -> RobotAdapter: ...
 ```
 
@@ -106,6 +121,8 @@ run in the test suite. Then the SDK backend:
   with fakes;
 - add the extra to `pyproject.toml` (with a `python_version` marker if the SDK needs
   one) and the module to `doctor.py`'s `EXTRAS` (metadata-only if importing it is heavy).
+  An adapter whose robot side is a daemon you ship needs no extra at all, because nothing
+  heavy is imported on the laptop: `open_duck` declares none.
 
 ## `upstream_api.py`: never guess a name
 

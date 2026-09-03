@@ -1,0 +1,110 @@
+name: Open Duck Mini v2 hardware report
+description: You ran quackd against a real Open Duck Mini v2. Tell us what happened.
+labels: ["open-duck", "hardware", "adapter-status"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Nobody has run this against a physical duck yet, so yours is the first
+        real evidence either way, and a report that says "it did not work" is worth as much
+        as one that says it did.
+
+        Please follow [docs/open-duck-hardware-checklist.md](https://github.com/rokbenko/quackd/blob/main/docs/open-duck-hardware-checklist.md)
+        first. It is ordered so the duck's feet stay off the ground until step 8, and this
+        robot cannot get back up if it falls.
+  - type: input
+    id: quackd_version
+    attributes:
+      label: quackd version
+      description: Output of `quackd --version`
+    validations:
+      required: true
+  - type: input
+    id: runtime_commit
+    attributes:
+      label: Open_Duck_Mini_Runtime commit
+      description: "`git rev-parse HEAD` inside your checkout"
+    validations:
+      required: true
+  - type: input
+    id: policy
+    attributes:
+      label: Walk policy
+      description: Which .onnx file, and where you got it
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: Which checklist step did you reach?
+      options:
+        - "1: upstream teleop works"
+        - "2: nothing else owns the serial bus"
+        - "3: the bridge check output looks right"
+        - "4: the protocol, against --fake"
+        - "5: link latency measured"
+        - "6: dry run, feet up"
+        - "7: head only, feet up"
+        - "8: walking in place, feet up"
+        - "9: the deadman tested by pulling Wi-Fi"
+        - "10: feet down, open-duck-scout"
+    validations:
+      required: true
+  - type: dropdown
+    id: deadman
+    attributes:
+      label: Did you test the deadman (step 9), and did the duck stop?
+      options:
+        - "yes, it stopped"
+        - "yes, and it did NOT stop"
+        - "not yet"
+    validations:
+      required: true
+  - type: dropdown
+    id: link
+    attributes:
+      label: Link
+      options:
+        - "Ethernet or USB gadget"
+        - "Wi-Fi 5 GHz"
+        - "Wi-Fi 2.4 GHz"
+  - type: input
+    id: loop_hz
+    attributes:
+      label: Observed loop_hz while walking
+  - type: textarea
+    id: check
+    attributes:
+      label: quackd_duck_bridge.py check
+      description: The whole thing. It carries your capabilities and limits.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: quackd doctor --robot open_duck:bridge --address ...
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: transcript
+    attributes:
+      label: The first 40 lines of transcript.jsonl
+      render: json
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What the duck actually did
+      description: What moved, what did not, and anything that surprised you. A video or a GIF is welcome.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Before you submit
+      options:
+        - label: The duck was on a stand for steps 1 through 9
+          required: true
+        - label: I understand quackd claims nothing about hardware until a maintainer runs it too
+          required: true

@@ -3,7 +3,6 @@
 `uvx quackd run find-and-kick --provider anthropic --robot microduck:sim2d` is the
 north-star demo; every command here exists to make that line, and the debugging around it,
 boring. Commands are thin: they parse, load `.env`, wire objects together, and hand off.
-`--transport X` still works as `--robot microduck:X` for one release (ADR-0017).
 """
 
 from __future__ import annotations
@@ -64,24 +63,24 @@ def _deprecated(msg: str) -> None:
     err_console.print(f"[yellow]{escape(msg)}[/yellow]")
 
 
-def _robot_specs(robot: str | None, robots: str | None, transport: str | None, duck: Any) -> list:
-    """The robots a command talks about: --robots, else --robot/--transport, else the duck's
-    own `robots:` default, else the Microduck simulator."""
+def _robot_specs(robot: str | None, robots: str | None, duck: Any) -> list:
+    """The robots a command talks about: --robots, else --robot, else the duck's own
+    `robots:` default, else the Microduck simulator."""
     from quackd.adapters.factory import RobotSpec, parse_robot_spec, parse_robots, resolve_robot
 
     if robots:
         return parse_robots(robots)
     default = duck.frontmatter.robots if duck is not None else None
     if isinstance(default, dict):
-        if robot or transport:
-            return [resolve_robot(robot, transport, warn=_deprecated)]
+        if robot:
+            return [resolve_robot(robot)]
         # the member names become the robot ids, as `--robots name=spec` would make them
         specs = []
         for name, text in default.items():
             parsed = parse_robot_spec(text)
             specs.append(RobotSpec(parsed.adapter, parsed.backend, name))
         return specs
-    return [resolve_robot(robot, transport, duck_default=default, warn=_deprecated)]
+    return [resolve_robot(robot, duck_default=default)]
 
 
 # ── validate ────────────────────────────────────────────────────────────────────────────
@@ -99,9 +98,6 @@ def validate(
     ),
     robots: str | None = typer.Option(
         None, "--robots", help="Check against a fleet: name=<adapter>:<backend>,..."
-    ),
-    transport: str | None = typer.Option(
-        None, "--transport", "-t", help="DEPRECATED: alias for --robot microduck:<backend>."
     ),
 ) -> None:
     """Validate .duck files against the spec and a robot's verbs. Exits 1 on any failure."""
@@ -128,14 +124,14 @@ def validate(
             details.append(f"{path}: {e.reason}")
             continue
         try:
-            if robot or robots or transport:
+            if robot or robots:
                 specs = (
                     [parse_robot_spec(r) for r in robot]
                     if robot
-                    else _robot_specs(None, robots, transport, duck)
+                    else _robot_specs(None, robots, duck)
                 )
             elif duck.frontmatter.robots is not None:
-                specs = _robot_specs(None, None, None, duck)
+                specs = _robot_specs(None, None, duck)
             else:
                 specs = []
             manifests = [describe(spec) for spec in specs]
@@ -232,7 +228,6 @@ def list_adapters_cmd() -> None:
             )
         table.add_row(row["name"], " · ".join(row["backends"]), row["status"], extra)
     console.print(table)
-    console.print("[dim]--transport <backend> still works as --robot microduck:<backend>.[/dim]")
 
 
 # ── run / record ────────────────────────────────────────────────────────────────────────
@@ -246,7 +241,6 @@ def _run_impl(
     duckfile: str | None,
     goal: str | None,
     provider: str,
-    transport: str | None,
     model: str | None,
     seed: int | None,
     dry_run: bool,
@@ -255,6 +249,8 @@ def _run_impl(
     yes: bool,
     live: bool,
     address: str | None,
+    camera_url: str | None,
+    token: str | None,
     gif: bool,
     gif_size: int,
     verbose: bool,
@@ -266,11 +262,12 @@ def _run_impl(
     robot: str | None = None,
     robots: str | None = None,
 ) -> None:
-    from quackd.adapters.factory import make_adapter, registry_for
+    from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
     from quackd.agent.providers.factory import make_provider
     from quackd.duckfile.parser import DuckParseError, duck_from_goal, load_duck
+    from quackd.duckfile.validate import validate_duck
     from quackd.safety import KillSwitch, allow_all
     from quackd.transport.base import TransportError
 
@@ -279,15 +276,26 @@ def _run_impl(
         return
     try:
         duck = load_duck(duckfile) if duckfile is not None else None
-        specs = _robot_specs(robot, robots, transport, duck)
+        specs = _robot_specs(robot, robots, duck)
         spec = specs[0]
         if goal is not None:
             safe = [v.name for v in registry_for(spec).verbs() if v.safety_class == "safe"]
             duck = duck_from_goal(goal, safe)
+        assert duck is not None
+        # Refuse before connecting, with the validator's words. `serve-mcp` has always done
+        # this; `run` never did, and reached the loop's tool_schemas and died on a raw
+        # VerbNotFound with the robot already connected and a run directory already made.
+        manifests = [describe(s) for s in specs]
+        problems = validate_duck(duck, manifests)
     except (DuckParseError, TransportError) as e:
         _fail(str(e))
         return
-    assert duck is not None
+    if problems:
+        _fail(
+            f"{duck.name} cannot run on {', '.join(s.key for s in specs)}: "
+            + "; ".join(p.message for p in problems)
+        )
+        return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
@@ -323,21 +331,32 @@ def _run_impl(
             api_key=api_key,
             vision=vision,
         )
-        duck_transport = make_adapter(spec, seed=seed, address=address, live=live)
+        duck_transport = make_adapter(
+            spec,
+            seed=seed,
+            address=address,
+            live=live,
+            camera_url=camera_url,
+            token=token,
+        )
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
         return
 
     recorder = None
     detector = None
-    if spec.backend == "sim2d":
+    # Any robot with a camera needs something to look at its frames with, not just the
+    # simulator. Without this every camera verb on a hardware backend runs blind: it fetches
+    # a frame, finds no detections because nothing is detecting, and reports nothing seen.
+    if "camera" in manifests[0].sensors:
         from quackd.perception.color_blob import ColorBlobDetector
 
         detector = ColorBlobDetector()
-        if gif:
-            from quackd.sim2d.recorder import FrameRecorder
+    # the recorder is sim2d only: it draws the world, and only the simulator has one
+    if spec.backend == "sim2d" and gif:
+        from quackd.sim2d.recorder import FrameRecorder
 
-            recorder = FrameRecorder(duck_transport, size=gif_size)
+        recorder = FrameRecorder(duck_transport, size=gif_size)
 
     def log(msg: str) -> None:
         if verbose:
@@ -376,7 +395,11 @@ def _run_impl(
             ks.uninstall()
 
     _ = run_duck  # imported for symmetry; AgentLoop is used directly so the kill switch can bind
-    result = asyncio.run(main())
+    try:
+        result = asyncio.run(main())
+    except TransportError as e:
+        _fail(str(e))
+        return
     if recorder is not None:
         gif_path = recorder.save_gif(result.run_dir / "run.gif")
         result.gif_path = gif_path
@@ -590,12 +613,6 @@ _ROBOTS = typer.Option(
     "--robots",
     help="A flock or fleet: name=<adapter>:<backend>,... (simulator only for flocks).",
 )
-_TRANSPORT = typer.Option(
-    None,
-    "--transport",
-    "-t",
-    help="DEPRECATED (removed in 0.5): alias for --robot microduck:<backend>.",
-)
 _MODEL = typer.Option(None, "--model", "-m", help="Override the provider's model.")
 _SEED = typer.Option(None, "--seed", help="Simulator seed (deterministic runs).")
 _DRY = typer.Option(False, "--dry-run", help="Print every intent, send nothing.")
@@ -604,6 +621,18 @@ _RUNS = typer.Option("runs", "--runs-dir", help="Where run directories go.")
 _YES = typer.Option(False, "--yes", "-y", help="Auto-confirm gated verbs (careful on hardware).")
 _LIVE = typer.Option(False, "--live", help="sim2d: open a live pygame window (needs quackd[live]).")
 _ADDR = typer.Option(None, "--address", help="jsonrpc: unix:///run/robotd.sock or tcp://host:port")
+_TOKEN = typer.Option(
+    None,
+    "--token",
+    help="The bridge token for a robot that wants one. Its installer writes one on the "
+    "robot. Reads QUACKD_DUCK_TOKEN when the flag is absent.",
+)
+_CAMERA_URL = typer.Option(
+    None,
+    "--camera-url",
+    help="An HTTP snapshot to read frames from, overriding whatever the robot advertises. "
+    "Needed when you reach the robot through a tunnel and its own URL is not routable.",
+)
 _VERBOSE = typer.Option(False, "--verbose", "-v", help="Log every intent to stderr.")
 
 
@@ -614,7 +643,6 @@ def run(
     provider: str = _PROVIDER,
     robot: str | None = _ROBOT,
     robots: str | None = _ROBOTS,
-    transport: str | None = _TRANSPORT,
     model: str | None = _MODEL,
     seed: int | None = _SEED,
     dry_run: bool = _DRY,
@@ -623,6 +651,8 @@ def run(
     yes: bool = _YES,
     live: bool = _LIVE,
     address: str | None = _ADDR,
+    camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
     gif: bool = typer.Option(True, "--gif/--no-gif", help="sim2d: write run.gif into the run dir."),
     gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
@@ -636,7 +666,6 @@ def run(
         duckfile,
         goal,
         provider,
-        transport,
         model,
         seed,
         dry_run,
@@ -645,6 +674,8 @@ def run(
         yes,
         live,
         address,
+        camera_url,
+        token,
         gif,
         gif_size,
         verbose,
@@ -678,7 +709,6 @@ def record(
         duckfile,
         goal,
         provider,
-        transport=None,
         model=model,
         seed=seed,
         dry_run=False,
@@ -687,6 +717,8 @@ def record(
         yes=True,
         live=False,
         address=None,
+        camera_url=None,
+        token=None,
         gif=True,
         gif_size=gif_size,
         verbose=verbose,
@@ -706,11 +738,24 @@ def doctor(
     robot: str | None = typer.Option(
         None, "--robot", "-r", help="Also show one robot's manifest (<adapter>:<backend>)."
     ),
+    address: str | None = typer.Option(
+        None,
+        "--address",
+        help="With --robot, connect to a real robot and report what it says about itself.",
+    ),
+    camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
 ) -> None:
-    """Check the environment: keys, optional extras, adapters, upstream assumptions."""
+    """Check the environment: keys, optional extras, adapters, upstream assumptions.
+
+    With `--robot X --address Y` it also connects, which is the only way to see what a
+    robot actually reports before a run does."""
     from quackd.doctor import run_doctor
 
-    ok = run_doctor(console, robot=robot)
+    if address and not robot:
+        _fail("--address needs --robot, so quackd knows what it is connecting to")
+        return
+    ok = run_doctor(console, robot=robot, address=address, camera_url=camera_url, token=token)
     if not ok:
         raise typer.Exit(code=1)
 
@@ -723,12 +768,13 @@ def serve_mcp(
         "--robots",
         help="A fleet: name=<adapter>:<backend>,... (six robot_* tools, one executor each).",
     ),
-    transport: str | None = _TRANSPORT,
     duckfile: str | None = typer.Option(
         None, "--duckfile", help="Load a .duck contract at startup (on the default robot)."
     ),
     seed: int | None = _SEED,
     address: str | None = _ADDR,
+    camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
     dry_run: bool = _DRY,
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
@@ -742,13 +788,13 @@ def serve_mcp(
         serve(
             robot=robot,
             robots=robots,
-            transport=transport,
             duckfile=duckfile,
             seed=seed,
             address=address,
+            camera_url=camera_url,
+            token=token,
             dry_run=dry_run,
             yes=yes,
-            warn=_deprecated,
         )
     except AdapterError as e:
         _fail(str(e))

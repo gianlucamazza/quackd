@@ -190,11 +190,11 @@ def test_cli_flock_run_and_guards(tmp_path: Path) -> None:
     one = runner.invoke(app, ["run", "hello-world", "--flock", "1", "--runs-dir", str(tmp_path)])
     assert one.exit_code == 1 and "2 to 4" in one.output
 
-    wrong_transport = runner.invoke(
+    wrong_backend = runner.invoke(
         app,
-        ["run", "flock-kick", "--transport", "mock", "--runs-dir", str(tmp_path)],
+        ["run", "flock-kick", "--robot", "microduck:mock", "--runs-dir", str(tmp_path)],
     )
-    assert wrong_transport.exit_code == 1 and "simulator only" in wrong_transport.output
+    assert wrong_backend.exit_code == 1 and "simulator only" in wrong_backend.output
 
 
 def test_cli_flock_flag_on_a_solo_duck(tmp_path: Path) -> None:

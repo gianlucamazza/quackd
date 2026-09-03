@@ -15,14 +15,6 @@ REPO = Path(__file__).resolve().parents[1]
 DUCKS = REPO / "ducks"
 
 
-@pytest.fixture(autouse=True)
-def _fresh_deprecation_warnings() -> None:
-    # the CLI prints a deprecation line once per process; every test is its own process
-    from quackd.adapters.factory import reset_warnings
-
-    reset_warnings()
-
-
 @pytest.fixture
 def registry() -> VerbRegistry:
     return default_registry()

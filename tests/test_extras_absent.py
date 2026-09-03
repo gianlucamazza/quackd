@@ -21,7 +21,13 @@ import quackd.lan.discover
 import quackd.flock.mqtt_bus
 from quackd.adapters.factory import BACKENDS, RobotSpec, describe, list_adapters, make_adapter
 rows = list_adapters()
-assert [r["name"] for r in rows] == ["microduck", "reachy_mini", "lerobot", "rosbridge"], rows
+assert [r["name"] for r in rows] == [
+    "microduck",
+    "reachy_mini",
+    "lerobot",
+    "rosbridge",
+    "open_duck",
+], rows
 assert not any(r["installed"] for r in rows if r["extra"] != "built-in"), rows
 for adapter, backends in BACKENDS.items():
     for backend in backends:

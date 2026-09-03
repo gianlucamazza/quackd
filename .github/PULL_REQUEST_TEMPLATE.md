@@ -14,6 +14,6 @@
 
 - [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest` pass locally
 - [ ] No network calls in tests; no API keys needed
-- [ ] No Pollen Robotics assets (logos, meshes, videos) added
+- [ ] No upstream assets, from Pollen Robotics or the Open Duck Mini project (logos, meshes, videos) added
 - [ ] CHANGELOG.md updated under *Unreleased*
 - [ ] `uv run quackd validate ducks/*.duck` passes (CI runs it)

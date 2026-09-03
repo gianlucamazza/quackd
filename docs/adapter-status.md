@@ -20,6 +20,9 @@ it). A test proves UNVERIFIED names are only reachable from the experimental bac
 | | `lerobot:real` | 🧪 every LeRobot name VERIFIED at a pinned commit, exercised with a fake arm, never run on an arm (Python 3.12+) | [`quackd/adapters/lerobot/upstream_api.py`](../quackd/adapters/lerobot/upstream_api.py) | |
 | rosbridge | `rosbridge:mock` | ✅ | | [adapters/rosbridge.md](adapters/rosbridge.md) |
 | | `rosbridge:ws` | 🧪 every roslibpy, rosbridge and message name VERIFIED at pinned commits, exercised with fake topics, never run against a bridge | [`quackd/adapters/rosbridge/upstream_api.py`](../quackd/adapters/rosbridge/upstream_api.py) | |
+| Open Duck Mini v2 | `open_duck:sim2d` | ✅ `open-duck-scout` 10 of 10 seeds | | [adapters/open_duck.md](adapters/open_duck.md) |
+| | `open_duck:mock` | ✅ | | |
+| | `open_duck:bridge` | 🧪 every runtime name VERIFIED at a pinned commit, the protocol exercised against the real daemon over loopback, never run on a duck | [`quackd/adapters/open_duck/upstream_api.py`](../quackd/adapters/open_duck/upstream_api.py) | |
 
 **Flocks** (`--flock`, `flock.roles`) run N in-process views of one simulated world on
 one lockstep clock. The MQTT bus implements the same `Bus` protocol and was exercised
@@ -38,8 +41,6 @@ Sources: [duck-ipc-proto/src/lib.rs](https://github.com/pollen-robotics/microduc
 [robotd-design.md](https://github.com/pollen-robotics/microduck/blob/main/docs/design/robotd-design.md) ·
 [remote-webrtc.md](https://github.com/pollen-robotics/microduck/blob/main/docs/design/remote-webrtc.md) ·
 [roadmap.md](https://github.com/pollen-robotics/microduck/blob/main/docs/project/roadmap.md) (2026-08-26).
-
-`--transport X` is a deprecated alias of `--robot microduck:X` (removed in 0.5).
 
 ### VERIFIED (read from upstream source)
 
@@ -83,11 +84,18 @@ Sources: [duck-ipc-proto/src/lib.rs](https://github.com/pollen-robotics/microduc
 `update.*`. The gamepad (`padd`) keeps authority on hardware; quackd does not arbitrate.
 The same principle holds on every adapter: `disable_motors` is never sent to a Reachy,
 `disable_torque` never to an arm, and a base over rosbridge gets a zero Twist, not silence.
+On an Open Duck the guarantee is stronger than a promise: the bridge protocol has no word
+that reaches torque, so going limp is unreachable rather than merely forbidden.
 
 ## How to help
 
-Ran `--robot microduck:jsonrpc` against a real duck, `reachy_mini:sdk` against a Reachy
-Mini (or its `--mockup-sim` daemon), `lerobot:real` against an arm, or `rosbridge:ws`
-against a bridge? Open an issue with `quackd doctor` output and the first lines of
+**Built an Open Duck Mini v2?** That is the row most likely to flip this year, because it
+is the only body here you can build from scratch and the only one whose robot side quackd
+ships and already exercises. [open-duck-hardware-checklist.md](open-duck-hardware-checklist.md)
+is the order to try it in, and there is an issue template waiting for the result.
+
+Ran `--robot open_duck:bridge` against a duck you built, `microduck:jsonrpc` against a real
+duck, `reachy_mini:sdk` against a Reachy Mini (or its `--mockup-sim` daemon), `lerobot:real`
+against an arm, or `rosbridge:ws` against a bridge? Open an issue with `quackd doctor` output and the first lines of
 `transcript.jsonl`. Every row above that flips from 🧪/⏳ to ✅ is one line in an
 `upstream_api.py` and one row here.

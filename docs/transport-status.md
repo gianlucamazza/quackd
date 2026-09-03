@@ -6,4 +6,4 @@ the honesty table for every adapter, the Microduck included, lives at
 `duck-ipc-proto` are there, unchanged; the other robots have their own pages under
 [adapters/](adapters/).
 
-`--transport X` still works for one release as an alias of `--robot microduck:X`.
+The 0.4 alias of `--robot microduck:<backend>` was removed in 0.5. Use `--robot`.

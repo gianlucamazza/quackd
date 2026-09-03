@@ -16,7 +16,7 @@ runner = CliRunner()
 def test_validate_starter_ducks() -> None:
     result = runner.invoke(app, ["validate", *[str(p) for p in sorted(DUCKS.glob("*.duck"))]])
     assert result.exit_code == 0, result.output
-    assert "8 file(s) valid" in result.output
+    assert "10 file(s) valid" in result.output
 
 
 def test_run_a_reachy_duck_by_its_own_default_robot(tmp_path: Path) -> None:
@@ -67,8 +67,8 @@ def test_run_hello_world_on_mock(tmp_path: Path) -> None:
             "hello-world",
             "--provider",
             "fake",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
             "--no-gif",
@@ -95,8 +95,8 @@ def test_missing_extra_hint_survives_rich_markup(tmp_path: Path, monkeypatch) ->
             "hello-world",
             "--provider",
             "anthropic",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],
@@ -114,8 +114,8 @@ def test_run_goal_builds_an_ad_hoc_duck(tmp_path: Path) -> None:
             "say hello and stop",
             "--provider",
             "fake",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],
@@ -153,9 +153,18 @@ def test_goal_picks_a_matching_scripted_strategy(tmp_path: Path) -> None:
 def test_run_needs_exactly_one_of_duck_or_goal(tmp_path: Path) -> None:
     both = runner.invoke(
         app,
-        ["run", "hello-world", "--goal", "x", "--transport", "mock", "--runs-dir", str(tmp_path)],
+        [
+            "run",
+            "hello-world",
+            "--goal",
+            "x",
+            "--robot",
+            "microduck:mock",
+            "--runs-dir",
+            str(tmp_path),
+        ],
     )
-    neither = runner.invoke(app, ["run", "--transport", "mock", "--runs-dir", str(tmp_path)])
+    neither = runner.invoke(app, ["run", "--robot", "microduck:mock", "--runs-dir", str(tmp_path)])
     assert both.exit_code == 1 and neither.exit_code == 1
     assert "either" in both.output and "either" in neither.output
 
@@ -176,26 +185,28 @@ def _run_hello(tmp_path: Path, *flags: str) -> object:
     )
 
 
-def test_transport_flag_is_a_deprecated_alias_that_warns_once(tmp_path: Path) -> None:
+def test_transport_flag_is_gone(tmp_path: Path) -> None:
+    """0.4 deprecated `--transport X` in favour of `--robot microduck:X` and said it would
+    be removed in 0.5. It is."""
     old = _run_hello(tmp_path, "--transport", "mock")
-    assert old.exit_code == 0, old.output  # type: ignore[attr-defined]
-    assert old.output.count("deprecated") == 1 and "--robot microduck:mock" in old.output  # type: ignore[attr-defined]
+    assert old.exit_code != 0  # type: ignore[attr-defined]
+    assert "No such option" in old.output  # type: ignore[attr-defined]
     new = _run_hello(tmp_path, "--robot", "microduck:mock")
-    assert new.exit_code == 0 and "deprecated" not in new.output  # type: ignore[attr-defined]
+    assert new.exit_code == 0, new.output  # type: ignore[attr-defined]
     assert "robot=microduck:mock" in new.output  # type: ignore[attr-defined]
 
 
 def test_robot_flag_errors_are_clean(tmp_path: Path) -> None:
     unknown = _run_hello(tmp_path, "--robot", "hal9000:mock")
     assert unknown.exit_code == 1 and "unknown adapter" in unknown.output  # type: ignore[attr-defined]
-    both = _run_hello(tmp_path, "--robot", "microduck:mock", "--transport", "sim2d")
-    assert both.exit_code == 1 and "choose one" in both.output  # type: ignore[attr-defined]
+    bad_backend = _run_hello(tmp_path, "--robot", "microduck:hovercraft")
+    assert bad_backend.exit_code == 1 and "unknown backend" in bad_backend.output  # type: ignore[attr-defined]
 
 
 def test_list_adapters() -> None:
     result = runner.invoke(app, ["list-adapters"])
     assert result.exit_code == 0, result.output
-    for needle in ("microduck", "sim2d", "mock", "jsonrpc", "--transport"):
+    for needle in ("microduck", "sim2d", "mock", "jsonrpc", "open_duck", "bridge"):
         assert needle in result.output
 
 
@@ -232,11 +243,96 @@ def test_run_unknown_provider_is_a_clean_error(tmp_path: Path) -> None:
             "hello-world",
             "--provider",
             "hal9000",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],
     )
     assert result.exit_code == 1
     assert "unknown provider" in result.output
+
+
+def test_run_refuses_a_duck_the_robot_cannot_do(tmp_path: Path) -> None:
+    """`serve-mcp` always validated the contract against the robot; `run` never did, and
+    died halfway in with a raw VerbNotFound once the robot was already connected."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "find-and-kick",
+            "--provider",
+            "fake",
+            "--robot",
+            "open_duck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 1
+    flat = " ".join(result.output.split())  # rich wraps the line
+    assert "find-and-kick cannot run on open_duck:mock" in flat
+    assert "requires kick, but open-duck-01 (open-duck-mini-v2) does not provide it" in flat
+    assert "Traceback" not in result.output
+    assert list(tmp_path.iterdir()) == []  # refused before a run directory was made
+
+
+def test_run_refuses_a_kick_duck_on_a_head_too(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "find-and-kick",
+            "--provider",
+            "fake",
+            "--robot",
+            "reachy_mini:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 1 and "does not provide it" in result.output
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_run_still_starts_when_the_duck_fits(tmp_path: Path) -> None:
+    """The guard must refuse the impossible without over-refusing the possible."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--robot",
+            "microduck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_a_camera_robot_that_is_not_the_simulator_still_gets_a_detector(tmp_path: Path) -> None:
+    """The detector used to be attached only for sim2d, so every hardware backend with a
+    camera ran blind: it fetched frames, detected nothing because nothing was detecting,
+    and reported that it could not see the ball."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "open-duck-scout",
+            "--provider",
+            "fake",
+            "--robot",
+            "open_duck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "SUCCESS" in result.output

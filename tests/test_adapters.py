@@ -109,25 +109,18 @@ def test_robot_spec_parsing() -> None:
         parse_robots("a=microduck:sim2d,a=microduck:mock")
 
 
-def test_transport_flag_resolves_to_microduck_with_one_warning() -> None:
-    import warnings
+def test_resolve_robot_is_the_flag_then_the_duck_then_the_simulator() -> None:
+    """0.4's `--transport X` alias was promised for removal in 0.5, and is gone."""
+    import inspect
 
-    from quackd.adapters.base import AdapterError
+    from quackd.adapters import factory
     from quackd.adapters.factory import resolve_robot
 
-    lines: list[str] = []
-    with pytest.warns(DeprecationWarning, match="--robot microduck:mock"):
-        spec = resolve_robot(None, "mock", warn=lines.append)
-    assert spec.key == "microduck:mock" and len(lines) == 1
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")  # a second use is silent: once per process
-        assert resolve_robot(None, "mock", warn=lines.append).key == "microduck:mock"
-    assert len(lines) == 1
-    assert resolve_robot("microduck:mock", "mock").key == "microduck:mock"  # agree: fine
-    with pytest.raises(AdapterError, match="choose one"):
-        resolve_robot("microduck:mock", "sim2d")
-    assert resolve_robot(None, None, duck_default="microduck:mock").key == "microduck:mock"
-    assert resolve_robot(None, None).key == "microduck:sim2d"
+    assert resolve_robot("microduck:mock").key == "microduck:mock"
+    assert resolve_robot(None, duck_default="microduck:mock").key == "microduck:mock"
+    assert resolve_robot(None).key == "microduck:sim2d"
+    assert "transport" not in inspect.signature(resolve_robot).parameters
+    assert not hasattr(factory, "warn_once") and not hasattr(factory, "reset_warnings")
 
 
 async def test_factory_describes_and_makes_adapters() -> None:
@@ -147,7 +140,13 @@ async def test_factory_describes_and_makes_adapters() -> None:
     live = await adapter.connect()
     assert live.digest() == static.digest()  # the static description is the real one
     rows = list_adapters()
-    assert [r["name"] for r in rows] == ["microduck", "reachy_mini", "lerobot", "rosbridge"]
+    assert [r["name"] for r in rows] == [
+        "microduck",
+        "reachy_mini",
+        "lerobot",
+        "rosbridge",
+        "open_duck",
+    ]
     assert rows[0]["installed"] and "sim2d" in rows[0]["backends"]
     assert rows[1]["extra"] == "quackd[reachy]" and "sdk" in rows[1]["backends"]
 

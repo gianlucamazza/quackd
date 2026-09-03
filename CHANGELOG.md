@@ -5,14 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-09-03
+
+The first robot you can actually build. Every hardware backend before this one targeted a
+robot you could not buy or had not assembled: the Microduck ships around Christmas 2026, and
+the Reachy, LeRobot and rosbridge backends have only ever talked to fakes. The Open Duck
+Mini v2 is open hardware people are printing at home today, so for the first time a stranger
+can follow these instructions all the way to a walking robot. That also makes this the first
+release where quackd ships code that runs **on** a robot. Design: `docs/adr/0024-open-duck-mini.md`.
+
+Still nothing has run on a duck. What is new is that everything except the duck is tested.
+
+### Added
+
+- **The Open Duck Mini v2 adapter** (`--robot open_duck:sim2d`, `open_duck:mock`,
+  `open_duck:bridge`): the
+  first robot quackd supports that anyone can build today. It is an open hardware 3D
+  printed biped that walks on its own 50 Hz ONNX policy on a Raspberry Pi Zero 2 W. Its
+  manifest is a strict subset and says so: this robot has no beak, no gripper, no kick
+  policy, no sit policy and no get-up-after-fall policy, so `kick`, `grab`, `sit`, `stand`
+  and `stand_up` are never declared and therefore do not exist for it anywhere. A duck
+  built without a camera or a speaker loses exactly the verbs that need them. Velocities
+  are clamped to the ranges read from the robot's own runtime (0.15 m/s forward, 0.2 m/s
+  sideways, 1.0 rad/s turning), and a fallen duck refuses to move with a message saying a
+  human must stand it up, because nothing quackd can call will.
+- **A bridge daemon that runs on the robot** (`bridge/open_duck/`), which is a first for
+  quackd: every other adapter talks to someone else's daemon, and this robot has none. It
+  does not reimplement the 50 Hz control loop, it *is* that loop, with the class upstream
+  imports to read a gamepad rebound to read a socket instead. One process, so the servo bus
+  keeps one owner, and nothing of upstream's is copied. Going limp is unreachable rather
+  than forbidden: the only channel from the network to the body is seven floats and a few
+  buttons. The deadman is quackd's own, it runs on the robot, and it is evaluated by the
+  control loop rather than a timer, so a server thread that is starved, wedged or dead still
+  stops the duck. Standard library plus numpy, so it installs on a 512 MB Pi, and
+  `--fake` runs the whole protocol on a laptop with no robot at all.
+- **A camera server for the duck's Pi** (`bridge/open_duck/quackd_duck_camd.py`), in its
+  own process because encoding a JPEG inside a 20 ms control tick is not affordable on a Pi
+  Zero 2 W. It captures on a timer so a slow client cannot stall it, serves the newest frame
+  over HTTP, and has no control path at all: it reads a camera and answers GET. Without it
+  the bridge advertises no camera and the verbs that need one do not exist rather than exist
+  and fail. `--fake` paints a duck's eye view, so the whole chain runs with no hardware.
+- **Two starter tasks**, `open-duck-scout` (find the ball, walk up, report, 10 of 10 seeds)
+  and `open-duck-lookout`, whose allowlist moves no legs at all and which exists to be the
+  first thing anyone points at a physical duck.
+- ADR-0024, `docs/adapters/open_duck.md`, and a hardware checklist and issue template for
+  the first person to run this on a duck they built.
+- **`--camera-url`** on `run`, `serve-mcp` and `doctor`, for a robot whose camera is an HTTP
+  snapshot rather than something the control socket can serve.
+- **`--token` and `QUACKD_DUCK_TOKEN`** for a robot that wants authentication. The Open Duck
+  bridge's own installer writes one, so until now a duck set up by the book refused every
+  client and no document explained why.
+- **`quackd doctor --robot X --address Y` connects.** Everything else in `doctor` is offline
+  and reads the static manifest, which describes a fully built robot. This prints what your
+  robot actually reported: its capabilities, which verbs it does and does not have, and
+  whether its control loop is healthy. It is the only way to see that difference before a
+  run does.
+
+### Removed
+
+- **`--transport X`**, the 0.4 alias of `--robot microduck:X`, along with `resolve_robot`'s
+  transport branch and the warn-once machinery that existed only to support it. 0.4 said in
+  ten places that it would go in 0.5.
+- **The eight `duck_*` MCP tools**, 0.3 aliases pinned to the default robot. Omitting the
+  `robot` argument to a `robot_*` tool does the same thing. `duck_get_frame` has no exact
+  replacement by design: `robot_observe` does the same job but goes through the executor, so
+  frames are now budgeted and logged like every other verb.
+- Removing them broke the MCP system prompt, which named three of the removed tools and
+  hardcoded "a small biped duck robot (25 cm, 800 g)" for every body. It now names the robot
+  and takes its description from the manifest's own `blurb`, so a lone Open Duck introduces
+  itself as the duck that cannot pick anything up and cannot get back up if it falls.
 
 ### Fixed
 
+- **Perception was attached only for the simulator.** Every hardware backend with a camera
+  ran blind: it fetched frames, detected nothing because nothing was detecting, and reported
+  that it could not see. The detector now follows the camera rather than the backend, which
+  also fixes `microduck:jsonrpc` and `rosbridge:ws`.
+- **A robot that reports fewer capabilities at connect than its description claims** used to
+  crash the run. `validate` checks the static manifest, which describes a fully built robot,
+  so a duck with no camera got past it and then raised a bare `VerbNotFound` when the agent
+  loop built its tools. A verb the task *requires* now refuses in the validator's words, and
+  one it merely *allows* is dropped with a line in the log, which is what a v1 task allowing
+  more than it needs is for.
+- `quackd run` now checks a `.duck` against its robot before connecting, the way
+  `serve-mcp` always has. Pointing a task at a robot that lacks one of its verbs used to
+  reach the agent loop and raise a bare `VerbNotFound` with the robot already connected and
+  an empty run directory already written. It now refuses up front with the validator's own
+  sentence and writes nothing.
 - `mypy` failed on Python 3.12 (the opencv stubs that resolve there type only the array
   overload of `cv2.inRange`, so the tuple bounds in `perception/color_blob.py` matched no
   variant). Bounds are now `uint8` arrays. OpenCV accepts both, so nothing about detection
-  changes: the seeded goldens are byte-identical and all four sweeps still pass 10 of 10.
+  changes: the seeded goldens are byte-identical and all five sweeps still pass 10 of 10.
   This landed just after the v0.4.0 tag, so the tagged commit and the 0.4.0 files on PyPI
   still carry it. It is a type-check-only issue and does not affect the released package at
   runtime.
@@ -293,7 +376,8 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/rokbenko/quackd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rokbenko/quackd/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0

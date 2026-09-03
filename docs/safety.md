@@ -85,6 +85,31 @@ widen it. **You are responsible for your robot.**
 - The speed limits are quackd's caution (`limits.max_vx`, `max_wz` in the manifest), not
   the base's capability. Lower them before the first real drive.
 
+**An Open Duck Mini v2:**
+
+- **If it falls, quackd cannot pick it up.** There is no get-up policy on this robot, so
+  `stand_up` does not exist for it and every verb that moves it refuses until a human
+  stands it up. Work with the duck on a stand until you trust the link.
+- The deadman is quackd's own, and it runs on the robot. quackd's bridge daemon zeroes the
+  velocity after 300 ms of silence, inside the call the control loop makes every tick, so a
+  server thread that is starved, wedged or dead still stops the duck. Test it by pulling
+  your laptop's Wi-Fi mid-walk before you rely on it.
+- Going limp is unreachable rather than forbidden: the only channel from the network to the
+  body is seven floats and a few buttons, so no message reaches a torque register.
+- Head control is off unless you start the daemon with it on, and then it is clamped inside
+  the runtime's own range and rate limited. Upstream warns that head control can break the
+  head, and quackd never presses its mode button.
+- The Feetech serial bus has exactly one owner. The bridge *is* the walk loop, so do not run
+  it and upstream's script at the same time.
+- The bridge binds loopback and wants a token, because a port that walks a robot on a shared
+  network is a hazard. Prefer `ssh -L 9871:127.0.0.1:9871 your-pi`.
+- The camera is a second process (`quackd_duck_camd.py`) serving one JPEG over HTTP with
+  **no authentication at all**. It binds loopback and warns if you bind it wider, because
+  it shows whatever the robot can see. Tunnel it rather than exposing it.
+- The only e-stop is the power switch.
+- The order to bring one up in, feet off the ground until step 8, with an abort condition
+  at every step: [open-duck-hardware-checklist.md](open-duck-hardware-checklist.md).
+
 ## On other bodies
 
 Since 0.4 quackd drives more than the duck, and the honest answer to "what stops it when
@@ -97,6 +122,7 @@ quackd goes quiet" differs per body. Each manifest says so
 | Reachy Mini (`reachy_mini:*`) | `none`: no client deadman or e-stop was verified; quackd's heartbeat is the authority | `cancel_move` | `disable_motors` (limp) |
 | LeRobot arm (`lerobot:*`) | `torque_limit`: the gripper's torque and current caps, plus `max_relative_target` when configured; no deadman, a position-controlled arm holds its goal | re-sends the present position as the goal (hold) | `disable_torque` (LeRobot's own `disconnect()` does, by its default, at the end of a session) |
 | rosbridge base (`rosbridge:*`) | `none`: neither rosbridge nor the driver has a deadman we verified | publishes a zero Twist; quackd also re-sends the Twist at 10 Hz while a verb runs | silence |
+| Open Duck Mini v2 (`open_duck:*`) | `none` in the robot, but quackd's own bridge daemon runs on it and zeroes the velocity after 300 ms of silence, inside the 50 Hz loop | zero velocity, head held, torque still on | anything that reaches torque, the head-control mode button, any direct servo or IMU read |
 
 The verbs a body lacks are not gated, they do not exist: a head cannot `kick`, an arm
 cannot `move`, a base cannot `say`, and `validate --robot` says so before a run starts.

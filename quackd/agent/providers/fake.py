@@ -104,6 +104,55 @@ def reachy_spotter_strategy(obs: Observation, step: int, history: list[Exchange]
     return ToolCall(name="search_scan", arguments={"target": "ball"})
 
 
+def _where(ball: dict[str, Any]) -> str:
+    bearing = ball.get("bearing_deg") or 0.0
+    dist = ball.get("est_distance_m")
+    where = f"ball at {abs(bearing):.0f} degrees {'left' if bearing >= 0 else 'right'}"
+    return where + (f", about {dist:.1f} m" if dist is not None else "")
+
+
+def open_duck_scout_strategy(obs: Observation, step: int, history: list[Exchange]) -> ToolCall:
+    """A duck that walks but cannot kick: find the ball, walk up to it, report once."""
+    if _count_calls(history, "say") > 0:
+        return ToolCall(name="declare_success", arguments={"reason": "walked up and reported"})
+    last = _last(obs)
+    balls = _detections(obs, "ball")
+    if balls:
+        dist = balls[0].get("est_distance_m")
+        if dist is None or dist <= 0.45 or _count_calls(history, "go_to") > 0:
+            return ToolCall(name="say", arguments={"text": _where(balls[0])})
+        return ToolCall(name="go_to", arguments={"target": "ball", "stop_distance": 0.3})
+    if (
+        _count_calls(history, "search_scan") >= 2
+        and last.get("verb") == "search_scan"
+        and not last.get("ok")
+    ):
+        return ToolCall(
+            name="declare_failure", arguments={"reason": "no ball found after two sweeps"}
+        )
+    return ToolCall(name="search_scan", arguments={"target": "ball"})
+
+
+def open_duck_lookout_strategy(obs: Observation, step: int, history: list[Exchange]) -> ToolCall:
+    """Head only, no legs: look left, right, centre, then report whatever is true."""
+    if _count_calls(history, "say") > 0:
+        return ToolCall(name="declare_success", arguments={"reason": "reported what is in view"})
+    balls = _detections(obs, "ball")
+    if balls:
+        return ToolCall(name="say", arguments={"text": _where(balls[0])})
+    # head control is off by default on a real duck, so gaze may not exist at all
+    if "gaze" not in obs.features.get("allowed", []):
+        return ToolCall(name="say", arguments={"text": "no ball in view, and no head to look"})
+    looks = _count_calls(history, "gaze")
+    if looks >= len(_LOOKOUT_SWEEP):
+        return ToolCall(name="say", arguments={"text": "no ball in view"})
+    return ToolCall(name="gaze", arguments={"bearing_deg": _LOOKOUT_SWEEP[looks]})
+
+
+#: Inside the Open Duck Mini v2's neck travel, which is about 23 degrees either way.
+_LOOKOUT_SWEEP = (20.0, -20.0, 0.0)
+
+
 def generic_strategy(obs: Observation, step: int, history: list[Exchange]) -> ToolCall:
     allowed = obs.features.get("allowed", [])
     if step == 0 and "quack" in allowed:
@@ -120,6 +169,8 @@ STRATEGIES: dict[str, Strategy] = {
     "find-and-kick": find_and_kick_strategy,
     "patrol-and-quack": patrol_strategy,
     "reachy-spotter": reachy_spotter_strategy,
+    "open-duck-scout": open_duck_scout_strategy,
+    "open-duck-lookout": open_duck_lookout_strategy,
 }
 
 

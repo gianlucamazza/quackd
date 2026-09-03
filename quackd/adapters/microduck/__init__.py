@@ -193,6 +193,7 @@ def make(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> MicroduckAdapter:
     from quackd.transport.factory import make_transport
 

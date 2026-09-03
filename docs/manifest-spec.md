@@ -12,7 +12,7 @@ version without touching the robot.
 | Field | Type | Meaning |
 |---|---|---|
 | `manifest` | `1` | schema version |
-| `id` | slug | unique within a run or a flock: `microduck`, `reachy-01`, `duck-01`, or the fleet name from `--robots name=...` |
+| `id` | slug | unique within a run or a flock: `microduck`, `open-duck-01`, `reachy-01`, `duck-01`, or the fleet name from `--robots name=...` |
 | `vendor`, `model` | string | who made it and what it is (`pollen-robotics`, `reachy-mini`) |
 | `embodiment` | `biped`, `quadruped`, `wheeled`, `arm`, `stationary_head`, `humanoid` | the body |
 | `mobility` | `none`, `legged`, `wheeled` | whether it can go somewhere |
@@ -20,7 +20,7 @@ version without touching the robot.
 | `sensors` | list of `camera`, `battery`, `odometry`, `imu`, `tof`, `microphone`, `joint_state` | what it can report |
 | `verbs` | list of `VerbSpec` | the vocabulary (see below) |
 | `preconditions` | verb → list of condition names | checks the executor runs before a verb; the adapter supplies the predicates by name |
-| `safety_authority` | `{native, deadman, heartbeat_hz}` | who stops the body when quackd goes quiet: `native` is `robotd_deadman`, `lease`, `torque_limit`, `estop` or `none`; `deadman` is whether the robot zeroes motion on silence |
+| `safety_authority` | `{native, deadman, heartbeat_hz}` | who stops the body when quackd goes quiet: `native` is `robotd_deadman`, `lease`, `torque_limit`, `estop` or `none`; `deadman` is whether motion zeroes on silence, wherever that code lives. An Open Duck Mini declares `native: none` with `deadman: true`, because the thing doing the zeroing is quackd's own daemon running on the robot |
 | `frame` | `{reference, note}` | `body`, `head`, `base` or `world`; what bearings are relative to |
 | `limits` | name → number | `max_vx`, `max_vy`, `max_wz`, `gaze_yaw_deg`, `gaze_pitch_deg`, `joint_deg`, ...; the core verbs clamp to them |
 | `backend` | string | informational: which backend produced this |
@@ -70,7 +70,7 @@ and MCP `robot_list` returns it.
 
 ## Examples
 
-The four shipped manifests, from `quackd list-verbs --robot ...` or `describe()`:
+The five shipped manifests, from `quackd list-verbs --robot ...` or `describe()`:
 
 | Robot | embodiment / mobility | intents | verbs |
 |---|---|---|---|
@@ -78,6 +78,7 @@ The four shipped manifests, from `quackd list-verbs --robot ...` or `describe()`
 | `reachy_mini:sim2d` | stationary_head / none | gaze, sound, skill | observe, report_state, stop, say, search_scan, gaze, play_sound, wake_up, express |
 | `lerobot:mock` | arm / none | joint, gripper, skill | observe, report_state, stop, move_joints, gripper, place, pick |
 | `rosbridge:mock` | wheeled / wheeled | twist | observe, report_state, stop, move, go_to, search_scan, approach_and |
+| `open_duck:sim2d` | biped / legged | twist, gaze, sound, skill | report_state, stop, move, observe, go_to, search_scan, approach_and, say, quack, gaze, express |
 
 What each body lacks is as important as what it has: the head cannot `kick`, the arm
 cannot `move`, the base cannot `say`, and a `.duck` that `requires` one of those fails

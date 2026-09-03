@@ -4,9 +4,8 @@ This is the second wow-demo — "I asked Claude to make the duck patrol my desk"
 goes through the *same* `Executor` as `.duck` runs, so allowlists, confirm gates, budgets
 and the heartbeat apply to an interactive session too. Since 0.4 one server can front
 several robots (`--robots duck=microduck:sim2d,reachy=reachy_mini:mock`): six `robot_*`
-tools take a robot name, every robot has its own executor, budget, heartbeat and
-contract, and the eight 0.3 `duck_*` tools stay as aliases of the default robot. stdout
-is the wire; every log line goes to stderr.
+tools take a robot name and every robot has its own executor, budget, heartbeat and
+contract. stdout is the wire, and every log line goes to stderr.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from quackd.agent.transcript import png_bytes
 from quackd.duckfile.parser import DuckParseError, load_duck
 from quackd.duckfile.schema import DuckFile
 from quackd.duckfile.validate import validate_duck
-from quackd.perception.base import Detector, summarize_detections
+from quackd.perception.base import Detector
 from quackd.safety import (
     Aborted,
     Budget,
@@ -58,23 +57,16 @@ TOOL_NAMES = (
     "robot_observe",
     "robot_say",
     "robot_load_duckfile",
-    "duck_list_verbs",
-    "duck_run_verb",
-    "duck_get_frame",
-    "duck_get_state",
-    "duck_set_velocity",
-    "duck_stop",
-    "duck_quack",
-    "duck_load_duckfile",
 )
 """Every tool the server registers, in this order; `docs/mcp.md` must list each one."""
 
-INSTRUCTIONS = """You are piloting a small biped duck robot (25 cm, 800 g) through quackd.
-Call duck_list_verbs first. Every action is a *verb*; the executor enforces an allowlist,
-budgets and confirmation gates, so a refused call is a rule, not a bug. Prefer composite
-verbs (search_scan, walk_to) over micro-managing velocities. Load a .duck file with
-duck_load_duckfile to adopt a task contract; then follow its body as your instructions.
-Call duck_stop if anything looks wrong."""
+INSTRUCTIONS = """You are piloting one robot through quackd: {names}, which is {blurb}.
+Call robot_list_verbs first: the verbs come from that robot's own manifest, so what it can
+do is what it lists and nothing else. Every action is a *verb*; the executor enforces an
+allowlist, budgets and confirmation gates, so a refused call is a rule, not a bug. Prefer
+composite verbs (search_scan, go_to) over micro-managing velocities. Load a .duck file with
+robot_load_duckfile(path) to adopt a task contract; then follow its body as your
+instructions. Call robot_run_verb(verb="stop") if anything looks wrong."""
 
 FLEET_INSTRUCTIONS = """You are piloting {n} robot(s) through quackd: {names}.
 Call robot_list first, then robot_list_verbs(robot) for each body you will use: verbs come
@@ -82,13 +74,9 @@ from each robot's own manifest, so they differ per robot. Every action is a *ver
 robot's executor enforces its own allowlist, budgets and confirmation gates, so a refused
 call is a rule, not a bug. Prefer composite verbs (search_scan, go_to) over micro-managing
 velocities. Load a .duck file with robot_load_duckfile(path, robot) to adopt a task
-contract on one robot; then follow its body as your instructions. The duck_* tools are
-deprecated aliases that target the default robot ({default}). Call
-robot_run_verb(verb="stop", robot=...) if anything looks wrong."""
-
-
-def _alias(of: str) -> str:
-    return f" Deprecated 0.3 alias of {of} on the default robot; removed in 0.5."
+contract on one robot; then follow its body as your instructions. Without a robot argument
+a tool acts on the default, {default}. Call robot_run_verb(verb="stop", robot=...) if
+anything looks wrong."""
 
 
 def _prefixed(emit: Callable[..., None], name: str) -> Callable[[str], None]:
@@ -345,9 +333,15 @@ def _pick_default(robots: Mapping[str, Any]) -> str:
 
 
 def _instructions(fleet: Fleet) -> str:
-    solo = fleet.sessions[fleet.default]
-    if len(fleet.sessions) == 1 and adapter_name(solo.transport) in (None, "microduck"):
-        return INSTRUCTIONS
+    """One robot gets a prompt about that robot, whichever body it is.
+
+    Until 0.5 the solo prompt was hardcoded to a 25 cm Microduck, which was wrong for every
+    other body. The description now comes from the manifest's own blurb."""
+    if len(fleet.sessions) == 1:
+        solo = fleet.sessions[fleet.default]
+        manifest = solo.manifest
+        blurb = manifest.blurb if manifest and manifest.blurb else "a small robot"
+        return INSTRUCTIONS.format(names=fleet.default, blurb=blurb)
     return FLEET_INSTRUCTIONS.format(
         n=len(fleet.sessions), names=", ".join(fleet.sessions), default=fleet.default
     )
@@ -490,80 +484,6 @@ def build_fleet_server(
         session = fleet.get(robot)
         return session.load(path) if session else fleet.unknown(robot)
 
-    # ── the 0.3 tools, aliases of the default robot ─────────────────────────────────
-
-    @mcp.tool(
-        description="List every verb: params, safety class, and whether it is allowed now."
-        + _alias("robot_list_verbs")
-    )
-    async def duck_list_verbs() -> dict[str, Any]:
-        return me().verbs_payload()
-
-    @mcp.tool(
-        description="Run a verb by name with JSON params. Refusals come back as ok=false."
-        + _alias("robot_run_verb")
-    )
-    async def duck_run_verb(name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        return await me().run(name, params)
-
-    @mcp.tool(
-        description="Capture the duck's camera frame (PNG) plus a detection summary."
-        + _alias("robot_observe"),
-        structured_output=False,
-    )
-    async def duck_get_frame() -> list[str | Image]:
-        session = me()
-        img = await session.transport.get_frame()
-        if img is None:
-            return ["this transport has no camera"]
-        session.frames += 1
-        dets = session.detector.detect(img) if session.detector else []
-        return [f"camera: {summarize_detections(dets)}", Image(data=png_bytes(img), format="png")]
-
-    @mcp.tool(
-        description="The duck's state: posture, policy, battery, pose (sim), budget status."
-        + _alias("robot_run_verb(verb='report_state')")
-    )
-    async def duck_get_state() -> dict[str, Any]:
-        session = me()
-        state = (await session.transport.get_state()).model_dump()
-        state["budget"] = session.executor.budget.status() if session.executor.budget else None
-        state["transport"] = backend_name(session.transport)
-        state["robot"] = session.name
-        state["manifest_id"] = session.manifest.id if session.manifest else None
-        state["dry_run"] = dry_run
-        return state
-
-    @mcp.tool(
-        description="Walk for a duration: vx forward m/s, vy left m/s, wz rad/s (+ = left)."
-        + _alias("robot_run_verb(verb='move')")
-    )
-    async def duck_set_velocity(
-        vx: float = 0.15, vy: float = 0.0, wz: float = 0.0, duration_s: float = 1.0
-    ) -> dict[str, Any]:
-        return await me().run("walk", {"vx": vx, "vy": vy, "wz": wz, "duration_s": duration_s})
-
-    @mcp.tool(
-        description="Stop the duck immediately. Always allowed."
-        + _alias("robot_run_verb(verb='stop')")
-    )
-    async def duck_stop() -> dict[str, Any]:
-        return await me().run("stop", {})
-
-    @mcp.tool(
-        description="Make a duck sound; optional text is mapped to one of the robot's seven tones."
-        + _alias("robot_run_verb(verb='quack')")
-    )
-    async def duck_quack(text: str | None = None) -> dict[str, Any]:
-        return await me().run("quack", {"text": text})
-
-    @mcp.tool(
-        description="Load a .duck file: adopt its allowlist and budgets; get its instructions."
-        + _alias("robot_load_duckfile")
-    )
-    async def duck_load_duckfile(path: str) -> dict[str, Any]:
-        return me().load(path)
-
     return mcp, fleet
 
 
@@ -592,10 +512,11 @@ def build_server(
 
 
 def serve(
-    transport: str | None = None,
     duckfile: str | None = None,
     seed: int | None = None,
     address: str | None = None,
+    camera_url: str | None = None,
+    token: str | None = None,
     dry_run: bool = False,
     yes: bool = False,
     *,
@@ -611,8 +532,8 @@ def serve(
         resolve_robot,
     )
 
-    if robots and (robot or transport):
-        raise SystemExit("choose one: --robots name=<adapter>:<backend>,... or --robot/--transport")
+    if robots and robot:
+        raise SystemExit("choose one: --robots name=<adapter>:<backend>,... or --robot")
     probe: DuckFile | None = None
     default = None
     if duckfile:
@@ -625,9 +546,7 @@ def serve(
         if isinstance(probe.frontmatter.robots, str):
             default = probe.frontmatter.robots
     specs: list[RobotSpec] = (
-        parse_robots(robots)
-        if robots
-        else [resolve_robot(robot, transport, duck_default=default, warn=warn)]
+        parse_robots(robots) if robots else [resolve_robot(robot, duck_default=default)]
     )
     manifests = {spec.name or describe(spec).id: describe(spec) for spec in specs}
     if probe is not None:
@@ -645,7 +564,13 @@ def serve(
         stream=sys.stderr, level=logging.INFO, format="quackd-mcp %(levelname)s %(message)s"
     )
     adapters = {
-        name: make_adapter(spec, seed=seed if seed is not None else 0, address=address)
+        name: make_adapter(
+            spec,
+            seed=seed if seed is not None else 0,
+            address=address,
+            camera_url=camera_url,
+            token=token,
+        )
         for name, spec in zip(manifests, specs, strict=True)
     }
     mcp, _fleet = build_fleet_server(adapters, duckfile=duckfile, dry_run=dry_run, yes=yes)
