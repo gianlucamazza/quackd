@@ -20,6 +20,8 @@ it). A test proves UNVERIFIED names are only reachable from the experimental bac
 | | `lerobot:real` | 🧪 every LeRobot name VERIFIED at a pinned commit, exercised with a fake arm, never run on an arm (Python 3.12+) | [`quackd/adapters/lerobot/upstream_api.py`](../quackd/adapters/lerobot/upstream_api.py) | |
 | rosbridge | `rosbridge:mock` | ✅ | | [adapters/rosbridge.md](adapters/rosbridge.md) |
 | | `rosbridge:ws` | 🧪 every roslibpy, rosbridge and message name VERIFIED at pinned commits, exercised with fake topics, never run against a bridge | [`quackd/adapters/rosbridge/upstream_api.py`](../quackd/adapters/rosbridge/upstream_api.py) | |
+| Open Duck Mini v2 | `open_duck:sim2d` | ✅ | | [adapters/open_duck.md](adapters/open_duck.md) |
+| | `open_duck:mock` | ✅ | | |
 
 **Flocks** (`--flock`, `flock.roles`) run N in-process views of one simulated world on
 one lockstep clock. The MQTT bus implements the same `Bus` protocol and was exercised

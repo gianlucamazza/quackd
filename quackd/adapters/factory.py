@@ -48,6 +48,14 @@ _ADAPTERS: dict[str, tuple[tuple[str, ...], str, str | None, str | None]] = {
         "quackd[rosbridge]",
         "roslibpy",
     ),
+    # Appended last on purpose: the doctor and list-adapters tables are order-sensitive.
+    # No extra: the client is stdlib, and the robot's own runtime is not installable here.
+    "open_duck": (
+        ("sim2d", "mock"),
+        "✅ built-in: sim2d, mock",
+        None,
+        None,
+    ),
 }
 ADAPTER_NAMES = tuple(_ADAPTERS)
 BACKENDS = {name: info[0] for name, info in _ADAPTERS.items()}

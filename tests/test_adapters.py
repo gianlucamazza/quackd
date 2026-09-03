@@ -147,7 +147,13 @@ async def test_factory_describes_and_makes_adapters() -> None:
     live = await adapter.connect()
     assert live.digest() == static.digest()  # the static description is the real one
     rows = list_adapters()
-    assert [r["name"] for r in rows] == ["microduck", "reachy_mini", "lerobot", "rosbridge"]
+    assert [r["name"] for r in rows] == [
+        "microduck",
+        "reachy_mini",
+        "lerobot",
+        "rosbridge",
+        "open_duck",
+    ]
     assert rows[0]["installed"] and "sim2d" in rows[0]["backends"]
     assert rows[1]["extra"] == "quackd[reachy]" and "sdk" in rows[1]["backends"]
 
