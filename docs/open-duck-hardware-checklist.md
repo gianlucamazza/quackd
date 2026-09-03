@@ -54,15 +54,22 @@ python /opt/quackd/quackd_duck_bridge.py serve --fake --seconds 120 \
 `--fake` paints a duck's eye view with a ball on the floor, so `quackd run open-duck-scout`
 should complete against it. If it does, everything except the robot itself works.
 
-On your laptop, through an ssh tunnel because the bridge binds loopback:
+On your laptop, forwarding **both** ports, because the bridge binds loopback and so does the
+camera. Export the token `install.sh` wrote, or pass `--token`:
 
 ```bash
-ssh -L 9871:127.0.0.1:9871 your-pi
+ssh -L 9871:127.0.0.1:9871 -L 9872:127.0.0.1:9872 your-pi
+export QUACKD_DUCK_TOKEN="$(ssh your-pi sudo cat /etc/quackd/duck-bridge.token)"
 quackd doctor --robot open_duck:bridge --address tcp://127.0.0.1:9871
-quackd list-verbs --robot open_duck:bridge
 ```
 
+`doctor` with an address connects and prints what your duck actually reported: its
+capabilities, which verbs it does and does not have, and whether the loop is healthy. Read
+that against what you soldered. `quackd list-verbs` will not do: it reads the static
+description of a fully built duck, not yours.
+
 > Abort on a protocol mismatch. Update whichever side is older rather than working around it.
+> Abort if it asks for a token you do not have: the installer wrote one on the robot.
 
 ## 5. Measure the link before you trust it
 
@@ -79,10 +86,12 @@ The deadman zeroes the duck after 300 ms of silence.
 ## 6. Dry run, feet still off the ground
 
 ```bash
-quackd run open-duck-lookout --robot open_duck:bridge --address tcp://127.0.0.1:9871 --dry-run
+quackd run open-duck-lookout --robot open_duck:bridge --address tcp://127.0.0.1:9871 \
+    --camera-url http://127.0.0.1:9872/snapshot.jpg --dry-run
 ```
 
-Verbs run, nothing moves.
+Verbs run, nothing moves. `--camera-url` goes on this side too when you are tunnelling: the
+bridge advertises a URL from its own point of view, which is not routable from your laptop.
 
 ## 7. The head only, feet still off the ground
 
@@ -91,16 +100,19 @@ quackd run open-duck-lookout --robot open_duck:bridge --address tcp://127.0.0.1:
 ```
 
 Nothing in this task's allowlist moves a leg. If you started the daemon without
-`--enable-head`, `gaze` will not exist at all and the task will report what it can see
-without moving, which is a perfectly good first result.
+`--enable-head`, `gaze` does not exist and the task drops it and reports what it can see
+without moving, which is a perfectly good first result and the one to prefer. Only add
+`--enable-head` once everything else works.
 
 > Abort on any servo whine, buzzing or stall. Head control is upstream-flagged as
 > experimental and it can break the head.
 
 ## 8. Walk in place, feet still off the ground
 
-Watch `loop_hz` in `quackd doctor` while it runs. Anything below 35 Hz fails the heartbeat
-on purpose, because a starved Pi walks badly with no other symptom.
+Watch `loop_hz` while it runs, either in a second terminal with
+`quackd doctor --robot open_duck:bridge --address tcp://127.0.0.1:9871` or in the run's own
+`report_state`. Anything below 35 Hz fails the heartbeat on purpose, because a starved Pi
+walks badly with no other symptom.
 
 ## 9. Test the deadman before you need it
 
@@ -114,14 +126,16 @@ With the duck walking in place on the stand, pull your laptop's Wi-Fi.
 Clear floor, hand on the power switch:
 
 ```bash
-quackd run open-duck-scout --robot open_duck:bridge --address tcp://127.0.0.1:9871 --max-steps 10
+quackd run open-duck-scout --robot open_duck:bridge --address tcp://127.0.0.1:9871 \
+    --camera-url http://127.0.0.1:9872/snapshot.jpg --max-steps 10
 ```
 
 ## What to send
 
 Open an issue with the Open Duck hardware report template, and attach:
 
-1. `quackd doctor --robot open_duck:bridge --address ...`, in full.
+1. `quackd doctor --robot open_duck:bridge --address ...`, in full. It carries what your
+   duck reported at connect, which is how we know what was actually tested.
 2. `python /opt/quackd/quackd_duck_bridge.py check`, in full. It carries your capabilities
    and limits, which is how we know what was actually tested.
 3. `git rev-parse HEAD` inside your `Open_Duck_Mini_Runtime` checkout, and which walk policy

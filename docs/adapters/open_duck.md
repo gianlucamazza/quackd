@@ -101,8 +101,9 @@ Safety, in the order it matters:
   `ssh -L 9871:127.0.0.1:9871 your-pi`. This port walks a robot.
 - The only e-stop is the power switch.
 
-Try the whole thing with no robot: `python quackd_duck_bridge.py serve --fake --seconds 60`,
-then point quackd at it. Install notes: [`bridge/open_duck/README.md`](../../bridge/open_duck/README.md).
+Every flag, the token, the ports, `--fake`, and how to get these files onto a Pi at all:
+[`bridge/open_duck/README.md`](../../bridge/open_duck/README.md). The order to bring a real
+duck up in: [open-duck-hardware-checklist.md](../open-duck-hardware-checklist.md).
 
 ### The camera is a second process
 
@@ -125,7 +126,17 @@ and failing. Two processes cannot own one camera either: if `expression_features
 true the robot's own runtime owns it and `camd` refuses to start rather than fight for the
 device. Set that flag false and let quackd serve frames.
 
-    python quackd_duck_camd.py --fake --size 256    # a duck's eye view, no camera needed
+### What is honestly degraded on hardware
+
+The manifest is honest about what exists. These are the places where a verb exists and does
+less than its name suggests, and they are worth knowing before you write a task.
+
+| Thing | What actually happens |
+|---|---|
+| `say`, `quack` | The only channel the bridge has to the speaker is upstream's random-sound button, so the mood quackd picks is logged but selects nothing. A duck says *something*, not the right thing |
+| a fall | Nothing detects one. `posture` reads `unknown`, never `standing`, and the `not_fallen` precondition never fires on hardware. Watch the duck yourself |
+| a battery | Nothing reports one, so `abort_when: battery below N%` parses and can never fire |
+| `gaze` | Off unless the daemon was started with head control enabled. Whether the head slots move at all without upstream's mode button is unverified, and quackd will not press it |
 
 ## VERIFIED (read from upstream source on 2026-09-03)
 
