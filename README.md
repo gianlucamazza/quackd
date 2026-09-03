@@ -37,6 +37,33 @@ Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **
 
 <br>
 
+## Table of Contents
+
+- [Try it in 60 seconds](#try-it-in-60-seconds)
+- [Why?](#why)
+- [What is this?](#what-is-this)
+- [How it works (the simple version)](#how-it-works-the-simple-version)
+- [Example](#example)
+- [What it can do today, and where it is going](#what-it-can-do-today-and-where-it-is-going)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [The `.duck` file](#the-duck-file)
+  - [Pilot it from Claude (MCP)](#pilot-it-from-claude-mcp)
+- [Any small robot](#any-small-robot)
+- [Flock mode (simulator)](#flock-mode-simulator)
+- [Configuration](#configuration)
+- [Performance](#performance)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Safety](#safety)
+- [Acknowledgements](#acknowledgements)
+- [Star history](#star-history)
+- [License](#license)
+
+<br>
+
 ## Try it in 60 seconds
 
 ```bash
