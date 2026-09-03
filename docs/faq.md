@@ -62,6 +62,53 @@ an HTTP or SSE transport, a long-lived process, a reachable address and authenti
 before a phone could talk to it. Roadmap, not shipped. The details are in
 [mcp.md](mcp.md#why-not-from-my-phone-yet).
 
+**Is control text-only?** Yes, from you — a `--goal` string, a `.duck` file, or a chat
+message over MCP; there's no voice or GUI input. The loop isn't text-only end to end,
+though: cloud providers also read the camera frame as an image each turn, and whatever
+the model decides is always one of a fixed set of verbs (`walk_to`, `kick`, `quack`, …),
+never a freeform command sent to the motors.
+
+**Do I need to be near the robot to control it?** No — proximity isn't the constraint,
+network reachability is. `robotd`'s socket only ever accepts connections from processes
+on the robot's own computer, so reaching it from anywhere else always goes through a
+network hop first (the same Wi-Fi, a VPN, or an SSH forward, as in the `Windows?` answer
+above), and that works the same from across the room or across the world. Latency is what
+actually matters: the deadman expects `robot.move` roughly every 100 ms, so a slow or
+flaky link can stop the robot outright, regardless of physical distance.
+
+**Is quackd production-ready?** No — it's a research prototype built around one trusted
+local operator, not a hardened multi-user product. There's no authentication layer;
+`.duck` files with a `flock:` block are refused over MCP for exactly that reason ("one
+pilot, a flock needs a coordinator"), and nothing arbitrates two sessions driving the same
+robot at once. Every real-hardware transport is experimental and unverified end to end
+([adapter-status.md](adapter-status.md)); the CLI and MCP server are both thin callers of
+the same executor and verb registry, so a real client like a phone app would mean adding a
+network-reachable server and auth on top, not rewriting the core.
+
+**Can I control who's allowed to pilot my robot?** Not through quackd — it adds no login
+or accounts of its own, so access is whatever your OS and network already enforce.
+`robotd`'s socket can't be reached off the robot's own computer unless something bridges
+it, so the real gate is SSH's authentication (and your Wi-Fi's) once you do that, not
+quackd's; `quackd announce`/`discover` do broadcast a robot's identity, unauthenticated,
+to anyone on the LAN ([lan.md](lan.md)), though that's identity only, not a way to drive
+it. On hardware, the physical gamepad always preempts remote commands regardless of any of
+this ([safety.md](safety.md)).
+
+**What stops the model itself from doing something dangerous?** The executor, not the
+model's judgment: every verb call is checked against the loaded `.duck`'s allowlist,
+budgets and confirm gates before anything is sent, and machine-enforced `abort_when` rules
+and preconditions (not fallen, not sitting) run right after — a refusal is enforced code,
+not a request the model can talk its way around. That's still only the software layer; on
+hardware the robot's own controller keeps the final word regardless (fall detection,
+thermal clamps, and on the Microduck a deadman) — see [safety.md](safety.md).
+
+**Does my data ever leave my machine?** Only if you choose a cloud provider. Claude,
+OpenAI, Gemini and Grok each send the camera frame and prompt to that provider's API over
+the network, under its own terms; the `fake` pilot and any local model (`ollama`, `vllm`,
+`llamacpp`, `lmstudio`) never do and need no API key, though a local model is still served
+over its own local HTTP endpoint, not literally air-gapped. See
+[local-llms.md](local-llms.md).
+
 **Can quackd drive something that is not a duck?** Since 0.4, yes: a robot is an adapter
 that returns a manifest, and the verbs come from the manifest. `quackd list-adapters`
 shows the four that ship (Microduck, Reachy Mini, a LeRobot arm, any base over
