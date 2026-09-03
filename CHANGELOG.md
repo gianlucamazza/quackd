@@ -7,8 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Open Duck Mini v2 adapter** (`--robot open_duck:sim2d`, `open_duck:mock`): the
+  first robot quackd supports that anyone can build today. It is an open hardware 3D
+  printed biped that walks on its own 50 Hz ONNX policy on a Raspberry Pi Zero 2 W. Its
+  manifest is a strict subset and says so: this robot has no beak, no gripper, no kick
+  policy, no sit policy and no get-up-after-fall policy, so `kick`, `grab`, `sit`, `stand`
+  and `stand_up` are never declared and therefore do not exist for it anywhere. A duck
+  built without a camera or a speaker loses exactly the verbs that need them. Velocities
+  are clamped to the ranges read from the robot's own runtime (0.15 m/s forward, 0.2 m/s
+  sideways, 1.0 rad/s turning), and a fallen duck refuses to move with a message saying a
+  human must stand it up, because nothing quackd can call will.
+
 ### Fixed
 
+- `quackd run` now checks a `.duck` against its robot before connecting, the way
+  `serve-mcp` always has. Pointing a task at a robot that lacks one of its verbs used to
+  reach the agent loop and raise a bare `VerbNotFound` with the robot already connected and
+  an empty run directory already written. It now refuses up front with the validator's own
+  sentence and writes nothing.
 - `mypy` failed on Python 3.12 (the opencv stubs that resolve there type only the array
   overload of `cv2.inRange`, so the tuple bounds in `perception/color_blob.py` matched no
   variant). Bounds are now `uint8` arrays. OpenCV accepts both, so nothing about detection

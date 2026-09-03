@@ -266,11 +266,12 @@ def _run_impl(
     robot: str | None = None,
     robots: str | None = None,
 ) -> None:
-    from quackd.adapters.factory import make_adapter, registry_for
+    from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
     from quackd.agent.providers.base import ProviderError
     from quackd.agent.providers.factory import make_provider
     from quackd.duckfile.parser import DuckParseError, duck_from_goal, load_duck
+    from quackd.duckfile.validate import validate_duck
     from quackd.safety import KillSwitch, allow_all
     from quackd.transport.base import TransportError
 
@@ -284,10 +285,20 @@ def _run_impl(
         if goal is not None:
             safe = [v.name for v in registry_for(spec).verbs() if v.safety_class == "safe"]
             duck = duck_from_goal(goal, safe)
+        assert duck is not None
+        # Refuse before connecting, with the validator's words. `serve-mcp` has always done
+        # this; `run` never did, and reached the loop's tool_schemas and died on a raw
+        # VerbNotFound with the robot already connected and a run directory already made.
+        problems = validate_duck(duck, [describe(s) for s in specs])
     except (DuckParseError, TransportError) as e:
         _fail(str(e))
         return
-    assert duck is not None
+    if problems:
+        _fail(
+            f"{duck.name} cannot run on {', '.join(s.key for s in specs)}: "
+            + "; ".join(p.message for p in problems)
+        )
+        return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return

@@ -240,3 +240,66 @@ def test_run_unknown_provider_is_a_clean_error(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert "unknown provider" in result.output
+
+
+def test_run_refuses_a_duck_the_robot_cannot_do(tmp_path: Path) -> None:
+    """`serve-mcp` always validated the contract against the robot; `run` never did, and
+    died halfway in with a raw VerbNotFound once the robot was already connected."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "find-and-kick",
+            "--provider",
+            "fake",
+            "--robot",
+            "open_duck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 1
+    flat = " ".join(result.output.split())  # rich wraps the line
+    assert "find-and-kick cannot run on open_duck:mock" in flat
+    assert "requires kick, but open-duck-01 (open-duck-mini-v2) does not provide it" in flat
+    assert "Traceback" not in result.output
+    assert list(tmp_path.iterdir()) == []  # refused before a run directory was made
+
+
+def test_run_refuses_a_kick_duck_on_a_head_too(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "find-and-kick",
+            "--provider",
+            "fake",
+            "--robot",
+            "reachy_mini:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 1 and "does not provide it" in result.output
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_run_still_starts_when_the_duck_fits(tmp_path: Path) -> None:
+    """The guard must refuse the impossible without over-refusing the possible."""
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--robot",
+            "microduck:mock",
+            "--runs-dir",
+            str(tmp_path),
+            "--no-gif",
+        ],
+    )
+    assert result.exit_code == 0, result.output
