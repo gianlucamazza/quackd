@@ -9,7 +9,7 @@ Thanks for taking a toy duck seriously. Two kinds of contribution matter most: *
 git clone https://github.com/rokbenko/quackd && cd quackd
 uv sync --extra dev            # add --extra anthropic etc. if you want a real provider
 uv run pre-commit install
-uv run pytest                  # 445 tests, about 80 s, no network, no keys
+uv run pytest                  # the whole suite, about 80 s, no network, no keys
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
 

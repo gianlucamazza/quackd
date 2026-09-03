@@ -151,6 +151,18 @@ def _prose(text: str) -> str:
     return re.sub(r"```.*?```", "", text, flags=re.S)
 
 
+def _living_docs() -> list[Path]:
+    """Every document that describes quackd as it is now.
+
+    CHANGELOG, PLAN and the ADRs and design notes are excluded: they record what was true
+    when they were written, and correcting a number in them would be falsifying history."""
+    return [
+        path
+        for path in sorted(REPO.glob("*.md")) + sorted((REPO / "docs").rglob("*.md"))
+        if path.name not in ("CHANGELOG.md", "PLAN.md") and not {"design", "adr"} & set(path.parts)
+    ]
+
+
 @pytest.mark.parametrize("name", ["README.md", "docs/adapters.md", "docs/faq.md", "LAUNCH.md"])
 def test_no_document_claims_the_wrong_number_of_adapters(name: str) -> None:
     """Half of the 0.5 documentation audit was stale counts that no test could see.
@@ -182,15 +194,24 @@ def test_the_readme_starter_table_lists_every_bundled_duck() -> None:
     assert not missing, f"README does not mention: {missing}"
 
 
+def test_no_living_document_quotes_an_exact_test_count() -> None:
+    """CONTRIBUTING said 445 while 451 ran, and no test could see it.
+
+    Collecting the suite to check a number would cost every run eight seconds for a fact
+    nobody reads, so the rule is simply not to quote one outside the history files, where
+    a count is a record of what was true on the day and must not be rewritten."""
+    for path in _living_docs():
+        for claim in re.findall(r"\b\d{2,4} tests?\b", _prose(path.read_text(encoding="utf-8"))):
+            pytest.fail(f"{path.name} quotes {claim!r}; say 'the whole suite' and let CI count")
+
+
 def test_no_document_still_promises_a_removal_that_happened() -> None:
     """0.4 said `--transport` and the duck_* tools go in 0.5. They did, so nothing should
     still be promising it, and nothing should still be offering them."""
     from quackd.mcp_server import TOOL_NAMES
 
     assert not [n for n in TOOL_NAMES if n.startswith("duck_")]
-    for path in sorted(REPO.glob("*.md")) + sorted((REPO / "docs").rglob("*.md")):
-        if path.name in ("CHANGELOG.md", "PLAN.md") or {"design", "adr"} & set(path.parts):
-            continue  # history and decisions record what was true when written
+    for path in _living_docs():
         text = _prose(path.read_text(encoding="utf-8"))
         assert "--transport" not in text, f"{path.name} still documents --transport"
         for promise in ("go away in 0.5", "gone in 0.5", "are removed in 0.5", "for one release"):
