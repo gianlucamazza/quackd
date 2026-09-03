@@ -173,6 +173,13 @@ therefore costs zero sim time, and with `--provider fake` and a fixed seed a flo
 reproducible. Wall clock heartbeat scheduling is the one nondeterministic input, and it
 only influences failure path timing, as in solo runs.
 
+## Which robots can join
+
+Flock mode knows the **Microduck** and the **Reachy Mini**. Any other adapter is refused
+when the run starts, with the names it does know. An Open Duck Mini cannot join a flock
+yet, and that is a limit of `quackd/flock/runner.py`, not of the robot: extending it is
+future work rather than a hardware problem.
+
 ## Status and future work
 
 Sim only. Nothing multi robot has run on hardware, and the acoustic channel stays
@@ -182,5 +189,6 @@ the real data). Two choreographies ship: `flock-kick` (ducks) and
 and ground truth checks. An MQTT bus implementing the same `Bus` protocol exists since 0.4
 ([lan.md](lan.md)), library only and tested on a fake broker; a flock across machines
 also needs a clock across machines, which is future work, as are hardware flocks once
-Microducks ship. See [adapter-status.md](adapter-status.md) for the wider honesty
+Microducks ship, and a flock of Open Ducks additionally needs the runner to learn a
+third body. See [adapter-status.md](adapter-status.md) for the wider honesty
 table.

@@ -124,7 +124,7 @@ is refused at runtime and the LLM is told so.
   `aborted` (heartbeat, kill switch, enforced `abort_when`). The robot is stopped in every
   case and its adapter closed.
 - `--max-steps` on the CLI overrides `budgets.max_steps` for one run.
-- `--dry-run` executes read-only verbs (`get_frame`) and logs everything else without
+- `--dry-run` executes read-only verbs (`observe`, alias `get_frame`, and `report_state`) and logs everything else without
   sending an intent.
 
 ## Validation

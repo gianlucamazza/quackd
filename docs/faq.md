@@ -77,7 +77,7 @@ actually matters: the deadman expects `robot.move` roughly every 100 ms, so a sl
 flaky link can stop the robot outright, regardless of physical distance.
 
 **Is quackd production-ready?** No — it's a research prototype built around one trusted
-local operator, not a hardened multi-user product. There's no authentication layer;
+local operator, not a hardened multi-user product. There's almost no authentication anywhere;
 `.duck` files with a `flock:` block are refused over MCP for exactly that reason ("one
 pilot, a flock needs a coordinator"), and nothing arbitrates two sessions driving the same
 robot at once. Every real-hardware transport is experimental and unverified end to end
@@ -85,14 +85,18 @@ robot at once. Every real-hardware transport is experimental and unverified end 
 the same executor and verb registry, so a real client like a phone app would mean adding a
 network-reachable server and auth on top, not rewriting the core.
 
-**Can I control who's allowed to pilot my robot?** Not through quackd — it adds no login
-or accounts of its own, so access is whatever your OS and network already enforce.
+**Can I control who's allowed to pilot my robot?** Barely, and only on one body. quackd
+adds no login or accounts, so access is mostly whatever your OS and network enforce.
 `robotd`'s socket can't be reached off the robot's own computer unless something bridges
-it, so the real gate is SSH's authentication (and your Wi-Fi's) once you do that, not
-quackd's; `quackd announce`/`discover` do broadcast a robot's identity, unauthenticated,
-to anyone on the LAN ([lan.md](lan.md)), though that's identity only, not a way to drive
-it. On hardware, the physical gamepad always preempts remote commands regardless of any of
-this ([safety.md](safety.md)).
+it, so the real gate there is SSH's authentication (and your Wi-Fi's), not quackd's;
+`quackd announce`/`discover` do broadcast a robot's identity, unauthenticated, to anyone on
+the LAN ([lan.md](lan.md)), though that's identity only, not a way to drive it. The one
+exception is the Open Duck bridge, which quackd itself ships: it binds loopback, and if a
+token file is configured it checks one with `hmac.compare_digest` before accepting a
+handshake (`--token`, or `QUACKD_DUCK_TOKEN`). Its camera server has no authentication at
+all, so tunnel it. On a Microduck the physical gamepad preempts remote commands; on an Open
+Duck it does not, because quackd's daemon *replaces* the gamepad the walk loop reads, which
+makes the power switch the only thing that always wins ([safety.md](safety.md)).
 
 **What stops the model itself from doing something dangerous?** The executor, not the
 model's judgment: every verb call is checked against the loaded `.duck`'s allowlist,

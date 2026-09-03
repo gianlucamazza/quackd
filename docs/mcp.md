@@ -9,7 +9,7 @@ Works with the built-in simulator out of the box — no hardware, no extra insta
 
 ## Tools
 
-Six fleet tools (0.4). `robot` is the name from `--robots name=<adapter>:<backend>`; omit
+Six tools. `robot` is the name from `--robots name=<adapter>:<backend>`; omit
 it (or pass `null`) to address the default robot, which is the only robot when there is
 one, else the first Microduck, else the first declared.
 
@@ -19,22 +19,14 @@ one, else the first Microduck, else the first declared.
 | `robot_list_verbs(robot?)` | That robot's verbs from its own manifest: params, safety class, `canonical` name and `aliases`, whether it is `core`, and whether its current contract allows it. |
 | `robot_run_verb(robot?, verb, params?)` | Run any verb through that robot's executor (`search_scan`, `go_to` or its alias `walk_to`, `kick`, `gaze`, `express`, …). Refusals come back as `ok: false`, and a verb the manifest does not list is a refusal too. |
 | `robot_observe(robot?)` | The `observe` verb through the executor (it counts against the budget), returning the camera frame as a PNG image plus a one-line detection summary. |
-| `robot_say(robot?, text)` | The `say` verb: tones on a Microduck, an expressive sound on a Reachy Mini. A robot without a `sound` intent refuses with `ok: false`. |
+| `robot_say(robot?, text)` | The `say` verb. No robot here has text to speech, so it degrades: one of seven tones on a Microduck, an expressive sound on a Reachy Mini, one of the duck's own sounds on an Open Duck. A robot without a `sound` intent refuses with `ok: false`. |
 | `robot_load_duckfile(robot?, path)` | Adopt a `.duck` contract on one robot: its `requires` (or, for `duck: 0`, its allowlist) is checked against that robot's manifest first, then allowlist and budgets are enforced for that robot only; the body is returned as instructions. Flock ducks are refused. |
 
-The eight 0.3 tools stay as aliases that target the default robot. Each description ends
-with a deprecation note; they are removed in 0.5.
-
-| Alias | Same as |
-|---|---|
-| `duck_list_verbs` | `robot_list_verbs` on the default robot |
-| `duck_run_verb(name, params)` | `robot_run_verb` on the default robot |
-| `duck_get_frame` | a raw frame plus detections, not through the executor (kept as it was in 0.3) |
-| `duck_get_state` | posture, policy, battery, pose (sim), budget status of the default robot |
-| `duck_set_velocity(vx, vy, wz, duration_s)` | `robot_run_verb(verb="move", ...)` (feeds the robot's deadman for you) |
-| `duck_stop` | `robot_run_verb(verb="stop")`, always allowed |
-| `duck_quack(text?)` | `robot_run_verb(verb="quack", ...)`, a Microduck verb, so a Reachy refuses it |
-| `duck_load_duckfile(path)` | `robot_load_duckfile` on the default robot |
+0.3 shipped eight `duck_*` tools pinned to the default robot. 0.4 kept them as deprecated
+aliases and said they would go in 0.5, and they have. Omit the `robot` argument to address
+the default robot, which is what they did. `duck_get_frame` has no exact replacement by
+design: `robot_observe` does the same job but goes through the executor, so frames are
+budgeted and logged like every other verb.
 
 Without a loaded `.duck`, every verb that is not `dangerous` is allowed and there are no
 budgets. Load one to get the guard rails. Contracts, budgets and abort flags are per
@@ -128,13 +120,40 @@ quackd serve-mcp --dry-run                           # intents are logged, never
 quackd serve-mcp --yes                               # allow confirm-gated verbs (no terminal to ask)
 quackd serve-mcp --robot microduck:jsonrpc --address tcp://127.0.0.1:9870   # real robot, experimental
 quackd serve-mcp --robots duck=microduck:sim2d,reachy=reachy_mini:mock       # a fleet: robot_* tools, one executor each
+quackd serve-mcp --robot open_duck:sim2d                                     # a buildable duck, no hardware needed
 ```
+
+## Driving a real Open Duck Mini from Claude
+
+The one body you can build yourself needs three flags, because its camera is a separate
+HTTP service on the robot and its bridge wants a token. Tunnel both ports rather than
+exposing them (`ssh -L 9871:127.0.0.1:9871 -L 9872:127.0.0.1:9872 your-pi`), then:
+
+```json
+{
+  "mcpServers": {
+    "duck": {
+      "command": "uvx",
+      "args": ["quackd", "serve-mcp",
+               "--robot", "open_duck:bridge",
+               "--address", "tcp://127.0.0.1:9871",
+               "--camera-url", "http://127.0.0.1:9872/snapshot.jpg"],
+      "env": {"QUACKD_DUCK_TOKEN": "the token from /etc/quackd/duck-bridge.token"}
+    }
+  }
+}
+```
+
+The verbs Claude is offered come from what that duck reports at connect, not from the
+description, so a duck with no camera or no head simply has fewer. Nothing has been run
+against a real duck: [adapters/open_duck.md](adapters/open_duck.md) and its
+[bring-up checklist](open-duck-hardware-checklist.md).
 
 ## The two-minute script
 
 1. `claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d` (≈20 s, first run downloads quackd)
 2. Open Claude Code in any folder and ask: **"Use the quackd tools. List the verbs, grab a frame, then find the ball and kick it. Quack when you're done."**
-3. Watch it call `robot_list` → `robot_list_verbs` → `robot_observe` → `robot_run_verb("search_scan")` → `robot_run_verb("go_to")` → `robot_run_verb("kick")` → `robot_say` (or the `duck_*` spellings, which do the same thing).
+3. Watch it call `robot_list` → `robot_list_verbs` → `robot_observe` → `robot_run_verb("search_scan")` → `robot_run_verb("go_to")` → `robot_run_verb("kick")` → `robot_say`.
 4. Ask: **"Load ducks/patrol-and-quack.duck and follow it."** — now the allowlist and budgets apply, and the model has the task body as instructions.
 
 ## Safety in an MCP session
@@ -146,4 +165,4 @@ quackd serve-mcp --robots duck=microduck:sim2d,reachy=reachy_mini:mock       # a
   and disconnects the ones that did, rather than fronting a fleet with a hole in it.
 - Confirm-gated verbs are **refused** unless the server was started with `--yes`, because
   there is no terminal to ask on. The refusal text tells the model why.
-- On hardware, the gamepad wins: upstream arbitrates authority, quackd does not fight it.
+- On a Microduck the gamepad wins: upstream arbitrates authority and quackd does not fight it. On an Open Duck it does not, because quackd's own daemon replaces the gamepad the walk loop reads, so there the power switch is the only thing that always wins.

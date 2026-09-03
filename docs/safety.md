@@ -103,7 +103,12 @@ widen it. **You are responsible for your robot.**
   it and upstream's script at the same time.
 - The bridge binds loopback and wants a token, because a port that walks a robot on a shared
   network is a hazard. Prefer `ssh -L 9871:127.0.0.1:9871 your-pi`.
+- The camera is a second process (`quackd_duck_camd.py`) serving one JPEG over HTTP with
+  **no authentication at all**. It binds loopback and warns if you bind it wider, because
+  it shows whatever the robot can see. Tunnel it rather than exposing it.
 - The only e-stop is the power switch.
+- The order to bring one up in, feet off the ground until step 8, with an abort condition
+  at every step: [open-duck-hardware-checklist.md](open-duck-hardware-checklist.md).
 
 ## On other bodies
 

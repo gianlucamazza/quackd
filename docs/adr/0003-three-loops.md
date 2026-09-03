@@ -1,6 +1,6 @@
 # ADR-0003: Three loops, three rates, three owners
 
-**Status:** accepted · **Date:** 2026-08-28
+**Status:** accepted · **Date:** 2026-08-28 · Amended by [ADR-0024](0024-open-duck-mini.md) (0.5: on an Open Duck Mini v2, whose runtime has no network control API, quackd's own daemon hosts the reflex loop. It still writes none of the control code, and feeds that loop the same command vector a gamepad would, so "quackd never touches this" below should be read as "quackd never writes this")
 
 ## Context
 

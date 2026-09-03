@@ -7,7 +7,7 @@ that has an adapter. This page is the map; the ADRs in [`adr/`](adr/) are the re
 
 | Loop | Rate | Where | Owner |
 |---|---|---|---|
-| Reflexes | the body's own (50 Hz on a Microduck) | below quackd: `robotd` on a Microduck, the daemon on a Reachy Mini, the position controller on an arm, the driver on a base | the robot's own controllers: RL policies (ONNX) for balance, gait and stand-up on the Microduck, a learned pick policy on the arm when one is loaded. quackd never touches this layer on any body. |
+| Reflexes | the body's own (50 Hz on both ducks) | below quackd: `robotd` on a Microduck, quackd's own bridge daemon on an Open Duck, the daemon on a Reachy Mini, the position controller on an arm, the driver on a base | the robot's own controllers: RL policies (ONNX) for balance, gait and stand-up on both ducks, a learned pick policy on the arm when one is loaded. quackd writes none of this control code. Since 0.5 it does *host* the loop on one body, the Open Duck Mini, whose runtime has no network API to talk to, and even there quackd only supplies the seven numbers a gamepad would ([ADR-0024](adr/0024-open-duck-mini.md)). |
 | Steering | 5–20 Hz | quackd process | perception + composite verbs. `go_to` (alias `walk_to`) closes the approach loop on detections. |
 | Deliberation | ~0.2–1 Hz | LLM | reads frame summary + state + last result, picks one **verb**, judges success. |
 
@@ -61,6 +61,7 @@ sequenceDiagram
 | `quackd/perception/` | `Detection` + `Detector`; the HSV colour-blob default; the lazy YOLO extra. |
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
 | `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: six `robot_*` tools through one executor per robot, the eight `duck_*` tools kept as aliases of the default robot. |
+| `bridge/open_duck/` | **The only quackd code that runs on a robot.** Two daemons for an Open Duck Mini v2's Raspberry Pi: the bridge, which is upstream's own walk loop with the gamepad it reads replaced by a socket, and the camera server, which serves one JPEG over HTTP. Standard library plus numpy, never imported by quackd, shipped in the sdist and never in the wheel ([ADR-0024](adr/0024-open-duck-mini.md)). |
 | `quackd/lan/` | LAN discovery over zeroconf (`_quackd._tcp.local.`): a pure TXT wire format, `announce`, `discover`; behind `quackd[lan]` ([lan.md](lan.md)). |
 | `quackd/flock/` | Many robots on one task: the in-process `Bus`, the typed messages, the Contract Net `Auction` and the role auction, the deterministic coordinator, the scripted member FSM, the one-call planner and the runner that judges from ground truth ([flock.md](flock.md)). |
 | `quackd/flock/mqtt_bus.py` | The flock `Bus` protocol over an MQTT broker, library only; the in-process bus stays the default. |
