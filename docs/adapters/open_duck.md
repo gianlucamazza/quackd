@@ -6,6 +6,10 @@ yourself today, and the reason this adapter exists. The `sim2d` and `mock` backe
 offline; the `bridge` backend talks to a daemon quackd ships for the duck's Pi, and has
 **never been run against a physical duck by us**.
 
+Everything else, including every LLM call, runs off this Pi entirely: on your laptop or in
+the cloud, talking to the two daemons below over the network (see the
+[hardware checklist](../open-duck-hardware-checklist.md) for the exact steps).
+
 Upstream: [apirrone/Open_Duck_Mini](https://github.com/apirrone/Open_Duck_Mini) (the design,
 Apache-2.0) and
 [apirrone/Open_Duck_Mini_Runtime](https://github.com/apirrone/Open_Duck_Mini_Runtime) (the
@@ -37,6 +41,7 @@ This matters more than what it can, and it is why the manifest is short.
 | `sit`, `stand` | no sit policy exists |
 | `stand_up` | **no get-up-after-fall policy exists.** A fallen v2 duck needs a human |
 | a battery abort | nothing in the runtime reports a battery percentage |
+| obstacle avoidance | no depth sensor in the official build, and quackd does not read one yet even where it exists (the Microduck's own TOF stream is unused too); the only sensing is a colour camera, so the duck steers toward or away from a detected target and avoids nothing else |
 
 These verbs are not gated off. They are never declared, so they do not exist for this robot
 in the registry, in the MCP tool list, in `.duck` validation or in the prompt. A task that

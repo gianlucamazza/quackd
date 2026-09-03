@@ -16,6 +16,10 @@ turn; composites never call the LLM; verbs send *intents*, never joint targets; 
 adapter owns time, so the steering loop runs at sim speed in the simulator and in real
 time on hardware without changing verb code. ([ADR-0003](adr/0003-three-loops.md))
 
+None of this needs to run on the robot's own computer. The only quackd code that ever runs
+on a robot is the Open Duck Mini's relay daemon (`bridge/open_duck/`, see Modules below),
+and it carries no model or perception code of its own.
+
 Since 0.4 the robot side is an **adapter** that declares a **manifest**: what body it has,
 which intents and sensors, which verbs. The registry, the tool list, the allowlist universe
 and the system prompt are all built from that manifest at connect time; a verb that is not

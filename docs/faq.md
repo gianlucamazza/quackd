@@ -27,6 +27,25 @@ writes its tool call as plain JSON is still understood. Details: [local-llms.md]
 turns; every provider gets a text line like `ball at bearing 12° left, ~0.80 m` from the
 detector. Composite verbs steer on detections at 10 Hz and never wait for the model.
 
+**Does the robot need a powerful onboard computer?** No. quackd's own process, the part
+that calls the LLM and runs the detector, never runs on the robot itself — you run
+`quackd run` on a laptop or a server, a network hop away, and it talks to the robot (or the
+simulator) from there. The Open Duck Mini's official target, a Raspberry Pi Zero 2 W, only
+ever runs its existing 50 Hz walk policy plus a small relay daemon that does run on the Pi
+but does no perception and no inference of its own, just enough to swap the gamepad for a
+socket ([`bridge/open_duck/`](../bridge/open_duck/README.md)). The Microduck's onboard
+computer works the same way, through `robotd`. Nothing here needs an NPU or a bigger board
+to keep up, because nothing model-shaped runs on the robot's own board in the first place.
+
+**Does quackd use TOF or another depth sensor for obstacle avoidance?** Not yet. The only
+sensing input today is a single colour camera: an HSV threshold (or optionally YOLO) gives
+a bearing and an apparent-size distance to one named target, and `go_to` steers toward it —
+there's no depth data, no occupancy grid and no general obstacle avoidance. The manifest
+schema has a generic `tof` sensor slot for future adapters
+([manifest-spec.md](manifest-spec.md)), and the Microduck's own `tofd` depth stream isn't
+read yet either ([adapter-status.md](adapter-status.md)); the Open Duck Mini's official
+build has no depth sensor at all.
+
 **How do I tune the detector for a real orange ball?** `ColorBlobDetector` takes
 `targets=(Target("ball", HSVRange(h_lo, h_hi, s_lo, v_lo), size_m=radius, round=True), …)`
 in OpenCV HSV (H 0–180). Photograph the ball under your light, sample its hue, give ±8, and

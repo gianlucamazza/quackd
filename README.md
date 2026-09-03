@@ -246,6 +246,8 @@ Five robots, and one table for how far each one has actually got. The distinctio
 
 Three loops, three rates, three owners. The LLM decides **what**. The steering loop decides **how to get there**. The robot's own controllers do the **moving**: balance on a biped, a pick policy on an arm, the base's driver on a wheeled base.
 
+quackd's own process, deliberation and perception both, runs off the robot itself, on your laptop or in the cloud: the only quackd code that ever runs on a robot's own computer is a thin relay daemon on the Open Duck Mini's Pi, and even that does no perception or inference of its own ([`bridge/open_duck/`](bridge/open_duck/README.md)).
+
 | Loop | Rate | Where | Who |
 |---|---|---|---|
 | Reflexes | the body's own (50 Hz on both ducks) | below quackd: `robotd` on a Microduck, quackd's own bridge daemon on an Open Duck, the daemon of a Reachy Mini, the position controller of an arm, the driver of a base | the robot's own controllers: RL policies (ONNX) for balance, gait and stand up on both ducks, a learned pick policy on the arm when one is loaded. quackd writes none of this control code. On the Open Duck it does host the loop, because that robot has no network API to talk to, and even there the command it feeds in is the same seven numbers a gamepad would send (ADR-0024) |
