@@ -129,6 +129,11 @@ def duck_from_goal(goal: str, allow: list[str]) -> DuckFile:
     body = (
         f"# Task\n{goal}\n\n## Strategy\n"
         "Use the available verbs. Look before you act (`observe` or `search_scan`), prefer "
-        "composite verbs like `go_to`, and verify with a fresh frame before declaring success."
+        "composite verbs like `go_to`, verify with a fresh frame, then `remember` one fact and "
+        "declare success.\n\n"
+        "## Memory\n"
+        "Before you declare success or failure, call `remember` once with one short fact a "
+        "future run can use (where something was, what worked, what to avoid), unless the "
+        "prompt already remembers it. It costs no step."
     )
     return DuckFile(frontmatter=frontmatter, body=body, path="<goal>")

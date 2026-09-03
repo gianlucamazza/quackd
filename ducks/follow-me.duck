@@ -33,8 +33,16 @@ half a metre away.
 3. `gaze` at them, then `walk_to` again if they have moved.
 4. If you lose them, `search_scan` (they were probably behind you). Quack once when you
    find them again.
-5. After three successful `walk_to` legs, declare success.
+5. After three successful `walk_to` legs, `remember` where the person tends to be, then
+   declare success.
 
 ## Notes
 
 - Never get closer than 0.4 m. If `walk_to` reports a distance under that, `stop` and wait.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: where the person tends to be, or the `stop_distance` that kept you close
+without crowding them. Skip it if the prompt already remembers the same thing. It costs
+no step.

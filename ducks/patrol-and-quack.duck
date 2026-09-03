@@ -32,9 +32,16 @@ anyone you meet.
 2. If a `person` or `pet` detection appears, `quack` twice ("quack quack"), `gaze` toward
    them, then continue the patrol.
 3. Turn (`walk` with `wz` only) when a wall is near or a leg has been going for a while.
-4. After three or more walk legs, declare success.
+4. After three or more walk legs, `remember` where anyone showed up (or that the
+   patrol was quiet), then declare success.
 
 ## Notes
 
 - Keep speeds gentle: `vx` ≤ 0.15. This is a patrol, not a chase.
 - Never walk toward a detected person; announce them from where you are.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: where a person or pet showed up, or where a wall forced you to turn. Skip it
+if the prompt already remembers the same thing. It costs no step.

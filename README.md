@@ -51,6 +51,7 @@ Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **
 - [Usage](#usage)
   * [The `.duck` file](#the-duck-file)
   * [Pilot it from Claude (MCP)](#pilot-it-from-claude-mcp)
+  * [What it remembers](#what-it-remembers)
 - [Any small robot](#any-small-robot)
 - [Flock mode (simulator)](#flock-mode-simulator)
 - [Configuration](#configuration)
@@ -434,6 +435,19 @@ claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d
 ```
 
 Then, in Claude Code or Claude Desktop: *"List the duck's verbs, then find the ball and kick it."* The same allowlists and budgets apply once you load a `.duck`, or start with `--duckfile`. Pass `--robots duck=microduck:sim2d,reachy=reachy_mini:mock` to front a fleet, with one executor, budget and heartbeat per robot. Simulated robots in a fleet each get their own world (a shared arena over MCP is future work), so for two bodies on one task use `quackd run reachy-spots-duck-kicks`. Config for both clients, the six `robot_*` tools, and a two minute script: [docs/mcp.md](docs/mcp.md).
+
+<br>
+
+### What it remembers
+
+A run no longer starts from nothing. Each robot (keyed `adapter:backend`, so the simulator
+and a real duck keep separate files) has a small memory under `~/.quackd/memory/`: the
+notes the pilot saved with the `remember` tool, and one line per earlier run that quackd
+writes itself (outcome, reason, the last few verb results). The newest of both go into the
+system prompt at the next run, and `remember` costs no step. `quackd memory show`, `add`
+and `clear` manage it, and `--no-memory` runs fresh. Over MCP the same file sits behind
+`robot_recall` and `robot_remember`. Details and what it is *not* (a learning loop, a
+search index): [docs/memory.md](docs/memory.md).
 
 <br>
 

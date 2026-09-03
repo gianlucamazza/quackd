@@ -15,6 +15,16 @@ REPO = Path(__file__).resolve().parents[1]
 DUCKS = REPO / "ducks"
 
 
+@pytest.fixture(autouse=True)
+def _memory_in_tmp(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A test run must never write the developer's real `~/.quackd/memory`: every test that
+    runs the CLI with memory on (the default) gets a throwaway directory instead. Not inside
+    `tmp_path`: tests count the run directories they make there."""
+    monkeypatch.setenv("QUACKD_MEMORY_DIR", str(tmp_path_factory.mktemp("quackd-memory")))
+
+
 @pytest.fixture
 def registry() -> VerbRegistry:
     return default_registry()

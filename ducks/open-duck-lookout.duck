@@ -33,7 +33,8 @@ and say what you can see.
 
 1. `gaze` left, then right, then back to centre, calling `observe` at each stop.
 2. `say` one sentence: whether the ball is in view and, if it is, its bearing and distance.
-3. Declare success once you have said it.
+3. `remember` what was in front of you from this spot, then declare success once you
+   have said it.
 
 ## Notes
 
@@ -46,3 +47,9 @@ and say what you can see.
   say what is in front of you and stop. That is a complete answer, not a failure.
 - You have no voice. `say` logs your text and plays the closest duck sound.
 - Saying "no ball in view" is a perfectly good answer. Do not invent one.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: what was in front of you from this spot, or that `gaze` was refused. Skip it
+if the prompt already remembers the same thing. It costs no step.

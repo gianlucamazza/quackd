@@ -261,6 +261,8 @@ def _run_impl(
     *,
     robot: str | None = None,
     robots: str | None = None,
+    memory: bool = True,
+    memory_dir: str | None = None,
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -360,6 +362,12 @@ def _run_impl(
         if verbose:
             err_console.print(f"[dim]{msg}[/dim]")
 
+    robot_memory = None
+    if memory:
+        from quackd.memory import RobotMemory
+
+        # keyed by adapter:backend, so a simulated duck never inherits a real one's notes
+        robot_memory = RobotMemory(spec.key, memory_dir)
     cfg = RunConfig(
         duck=duck,
         provider=llm,
@@ -371,6 +379,7 @@ def _run_impl(
         max_steps=max_steps,
         log=log,
         on_frame=recorder.capture if recorder is not None else None,
+        memory=robot_memory,
     )
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
@@ -379,6 +388,12 @@ def _run_impl(
         + (f" · seed={seed}" if seed is not None else "")
         + (" · [yellow]DRY RUN[/yellow]" if dry_run else "")
     )
+    if robot_memory is not None:
+        m = robot_memory.summary()
+        console.print(
+            f"[dim]memory: {m['notes']} notes, {m['episodes']} earlier runs "
+            f"({m['path']}) · --no-memory to run fresh[/dim]"
+        )
     console.print("[dim]Ctrl-C or q stops the duck.[/dim]")
 
     async def main() -> Any:
@@ -582,6 +597,16 @@ _FLOCK = typer.Option(
     "--flock",
     help="EXPERIMENTAL: run N cooperating ducks (2-4) in sim2d. Overrides the file's flock block.",
 )
+_MEMORY = typer.Option(
+    True,
+    "--memory/--no-memory",
+    help="Carry notes and run outcomes between runs of the same robot (see `quackd memory`).",
+)
+_MEMORY_DIR = typer.Option(
+    None,
+    "--memory-dir",
+    help="Where memory files live (default: $QUACKD_MEMORY_DIR or ~/.quackd/memory).",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -658,6 +683,8 @@ def run(
     api_key: str | None = _APIKEY,
     vision: bool | None = _VISION,
     flock: int | None = _FLOCK,
+    memory: bool = _MEMORY,
+    memory_dir: str | None = _MEMORY_DIR,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -683,6 +710,8 @@ def run(
         flock=flock,
         robot=robot,
         robots=robots,
+        memory=memory,
+        memory_dir=memory_dir,
     )
 
 
@@ -777,6 +806,8 @@ def serve_mcp(
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
     ),
+    memory: bool = _MEMORY,
+    memory_dir: str | None = _MEMORY_DIR,
 ) -> None:
     """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
     from quackd.adapters.base import AdapterError
@@ -793,9 +824,80 @@ def serve_mcp(
             token=token,
             dry_run=dry_run,
             yes=yes,
+            memory=memory,
+            memory_dir=memory_dir,
         )
     except AdapterError as e:
         _fail(str(e))
+
+
+# ── memory ──────────────────────────────────────────────────────────────────────────────
+
+memory_app = typer.Typer(
+    name="memory",
+    help="What a robot remembers between runs: notes the pilot saved, and how runs ended.",
+    no_args_is_help=True,
+)
+app.add_typer(memory_app, name="memory")
+
+
+def _memory_for(robot: str | None, memory_dir: str | None) -> Any:
+    from quackd.adapters.factory import resolve_robot
+    from quackd.memory import RobotMemory
+
+    return RobotMemory(resolve_robot(robot).key, memory_dir)
+
+
+@memory_app.command("show")
+def memory_show(
+    robot: str | None = _ROBOT,
+    memory_dir: str | None = _MEMORY_DIR,
+    raw: bool = typer.Option(False, "--raw", help="Print the JSONL file as is."),
+) -> None:
+    """Print what one robot remembers (default: the Microduck simulator)."""
+    mem = _memory_for(robot, memory_dir)
+    if raw:
+        if mem.path.exists():
+            console.print(mem.path.read_text(encoding="utf-8"), end="")
+        return
+    info = mem.summary()
+    console.print(
+        f"[bold]{info['robot']}[/bold] · {info['notes']} notes · {info['episodes']} runs · "
+        f"[dim]{info['path']}[/dim]"
+    )
+    text = mem.recall(max_notes=50, max_episodes=10)
+    console.print(escape(text) if text else "[dim](nothing remembered yet)[/dim]")
+
+
+@memory_app.command("add")
+def memory_add(
+    text: str = typer.Argument(..., help="One short fact, e.g. 'the ball lives by the sofa'."),
+    robot: str | None = _ROBOT,
+    memory_dir: str | None = _MEMORY_DIR,
+    tag: list[str] = typer.Option([], "--tag", help="Optional label(s)."),
+) -> None:
+    """Save a note by hand, the same way the pilot's `remember` does."""
+    mem = _memory_for(robot, memory_dir)
+    entry = mem.remember(text, tags=tag)
+    console.print(f"remembered for [bold]{mem.robot_key}[/bold]: {escape(entry.text)}")
+
+
+@memory_app.command("clear")
+def memory_clear(
+    robot: str | None = _ROBOT,
+    memory_dir: str | None = _MEMORY_DIR,
+    yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask."),
+) -> None:
+    """Forget everything one robot remembers (deletes its memory file)."""
+    mem = _memory_for(robot, memory_dir)
+    n = len(mem.entries())
+    if n == 0:
+        console.print(f"[dim]{mem.robot_key}: nothing to forget[/dim]")
+        return
+    if not yes and not typer.confirm(f"forget {n} entries for {mem.robot_key}?"):
+        raise typer.Exit()
+    mem.clear()
+    console.print(f"forgot {n} entries for [bold]{mem.robot_key}[/bold]")
 
 
 # ── lan (quackd[lan]) ───────────────────────────────────────────────────────────────────

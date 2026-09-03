@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Memory between runs** (`quackd/memory.py`, [docs/memory.md](docs/memory.md)). Every
+  run used to start from nothing. Now each robot, keyed `adapter:backend`, has a JSONL
+  file under `~/.quackd/memory/` that holds the notes the pilot saved with the new
+  `remember` tool and an episode line quackd writes at the end of every non-dry run
+  (outcome, reason, the last few verb results). The newest of both are rendered into the
+  system prompt at the next run. `remember` costs an LLM call but no step, and a repeated
+  sentence refreshes the old note. `quackd run --no-memory` / `--memory-dir`,
+  `quackd memory show|add|clear`, and over MCP `robot_recall` / `robot_remember` (eight
+  tools now). A simulated body never inherits a real one's notes.
+- **The solo starter ducks ask for a note.** `find-and-kick`, `fetch`, `follow-me`,
+  `patrol-and-quack`, `open-duck-scout`, `open-duck-lookout` and `reachy-spotter` carry
+  `remember` in their last strategy step and a *Memory* section saying what is worth
+  keeping, and `--goal` runs get the same line. A prompt-level hint alone was ignored by a
+  14B local model; the strategy step is followed. The v0 duck goldens were regenerated
+  for this. `hello-world` and the flock ducks are unchanged.
+
+### Fixed
+
+- Tests set `QUACKD_MEMORY_DIR` to a temporary directory, so a test run no longer writes
+  the developer's own `~/.quackd/memory`.
+
 ## [0.5.0] — 2026-09-03
 
 The first robot you can actually build. Every hardware backend before this one targeted a

@@ -15,6 +15,7 @@ import logging
 import sys
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from mcp.server import MCPServer
@@ -27,6 +28,7 @@ from quackd.agent.transcript import png_bytes
 from quackd.duckfile.parser import DuckParseError, load_duck
 from quackd.duckfile.schema import DuckFile
 from quackd.duckfile.validate import validate_duck
+from quackd.memory import RobotMemory
 from quackd.perception import detector_for
 from quackd.perception.base import Detector
 from quackd.safety import (
@@ -58,6 +60,8 @@ TOOL_NAMES = (
     "robot_observe",
     "robot_say",
     "robot_load_duckfile",
+    "robot_recall",
+    "robot_remember",
 )
 """Every tool the server registers, in this order; `docs/mcp.md` must list each one."""
 
@@ -67,7 +71,9 @@ do is what it lists and nothing else. Every action is a *verb*; the executor enf
 allowlist, budgets and confirmation gates, so a refused call is a rule, not a bug. Prefer
 composite verbs (search_scan, go_to) over micro-managing velocities. Load a .duck file with
 robot_load_duckfile(path) to adopt a task contract; then follow its body as your
-instructions. Call robot_run_verb(verb="stop") if anything looks wrong."""
+instructions. Call robot_recall early: it is what this robot learned in earlier sessions,
+and robot_remember(text) keeps one short fact for the next one. Call
+robot_run_verb(verb="stop") if anything looks wrong."""
 
 FLEET_INSTRUCTIONS = """You are piloting {n} robot(s) through quackd: {names}.
 Call robot_list first, then robot_list_verbs(robot) for each body you will use: verbs come
@@ -75,9 +81,10 @@ from each robot's own manifest, so they differ per robot. Every action is a *ver
 robot's executor enforces its own allowlist, budgets and confirmation gates, so a refused
 call is a rule, not a bug. Prefer composite verbs (search_scan, go_to) over micro-managing
 velocities. Load a .duck file with robot_load_duckfile(path, robot) to adopt a task
-contract on one robot; then follow its body as your instructions. Without a robot argument
-a tool acts on the default, {default}. Call robot_run_verb(verb="stop", robot=...) if
-anything looks wrong."""
+contract on one robot; then follow its body as your instructions. robot_recall(robot) is
+what that robot learned in earlier sessions; robot_remember(text, robot) keeps one short
+fact for the next one. Without a robot argument a tool acts on the default, {default}.
+Call robot_run_verb(verb="stop", robot=...) if anything looks wrong."""
 
 
 def _prefixed(emit: Callable[..., None], name: str) -> Callable[[str], None]:
@@ -118,6 +125,8 @@ class RobotSession:
     """The most recent frame an `observe` captured, so `robot_observe` can return it."""
     explicit_registry: bool = False
     """A caller-supplied registry is kept as is; otherwise the manifest builds one."""
+    memory: RobotMemory | None = None
+    """What this robot keeps between sessions (`quackd memory`). None = off."""
 
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
@@ -247,6 +256,35 @@ class RobotSession:
             }
         return await self.run("say", {"text": text})
 
+    def recall(self) -> dict[str, Any]:
+        if self.memory is None:
+            return {"ok": False, "robot": self.name, "summary": "memory is off for this server"}
+        text = self.memory.recall()
+        return {
+            "ok": True,
+            "robot": self.name,
+            "summary": text or "nothing remembered yet: this is the first session on this robot",
+            "notes": [e.text for e in self.memory.notes()[-20:]],
+            "episodes": [e.text for e in self.memory.episodes()[-5:]],
+            "path": str(self.memory.path),
+        }
+
+    def remember(self, text: str, tags: list[str] | None = None) -> dict[str, Any]:
+        if self.memory is None:
+            return {"ok": False, "robot": self.name, "summary": "memory is off for this server"}
+        try:
+            entry = self.memory.remember(
+                text, tags=tags, duck=self.duck.name if self.duck else None
+            )
+        except (ValueError, OSError) as e:
+            return {"ok": False, "robot": self.name, "summary": f"could not remember: {e}"}
+        return {
+            "ok": True,
+            "robot": self.name,
+            "summary": f"remembered for future sessions: {entry.text}",
+            "notes": len(self.memory.notes()),
+        }
+
     def load(self, path: str) -> dict[str, Any]:
         try:
             duck = load_duck(path)
@@ -358,11 +396,15 @@ def build_fleet_server(
     detector: Detector | None = None,
     heartbeat_period_s: float = 0.5,
     default: str | None = None,
+    memory: bool = True,
+    memory_dir: str | Path | None = None,
 ) -> tuple[MCPServer, Fleet]:
     """One MCP server over several robots, each behind its own executor.
 
     `--yes` and `--dry-run` are global; contracts, budgets and abort flags are per robot.
-    A `.duck` given at startup is adopted by the default robot."""
+    A `.duck` given at startup is adopted by the default robot. With `memory` on, each
+    robot gets its `RobotMemory` (keyed adapter:backend, so a simulated body never
+    inherits a real one's notes) behind `robot_recall` / `robot_remember`."""
     if not robots:
         raise ValueError("a fleet needs at least one robot")
     sessions: dict[str, RobotSession] = {}
@@ -397,6 +439,13 @@ def build_fleet_server(
             heartbeat=heartbeat,
             detector=det,
             explicit_registry=registry is not None,
+            memory=(
+                RobotMemory(
+                    f"{adapter_name(transport) or name}:{backend_name(transport)}", memory_dir
+                )
+                if memory
+                else None
+            ),
         )
         executor.on_frame = _stash_frames(session)
         sessions[name] = session
@@ -492,6 +541,26 @@ def build_fleet_server(
         session = fleet.get(robot)
         return session.load(path) if session else fleet.unknown(robot)
 
+    @mcp.tool(
+        description="What one robot remembers from earlier sessions and runs: the notes a "
+        "pilot saved with robot_remember, and how its recent runs ended. Call it before "
+        "planning; it costs no step."
+    )
+    async def robot_recall(robot: str | None = None) -> dict[str, Any]:
+        session = fleet.get(robot)
+        return session.recall() if session else fleet.unknown(robot)
+
+    @mcp.tool(
+        description="Keep one short fact for future sessions on one robot (where things "
+        "usually are, what worked, what to avoid). Moves nothing, costs no step. The same "
+        "sentence twice updates the old note instead of duplicating it."
+    )
+    async def robot_remember(
+        text: str, tags: list[str] | None = None, robot: str | None = None
+    ) -> dict[str, Any]:
+        session = fleet.get(robot)
+        return session.remember(text, tags) if session else fleet.unknown(robot)
+
     return mcp, fleet
 
 
@@ -504,6 +573,8 @@ def build_server(
     registry: VerbRegistry | None = None,
     detector: Detector | None = None,
     heartbeat_period_s: float = 0.5,
+    memory: bool = True,
+    memory_dir: str | Path | None = None,
 ) -> tuple[MCPServer, RobotSession]:
     """One robot, the 0.3 entry point: a fleet of one named after its adapter."""
     name = adapter_name(transport) or "duck"
@@ -515,6 +586,8 @@ def build_server(
         registry=registry,
         detector=detector,
         heartbeat_period_s=heartbeat_period_s,
+        memory=memory,
+        memory_dir=memory_dir,
     )
     return mcp, fleet.sessions[name]
 
@@ -531,6 +604,8 @@ def serve(
     robot: str | None = None,
     robots: str | None = None,
     warn: Any = None,
+    memory: bool = True,
+    memory_dir: str | None = None,
 ) -> None:
     from quackd.adapters.factory import (
         RobotSpec,
@@ -581,7 +656,14 @@ def serve(
         )
         for name, spec in zip(manifests, specs, strict=True)
     }
-    mcp, _fleet = build_fleet_server(adapters, duckfile=duckfile, dry_run=dry_run, yes=yes)
+    mcp, _fleet = build_fleet_server(
+        adapters,
+        duckfile=duckfile,
+        dry_run=dry_run,
+        yes=yes,
+        memory=memory,
+        memory_dir=memory_dir,
+    )
     mcp.run(transport="stdio")
 
 
