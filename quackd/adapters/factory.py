@@ -51,8 +51,9 @@ _ADAPTERS: dict[str, tuple[tuple[str, ...], str, str | None, str | None]] = {
     # Appended last on purpose: the doctor and list-adapters tables are order-sensitive.
     # No extra: the client is stdlib, and the robot's own runtime is not installable here.
     "open_duck": (
-        ("sim2d", "mock"),
-        "✅ built-in: sim2d, mock",
+        ("sim2d", "mock", "bridge"),
+        "✅ built-in: sim2d, mock · 🧪 bridge (quackd's own daemon on the duck's Pi, "
+        "never run on a robot)",
         None,
         None,
     ),

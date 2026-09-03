@@ -14,6 +14,7 @@ from types import ModuleType
 import pytest
 
 from quackd.adapters.lerobot import upstream_api as lerobot_api
+from quackd.adapters.open_duck import upstream_api as open_duck_api
 from quackd.adapters.reachy_mini import upstream_api as reachy_api
 from quackd.adapters.rosbridge import upstream_api as rosbridge_api
 from quackd.transport import upstream_api
@@ -57,8 +58,20 @@ UPSTREAMS: list[tuple[ModuleType, set[str], tuple[str, ...]]] = [
             "https://github.com/ros2/common_interfaces",
         ),
     ),
+    (
+        open_duck_api,
+        {
+            "adapters/open_duck/upstream_api.py",
+            "adapters/open_duck/bridge.py",
+            "doctor.py",
+        },
+        (
+            "https://github.com/apirrone/Open_Duck_Mini_Runtime",
+            "https://github.com/apirrone/Open_Duck_Mini",
+        ),
+    ),
 ]
-IDS = ["microduck", "reachy_mini", "lerobot", "rosbridge"]
+IDS = ["microduck", "reachy_mini", "lerobot", "rosbridge", "open_duck"]
 
 
 def _unverified_identifiers(module: ModuleType) -> list[str]:

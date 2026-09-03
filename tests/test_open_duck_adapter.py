@@ -287,11 +287,11 @@ def test_mood_mapping_is_stable() -> None:
     assert mood_for(None) == "chirp"
 
 
-def test_the_factory_makes_both_backends() -> None:
-    for backend in ("sim2d", "mock"):
+def test_the_factory_makes_every_backend() -> None:
+    for backend in ("sim2d", "mock", "bridge"):
         adapter = make_adapter(parse_robot_spec(f"open_duck:{backend}"))
         assert adapter.name == "open_duck" and adapter.backend == backend
     with pytest.raises(ValueError, match="unknown open_duck backend"):
         from quackd.adapters.open_duck import make
 
-        make("bridge")
+        make("mujoco")

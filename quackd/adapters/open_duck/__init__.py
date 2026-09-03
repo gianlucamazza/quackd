@@ -46,7 +46,7 @@ from quackd.transport.base import Ack, DuckState, DuckTransport, HeartbeatError,
 from quackd.verbs.core import CORE
 from quackd.verbs.registry import Precondition, Verb
 
-BACKENDS = ("sim2d", "mock")
+BACKENDS = ("sim2d", "mock", "bridge")
 DEFAULT_ID = "open-duck-01"
 CONTROL_HZ = 50
 
@@ -334,6 +334,12 @@ def make(
         from quackd.adapters.open_duck.mock import OpenDuckMock
 
         return OpenDuckAdapter(OpenDuckMock(), robot_id=robot_id)
+    if backend == "bridge":
+        from quackd.adapters.open_duck.bridge import OpenDuckBridge
+
+        return OpenDuckAdapter(
+            OpenDuckBridge(address=address, camera_url=camera_url), robot_id=robot_id
+        )
     raise ValueError(f"unknown open_duck backend {backend!r}; choose one of {BACKENDS}")
 
 
