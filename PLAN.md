@@ -108,6 +108,10 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ Only a human can: run `open_duck:bridge` against a duck they built, work the checklist
   in `docs/open-duck-hardware-checklist.md`, and confirm the deadman by pulling Wi-Fi
   mid-walk. Flip the `bridge` row in `docs/adapter-status.md` only after
-- ⏸ Publish 0.5.0 to PyPI (needs `UV_PUBLISH_TOKEN`), tag `v0.5.0`, and update the GitHub
-  About description and Topics for five bodies
+- ✅ Tagged `v0.5.0` (annotated) and pushed `main`, GitHub Release
+  `v0.5.0 "open duck"` created on `main` with the wheel and sdist attached (2026-09-03).
+  A pre-release audit of the note against the code fixed a half-applied detector fix, two
+  commands still advertising `--transport`, and a PyPI summary with no Open Duck in it
+- ⏸ Publish 0.5.0 to PyPI (needs `UV_PUBLISH_TOKEN` in `.env`), and update the GitHub About
+  description and Topics for five bodies
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)
