@@ -324,3 +324,86 @@ async def test_the_real_daemon_and_the_real_client_agree(daemon: ModuleType) -> 
     finally:
         server.stop()
         server.join(timeout=2)
+
+
+# ── antenna gestures have to actually reach the antennas ────────────────────────────────
+
+
+def test_a_gesture_drives_the_triggers_and_then_rests(daemon: ModuleType) -> None:
+    """Upstream drives the antennas from the pad's triggers, so a gesture that never
+    changes a trigger is an accepted no-op, which is the worst kind of answer."""
+    clock = Clock()
+    core = daemon.BridgeCore(now=clock, capabilities={"antennas": True})
+    hello(core)
+    controller = daemon.NetworkController(core, 20)
+    assert controller.get_last_command()[2:] == (0.0, 0.0)
+
+    reply, _ = core.handle(
+        {"id": 5, "method": "duck.antennas", "params": {"gesture": "perk"}}, authed=True
+    )
+    assert reply["result"]["accepted"] and reply["result"]["seconds"] == daemon.GESTURE_S
+    assert controller.get_last_command()[2:] == (1.0, 1.0)
+
+    clock.t += daemon.GESTURE_S + 0.01
+    assert controller.get_last_command()[2:] == (0.0, 0.0), "a gesture is a transient"
+
+
+def test_a_wiggle_actually_wiggles(daemon: ModuleType) -> None:
+    clock = Clock()
+    core = daemon.BridgeCore(now=clock, capabilities={"antennas": True})
+    hello(core)
+    core.handle({"id": 6, "method": "duck.antennas", "params": {"gesture": "wiggle"}}, authed=True)
+    seen = set()
+    for _ in range(10):
+        clock.t += 0.05
+        left, _right = core.triggers_for(clock.t)
+        seen.add(round(left, 2))
+    assert len(seen) > 3, "the antennas move over time rather than sitting at one value"
+
+
+def test_an_unknown_gesture_is_refused_rather_than_silently_dropped(daemon: ModuleType) -> None:
+    core = daemon.BridgeCore(capabilities={"antennas": True})
+    hello(core)
+    reply, _ = core.handle(
+        {"id": 7, "method": "duck.antennas", "params": {"gesture": "moonwalk"}}, authed=True
+    )
+    assert reply["error"]["code"] == -32602
+
+
+def test_the_deadman_rests_the_antennas_too(daemon: ModuleType) -> None:
+    clock = Clock()
+    core = daemon.BridgeCore(now=clock, capabilities={"antennas": True})
+    hello(core)
+    core.handle({"id": 8, "method": "duck.antennas", "params": {"gesture": "perk"}}, authed=True)
+    assert core.command_for_tick().triggers == (1.0, 1.0)
+    clock.t += core.deadman_s + 0.01
+    assert core.command_for_tick().triggers == (0.0, 0.0)
+
+
+# ── a camera nobody can fetch a frame from is not a camera ──────────────────────────────
+
+
+def test_a_camera_with_no_snapshot_url_is_not_advertised(daemon: ModuleType, tmp_path) -> None:
+    """Otherwise the manifest promises observe, go_to, search_scan and approach_and, and
+    every one of them fails at runtime instead of simply not existing."""
+    config = tmp_path / "duck_config.json"
+    config.write_text('{"expression_features": {"camera": true, "speaker": true}}')
+    args = daemon.parser().parse_args(
+        ["serve", "--duck-config", str(config), "--token-file", str(tmp_path / "none")]
+    )
+    assert daemon.build_core(args).capabilities["camera"] is False
+
+    args = daemon.parser().parse_args(
+        [
+            "serve",
+            "--duck-config",
+            str(config),
+            "--token-file",
+            str(tmp_path / "none"),
+            "--camera-url",
+            "http://127.0.0.1:9872/snapshot.jpg",
+        ]
+    )
+    core = daemon.build_core(args)
+    assert core.capabilities["camera"] is True
+    assert core.hello()["camera"]["url"].endswith("/snapshot.jpg")

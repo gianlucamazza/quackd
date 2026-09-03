@@ -32,6 +32,7 @@ import contextlib
 import hmac
 import json
 import logging
+import math
 import os
 import selectors
 import socket
@@ -78,6 +79,11 @@ HEAD_HOLDS_ON_DEADMAN = True
 HEAD_SLEW_RAD_S = 1.0
 #: Fraction of the runtime's head range quackd will use when head control is enabled.
 HEAD_SAFETY = 0.8
+#: How long one antenna gesture plays before the antennas return to rest, and how fast a
+#: wiggle wiggles. Upstream drives the antennas from the pad's triggers, so a gesture is a
+#: shape in trigger space over time, and this is the only channel the bridge has to them.
+GESTURE_S = 1.0
+GESTURE_WIGGLE_HZ = 3.0
 #: If upstream never constructs our controller within this long, the loop is reading a real
 #: pad (or the class was renamed) while our socket does nothing. That is a duck moving for
 #: reasons its owner cannot see, so we exit instead.
@@ -167,8 +173,28 @@ class BridgeCore:
         self.greeted = False
         self._seq = 0
         self._last_tick: float | None = None
+        self._gesture: tuple[str, float] | None = None
 
     # ── what the control thread calls, once per tick ────────────────────────────────
+
+    def triggers_for(self, now: float) -> tuple[float, float]:
+        """An antenna gesture, as the trigger values upstream turns into servo positions.
+
+        A gesture is a transient: it plays for `GESTURE_S` and the antennas then rest. This
+        is what makes `express` a real movement rather than an accepted no-op."""
+        if self._gesture is None:
+            return (0.0, 0.0)
+        name, started = self._gesture
+        elapsed = now - started
+        if elapsed > GESTURE_S:
+            self._gesture = None
+            return (0.0, 0.0)
+        if name == "perk":
+            return (1.0, 1.0)
+        if name == "droop":
+            return (0.0, 0.0)
+        phase = math.sin(2 * math.pi * GESTURE_WIGGLE_HZ * elapsed)
+        return (0.5 + 0.35 * phase, 0.5 - 0.35 * phase)
 
     def command_for_tick(self) -> Snapshot:
         """The deadman lives here, in the consumer, so that a dead server thread, a wedged
@@ -184,11 +210,20 @@ class BridgeCore:
         stale = (now - snap.at) > self.deadman_s
         self.deadman_tripped = stale
         if not stale and not self.fallen:
-            return snap
-        # zero the velocities; hold the head, because a neck that snaps is the failure
-        # upstream warns about and a velocity that drops to zero is not
+            return Snapshot(
+                seq=snap.seq,
+                at=snap.at,
+                vx=snap.vx,
+                vy=snap.vy,
+                vyaw=snap.vyaw,
+                head=snap.head,
+                triggers=self.triggers_for(now),
+            )
+        # zero the velocities and rest the antennas; hold the head, because a neck that
+        # snaps is the failure upstream warns about and a velocity dropping to zero is not
+        self._gesture = None
         head = snap.head if HEAD_HOLDS_ON_DEADMAN else (0.0, 0.0, 0.0, 0.0)
-        return Snapshot(seq=snap.seq, at=snap.at, head=head, triggers=snap.triggers)
+        return Snapshot(seq=snap.seq, at=snap.at, head=head)
 
     # ── the protocol ────────────────────────────────────────────────────────────────
 
@@ -256,8 +291,13 @@ class BridgeCore:
                     msg_id, 4, "this duck has no antennas in its duck_config.json"
                 ), authed
             gesture = str(params.get("gesture", "wiggle"))
+            if gesture not in ("perk", "droop", "wiggle"):
+                return self._err(msg_id, -32602, f"unknown antenna gesture {gesture!r}"), authed
             self.gestures.append(gesture)
-            return self._ok(msg_id, {"accepted": True, "gesture": gesture}), authed
+            self._gesture = (gesture, self.now())
+            return self._ok(
+                msg_id, {"accepted": True, "gesture": gesture, "seconds": GESTURE_S}
+            ), authed
         return self._err(msg_id, -32601, f"unknown method {method!r}"), authed
 
     def _apply(self, params: dict[str, Any]) -> None:
@@ -284,6 +324,7 @@ class BridgeCore:
     def _zero(self) -> None:
         self._seq += 1
         self.stopped_upto = self._seq
+        self._gesture = None
         self.snapshot = Snapshot(seq=self._seq, at=self.now(), head=self.snapshot.head)
 
     def hello(self) -> dict[str, Any]:
@@ -593,6 +634,17 @@ def build_core(args: argparse.Namespace) -> BridgeCore:
     caps = capabilities_from(config)
     if args.fake:
         caps = {"camera": False, "speaker": True, "antennas": True, "microphone": False}
+    # quackd reads frames from an HTTP snapshot, never through this socket: encoding a
+    # 512 by 512 JPEG inside a 20 ms control tick is not affordable on a Pi Zero 2 W. So a
+    # camera with nowhere to fetch it from is not a camera, and saying otherwise would
+    # promise `observe`, `go_to`, `search_scan` and `approach_and` that then fail at runtime.
+    if caps.get("camera") and not args.camera_url:
+        log.warning(
+            "duck_config.json says this duck has a camera, but no --camera-url was given, "
+            "so quackd has nowhere to fetch a frame from. Advertising no camera: the verbs "
+            "that need one will not exist rather than fail. See docs/adapters/open_duck.md."
+        )
+        caps["camera"] = False
     limits = Limits(
         vx=(-abs(args.max_vx), abs(args.max_vx)),
         vy=(-abs(args.max_vy), abs(args.max_vy)),

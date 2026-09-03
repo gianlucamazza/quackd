@@ -13,7 +13,7 @@
   <a href="https://pypi.org/project/quackd/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
   <a href="docs/mcp.md"><img src="https://img.shields.io/badge/MCP-ready-8A2BE2" alt="MCP ready"></a>
-  <a href="docs/adapter-status.md"><img src="https://img.shields.io/badge/robots-Microduck%20%C2%B7%20Reachy%20Mini%20%C2%B7%20LeRobot%20%C2%B7%20rosbridge-f5c518" alt="robots: Microduck, Reachy Mini, LeRobot, rosbridge"></a>
+  <a href="docs/adapter-status.md"><img src="https://img.shields.io/badge/robots-Microduck%20%C2%B7%20Reachy%20Mini%20%C2%B7%20LeRobot%20%C2%B7%20rosbridge%20%C2%B7%20Open%20Duck%20Mini-f5c518" alt="robots: Microduck, Reachy Mini, LeRobot, rosbridge, Open Duck Mini"></a>
   <a href="https://github.com/pollen-robotics/microduck#readme"><img src="https://img.shields.io/badge/community-Pollen%20Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
@@ -23,7 +23,7 @@
   <sub>"Find the ball and kick it", in the bundled simulator, driven by the <em>scripted</em> pilot (no API key). Same verbs, same safety layer, same perception as a real model run. See <a href="docs/assets/README.md">docs/assets</a>.</sub>
 </p>
 
-**quackd** connects a small robot to a large language model (Claude, OpenAI, Gemini, Grok, or an open source model running locally through llama.cpp, vLLM, Ollama or LM Studio). The first robot is the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, a biped that already knows how to walk, turn, kick, scoop something off the floor, look around and quack. Since 0.4 the same loop drives other bodies through adapters that declare what each can do: a Reachy Mini head, an SO-101 class arm through LeRobot and any wheeled base over rosbridge, the head in the bundled simulator or a mock, the arm and the base in a mock only, none on hardware. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of a robot's own skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
+**quackd** connects a small robot to a large language model (Claude, OpenAI, Gemini, Grok, or an open source model running locally through llama.cpp, vLLM, Ollama or LM Studio). The first robot is the [Microduck](https://pollen-robotics.com/microduck/) from Pollen Robotics, a biped that already knows how to walk, turn, kick, scoop something off the floor, look around and quack. Since 0.4 the same loop drives other bodies through adapters that declare what each can do: a Reachy Mini head, an SO-101 class arm through LeRobot, any wheeled base over rosbridge and an Open Duck Mini v2, the open hardware biped you can print and build yourself. The head and the Open Duck run in the bundled simulator or a mock, the arm and the base in a mock only, none on hardware. quackd is the missing layer that turns a request like *"find the ball and kick it"* into the right sequence of a robot's own skills, watches what happens, and keeps going until the job is done or it is clearly impossible.
 
 You do not need a robot to try it. A bundled simulator runs on any laptop in seconds. Goals proven today, in that simulator, on 10 of 10 seeds with the scripted pilot and a ground truth check:
 
@@ -33,7 +33,34 @@ Four more starters ship. `hello-world` is the smoke test (quack, one step, quack
 
 Runs with a cloud model or with an open source model on your own machine (Ollama, vLLM, llama.cpp, LM Studio). The local path needs no API key.
 
-Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet. The Microduck ships at Christmas 2026, Reachy Mini hardware exists today, and nothing here has run on real hardware, on any of the four adapters: every hardware backend is experimental or a stub, its upstream names read from upstream source, nothing verified end to end. The honest label for today is *LLM driven, goal directed control of simulated robots*: an early, working step toward a small robot you can simply talk to.
+Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **not** what it does yet. The Microduck ships at Christmas 2026, Reachy Mini hardware exists today, and nothing here has run on real hardware, on any of the five adapters: every hardware backend is experimental or a stub, its upstream names read from upstream source, nothing verified end to end. The honest label for today is *LLM driven, goal directed control of simulated robots*: an early, working step toward a small robot you can simply talk to.
+
+<br>
+
+## Table of Contents
+
+- [Try it in 60 seconds](#try-it-in-60-seconds)
+- [Why?](#why)
+- [What is this?](#what-is-this)
+- [How it works (the simple version)](#how-it-works-the-simple-version)
+- [Example](#example)
+- [What it can do today, and where it is going](#what-it-can-do-today-and-where-it-is-going)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+  * [The `.duck` file](#the-duck-file)
+  * [Pilot it from Claude (MCP)](#pilot-it-from-claude-mcp)
+- [Any small robot](#any-small-robot)
+- [Flock mode (simulator)](#flock-mode-simulator)
+- [Configuration](#configuration)
+- [Performance](#performance)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Safety](#safety)
+- [Acknowledgements](#acknowledgements)
+- [Star history](#star-history)
+- [License](#license)
 
 <br>
 

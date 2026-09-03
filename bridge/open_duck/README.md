@@ -38,6 +38,14 @@ upstream imports to read a gamepad, then runs upstream's own script. Three thing
 - **It binds loopback by default** and wants a token. This port walks a robot. Prefer
   `ssh -L 9871:127.0.0.1:9871 your-pi` over exposing it to a network.
 
+## What is not here yet
+
+**A camera snapshot server.** Frames do not travel over this socket, because encoding a
+512 by 512 JPEG inside a 20 ms tick is not affordable on this board. The bridge advertises an
+HTTP URL and quackd fetches from it, but you have to run that server yourself and pass
+`--camera-url`. Without one the bridge reports no camera, even if `duck_config.json` says
+otherwise, so the verbs that need a camera do not exist rather than exist and fail.
+
 ## Install
 
 Read [`install.sh`](install.sh), then run it on the Pi. It checks rather than fixes, and
