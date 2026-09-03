@@ -67,8 +67,8 @@ def test_run_hello_world_on_mock(tmp_path: Path) -> None:
             "hello-world",
             "--provider",
             "fake",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
             "--no-gif",
@@ -95,8 +95,8 @@ def test_missing_extra_hint_survives_rich_markup(tmp_path: Path, monkeypatch) ->
             "hello-world",
             "--provider",
             "anthropic",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],
@@ -114,8 +114,8 @@ def test_run_goal_builds_an_ad_hoc_duck(tmp_path: Path) -> None:
             "say hello and stop",
             "--provider",
             "fake",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],
@@ -153,9 +153,18 @@ def test_goal_picks_a_matching_scripted_strategy(tmp_path: Path) -> None:
 def test_run_needs_exactly_one_of_duck_or_goal(tmp_path: Path) -> None:
     both = runner.invoke(
         app,
-        ["run", "hello-world", "--goal", "x", "--transport", "mock", "--runs-dir", str(tmp_path)],
+        [
+            "run",
+            "hello-world",
+            "--goal",
+            "x",
+            "--robot",
+            "microduck:mock",
+            "--runs-dir",
+            str(tmp_path),
+        ],
     )
-    neither = runner.invoke(app, ["run", "--transport", "mock", "--runs-dir", str(tmp_path)])
+    neither = runner.invoke(app, ["run", "--robot", "microduck:mock", "--runs-dir", str(tmp_path)])
     assert both.exit_code == 1 and neither.exit_code == 1
     assert "either" in both.output and "either" in neither.output
 
@@ -176,26 +185,28 @@ def _run_hello(tmp_path: Path, *flags: str) -> object:
     )
 
 
-def test_transport_flag_is_a_deprecated_alias_that_warns_once(tmp_path: Path) -> None:
+def test_transport_flag_is_gone(tmp_path: Path) -> None:
+    """0.4 deprecated `--transport X` in favour of `--robot microduck:X` and said it would
+    be removed in 0.5. It is."""
     old = _run_hello(tmp_path, "--transport", "mock")
-    assert old.exit_code == 0, old.output  # type: ignore[attr-defined]
-    assert old.output.count("deprecated") == 1 and "--robot microduck:mock" in old.output  # type: ignore[attr-defined]
+    assert old.exit_code != 0  # type: ignore[attr-defined]
+    assert "No such option" in old.output  # type: ignore[attr-defined]
     new = _run_hello(tmp_path, "--robot", "microduck:mock")
-    assert new.exit_code == 0 and "deprecated" not in new.output  # type: ignore[attr-defined]
+    assert new.exit_code == 0, new.output  # type: ignore[attr-defined]
     assert "robot=microduck:mock" in new.output  # type: ignore[attr-defined]
 
 
 def test_robot_flag_errors_are_clean(tmp_path: Path) -> None:
     unknown = _run_hello(tmp_path, "--robot", "hal9000:mock")
     assert unknown.exit_code == 1 and "unknown adapter" in unknown.output  # type: ignore[attr-defined]
-    both = _run_hello(tmp_path, "--robot", "microduck:mock", "--transport", "sim2d")
-    assert both.exit_code == 1 and "choose one" in both.output  # type: ignore[attr-defined]
+    bad_backend = _run_hello(tmp_path, "--robot", "microduck:hovercraft")
+    assert bad_backend.exit_code == 1 and "unknown backend" in bad_backend.output  # type: ignore[attr-defined]
 
 
 def test_list_adapters() -> None:
     result = runner.invoke(app, ["list-adapters"])
     assert result.exit_code == 0, result.output
-    for needle in ("microduck", "sim2d", "mock", "jsonrpc", "--transport"):
+    for needle in ("microduck", "sim2d", "mock", "jsonrpc", "open_duck", "bridge"):
         assert needle in result.output
 
 
@@ -232,8 +243,8 @@ def test_run_unknown_provider_is_a_clean_error(tmp_path: Path) -> None:
             "hello-world",
             "--provider",
             "hal9000",
-            "--transport",
-            "mock",
+            "--robot",
+            "microduck:mock",
             "--runs-dir",
             str(tmp_path),
         ],

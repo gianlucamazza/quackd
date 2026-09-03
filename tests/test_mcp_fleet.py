@@ -1,4 +1,4 @@
-"""A fleet over MCP: six robot_* tools, one executor per robot, the duck_* tools as aliases.
+"""A fleet over MCP: six robot_* tools, one executor, budget and heartbeat per robot.
 
 Driven in-process by the SDK's own client over memory streams, exactly like the one-robot
 tests. Two bodies: a simulated Microduck and a mocked Reachy Mini, each with its own
@@ -72,7 +72,9 @@ async def test_robot_list_names_every_robot_and_the_default() -> None:
         # the fleet instructions name every robot and the default
         from quackd.mcp_server import _instructions
 
-        assert "duck, reachy" in _instructions(fleet) and "(duck)" in _instructions(fleet)
+        prompt = _instructions(fleet)
+        assert "duck, reachy" in prompt and "the default, duck" in prompt
+        assert "duck_" not in prompt, "the prompt must not name tools that no longer exist"
 
 
 async def test_verbs_come_from_each_robots_own_manifest() -> None:
@@ -195,28 +197,30 @@ async def test_dry_run_still_observes_but_moves_nothing() -> None:
         assert fleet.sessions["duck"].transport.world.steps == 0
 
 
-async def test_duck_aliases_target_the_first_microduck() -> None:
+async def test_a_tool_without_a_robot_acts_on_the_default() -> None:
+    """0.4 kept eight duck_* aliases pinned to the default robot and promised to remove them
+    in 0.5. They are gone; omitting `robot` is how you address the default now."""
     async with connected(two_robots(reachy_first=True)) as (client, fleet):
         assert fleet.default == "duck"  # not the first declared: the first Microduck
-        listed = _data(await client.call_tool("duck_list_verbs", {}))
+        listed = _data(await client.call_tool("robot_list_verbs", {}))
         assert listed["robot"] == "duck"
-        state = _data(await client.call_tool("duck_get_state", {}))
-        assert state["robot"] == "duck" and state["transport"] == "sim2d"
-        quack = _data(await client.call_tool("duck_quack", {"text": "hello"}))
+        quack = _data(
+            await client.call_tool("robot_run_verb", {"verb": "quack", "params": {"text": "hello"}})
+        )
         assert quack["ok"] and fleet.sessions["duck"].transport.world.quacks
         assert fleet.sessions["reachy"].calls == 0
-        tools = {t.name: t.description or "" for t in (await client.list_tools()).tools}
-        assert all("Deprecated" in tools[n] for n in TOOL_NAMES if n.startswith("duck_"))
-        assert not any("Deprecated" in tools[n] for n in TOOL_NAMES if n.startswith("robot_"))
+        tools = {t.name for t in (await client.list_tools()).tools}
+        assert not [n for n in tools if n.startswith("duck_")]
+        assert tools == set(TOOL_NAMES)
 
 
 async def test_a_lone_reachy_is_its_own_default_and_quack_is_refused() -> None:
     reachy = make_adapter(RobotSpec("reachy_mini", "mock", "reachy"))
     async with connected({"reachy": reachy}) as (client, fleet):
         assert fleet.default == "reachy"
-        quack = _data(await client.call_tool("duck_quack", {}))
+        quack = _data(await client.call_tool("robot_run_verb", {"verb": "quack"}))
         assert quack["ok"] is False  # a Microduck verb on a head: a rule, not a crash
-        assert _data(await client.call_tool("duck_stop", {}))["ok"]
+        assert _data(await client.call_tool("robot_run_verb", {"verb": "stop"}))["ok"]
 
 
 class _Dead:

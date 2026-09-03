@@ -3,7 +3,6 @@
 `uvx quackd run find-and-kick --provider anthropic --robot microduck:sim2d` is the
 north-star demo; every command here exists to make that line, and the debugging around it,
 boring. Commands are thin: they parse, load `.env`, wire objects together, and hand off.
-`--transport X` still works as `--robot microduck:X` for one release (ADR-0017).
 """
 
 from __future__ import annotations
@@ -64,24 +63,24 @@ def _deprecated(msg: str) -> None:
     err_console.print(f"[yellow]{escape(msg)}[/yellow]")
 
 
-def _robot_specs(robot: str | None, robots: str | None, transport: str | None, duck: Any) -> list:
-    """The robots a command talks about: --robots, else --robot/--transport, else the duck's
-    own `robots:` default, else the Microduck simulator."""
+def _robot_specs(robot: str | None, robots: str | None, duck: Any) -> list:
+    """The robots a command talks about: --robots, else --robot, else the duck's own
+    `robots:` default, else the Microduck simulator."""
     from quackd.adapters.factory import RobotSpec, parse_robot_spec, parse_robots, resolve_robot
 
     if robots:
         return parse_robots(robots)
     default = duck.frontmatter.robots if duck is not None else None
     if isinstance(default, dict):
-        if robot or transport:
-            return [resolve_robot(robot, transport, warn=_deprecated)]
+        if robot:
+            return [resolve_robot(robot)]
         # the member names become the robot ids, as `--robots name=spec` would make them
         specs = []
         for name, text in default.items():
             parsed = parse_robot_spec(text)
             specs.append(RobotSpec(parsed.adapter, parsed.backend, name))
         return specs
-    return [resolve_robot(robot, transport, duck_default=default, warn=_deprecated)]
+    return [resolve_robot(robot, duck_default=default)]
 
 
 # ── validate ────────────────────────────────────────────────────────────────────────────
@@ -99,9 +98,6 @@ def validate(
     ),
     robots: str | None = typer.Option(
         None, "--robots", help="Check against a fleet: name=<adapter>:<backend>,..."
-    ),
-    transport: str | None = typer.Option(
-        None, "--transport", "-t", help="DEPRECATED: alias for --robot microduck:<backend>."
     ),
 ) -> None:
     """Validate .duck files against the spec and a robot's verbs. Exits 1 on any failure."""
@@ -128,14 +124,14 @@ def validate(
             details.append(f"{path}: {e.reason}")
             continue
         try:
-            if robot or robots or transport:
+            if robot or robots:
                 specs = (
                     [parse_robot_spec(r) for r in robot]
                     if robot
-                    else _robot_specs(None, robots, transport, duck)
+                    else _robot_specs(None, robots, duck)
                 )
             elif duck.frontmatter.robots is not None:
-                specs = _robot_specs(None, None, None, duck)
+                specs = _robot_specs(None, None, duck)
             else:
                 specs = []
             manifests = [describe(spec) for spec in specs]
@@ -232,7 +228,6 @@ def list_adapters_cmd() -> None:
             )
         table.add_row(row["name"], " · ".join(row["backends"]), row["status"], extra)
     console.print(table)
-    console.print("[dim]--transport <backend> still works as --robot microduck:<backend>.[/dim]")
 
 
 # ── run / record ────────────────────────────────────────────────────────────────────────
@@ -246,7 +241,6 @@ def _run_impl(
     duckfile: str | None,
     goal: str | None,
     provider: str,
-    transport: str | None,
     model: str | None,
     seed: int | None,
     dry_run: bool,
@@ -282,7 +276,7 @@ def _run_impl(
         return
     try:
         duck = load_duck(duckfile) if duckfile is not None else None
-        specs = _robot_specs(robot, robots, transport, duck)
+        specs = _robot_specs(robot, robots, duck)
         spec = specs[0]
         if goal is not None:
             safe = [v.name for v in registry_for(spec).verbs() if v.safety_class == "safe"]
@@ -619,12 +613,6 @@ _ROBOTS = typer.Option(
     "--robots",
     help="A flock or fleet: name=<adapter>:<backend>,... (simulator only for flocks).",
 )
-_TRANSPORT = typer.Option(
-    None,
-    "--transport",
-    "-t",
-    help="DEPRECATED (removed in 0.5): alias for --robot microduck:<backend>.",
-)
 _MODEL = typer.Option(None, "--model", "-m", help="Override the provider's model.")
 _SEED = typer.Option(None, "--seed", help="Simulator seed (deterministic runs).")
 _DRY = typer.Option(False, "--dry-run", help="Print every intent, send nothing.")
@@ -655,7 +643,6 @@ def run(
     provider: str = _PROVIDER,
     robot: str | None = _ROBOT,
     robots: str | None = _ROBOTS,
-    transport: str | None = _TRANSPORT,
     model: str | None = _MODEL,
     seed: int | None = _SEED,
     dry_run: bool = _DRY,
@@ -679,7 +666,6 @@ def run(
         duckfile,
         goal,
         provider,
-        transport,
         model,
         seed,
         dry_run,
@@ -723,7 +709,6 @@ def record(
         duckfile,
         goal,
         provider,
-        transport=None,
         model=model,
         seed=seed,
         dry_run=False,
@@ -783,7 +768,6 @@ def serve_mcp(
         "--robots",
         help="A fleet: name=<adapter>:<backend>,... (six robot_* tools, one executor each).",
     ),
-    transport: str | None = _TRANSPORT,
     duckfile: str | None = typer.Option(
         None, "--duckfile", help="Load a .duck contract at startup (on the default robot)."
     ),
@@ -804,7 +788,6 @@ def serve_mcp(
         serve(
             robot=robot,
             robots=robots,
-            transport=transport,
             duckfile=duckfile,
             seed=seed,
             address=address,
@@ -812,7 +795,6 @@ def serve_mcp(
             token=token,
             dry_run=dry_run,
             yes=yes,
-            warn=_deprecated,
         )
     except AdapterError as e:
         _fail(str(e))

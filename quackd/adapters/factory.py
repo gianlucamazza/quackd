@@ -1,9 +1,7 @@
 """`--robot <adapter>:<backend>` -> a `RobotAdapter`, plus everything the CLI needs to talk
 about adapters without connecting to one (static manifests, the status table).
 
-`--transport X` is a deprecated alias of `--robot microduck:X` for exactly one release
-(one stderr line per process, a `DeprecationWarning`); it is resolved here and nowhere
-else. Adapter packages are imported lazily, so listing adapters never imports an SDK.
+Adapter packages are imported lazily, so listing adapters never imports an SDK.
 """
 
 from __future__ import annotations
@@ -11,8 +9,6 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import re
-import warnings
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -114,51 +110,10 @@ def parse_robots(text: str) -> list[RobotSpec]:
     return specs
 
 
-_warned: set[str] = set()
-
-
-def warn_once(key: str, message: str, *, echo: Callable[[str], None] | None = None) -> None:
-    """A `DeprecationWarning` plus one visible line per process for `key`."""
-    if key in _warned:
-        return
-    _warned.add(key)
-    warnings.warn(message, DeprecationWarning, stacklevel=3)
-    if echo is not None:
-        echo(message)
-
-
-def reset_warnings() -> None:
-    """Tests run many CLI invocations in one process; each should see the line once."""
-    _warned.clear()
-
-
-def resolve_robot(
-    robot: str | None,
-    transport: str | None,
-    *,
-    duck_default: str | None = None,
-    warn: Callable[[str], None] | None = None,
-) -> RobotSpec:
-    """`--robot` wins; `--transport X` means `microduck:X` with a deprecation line; neither
-    means the duck's `robots:` default, then `microduck:sim2d`."""
-    if robot and transport:
-        spec = parse_robot_spec(robot)
-        if spec.key != f"microduck:{transport.strip().lower()}":
-            raise AdapterError(
-                f"choose one: --robot {spec.key} or --transport {transport} (they disagree)"
-            )
-        return spec
+def resolve_robot(robot: str | None, *, duck_default: str | None = None) -> RobotSpec:
+    """`--robot` wins; without it, the duck's own `robots:` default, then `microduck:sim2d`."""
     if robot:
         return parse_robot_spec(robot)
-    if transport:
-        spec = parse_robot_spec(f"microduck:{transport}")
-        warn_once(
-            "cli.transport",
-            f"deprecated: --transport {spec.backend} is now --robot {spec.key} "
-            "(the old flag is removed in 0.5)",
-            echo=warn,
-        )
-        return spec
     if duck_default:
         return parse_robot_spec(duck_default)
     return parse_robot_spec(DEFAULT_ROBOT)
