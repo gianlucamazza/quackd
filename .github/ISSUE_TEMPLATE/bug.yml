@@ -26,6 +26,9 @@ body:
         - "lerobot:real (real arm, experimental)"
         - "rosbridge:mock"
         - "rosbridge:ws (real bridge, experimental)"
+        - "open_duck:sim2d"
+        - "open_duck:mock"
+        - "open_duck:bridge (real duck, experimental)"
         - "not robot specific (CLI, docs, validation, MCP)"
     validations:
       required: true

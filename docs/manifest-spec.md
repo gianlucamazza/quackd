@@ -70,7 +70,7 @@ and MCP `robot_list` returns it.
 
 ## Examples
 
-The four shipped manifests, from `quackd list-verbs --robot ...` or `describe()`:
+The five shipped manifests, from `quackd list-verbs --robot ...` or `describe()`:
 
 | Robot | embodiment / mobility | intents | verbs |
 |---|---|---|---|
@@ -78,6 +78,7 @@ The four shipped manifests, from `quackd list-verbs --robot ...` or `describe()`
 | `reachy_mini:sim2d` | stationary_head / none | gaze, sound, skill | observe, report_state, stop, say, search_scan, gaze, play_sound, wake_up, express |
 | `lerobot:mock` | arm / none | joint, gripper, skill | observe, report_state, stop, move_joints, gripper, place, pick |
 | `rosbridge:mock` | wheeled / wheeled | twist | observe, report_state, stop, move, go_to, search_scan, approach_and |
+| `open_duck:sim2d` | biped / legged | twist, gaze, sound, skill | report_state, stop, move, observe, go_to, search_scan, approach_and, say, quack, gaze, express |
 
 What each body lacks is as important as what it has: the head cannot `kick`, the arm
 cannot `move`, the base cannot `say`, and a `.duck` that `requires` one of those fails

@@ -46,5 +46,18 @@ This project builds on, interoperates with, and is grateful to:
     lazily and never on the default path.
     https://github.com/python-zeroconf/python-zeroconf
 
-No Pollen Robotics logos, meshes, videos, or other brand assets are
-distributed with quackd.
+  * Open Duck Mini (apirrone/Open_Duck_Mini) — the open source 3D printed
+    biped the open_duck adapter targets, and the source of its walk policy.
+    Apache-2.0. Nothing vendored: no ONNX policy, no CAD, no meshes and no
+    sounds are distributed with quackd. You fetch them onto your own robot.
+    https://github.com/apirrone/Open_Duck_Mini
+
+  * Open Duck Mini Runtime (apirrone/Open_Duck_Mini_Runtime) — the on-robot
+    runtime that quackd's bridge daemon imports. It carries NO LICENSE FILE,
+    so all rights are reserved by its authors: quackd vendors none of it,
+    depends on none of it, and never redistributes it. You install it on your
+    own robot from upstream. Method and constant names are cited as facts.
+    https://github.com/apirrone/Open_Duck_Mini_Runtime
+
+No Pollen Robotics or Open Duck Mini logos, meshes, CAD, ONNX policies,
+sounds, videos, or other brand assets are distributed with quackd.

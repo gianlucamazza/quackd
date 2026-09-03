@@ -9,12 +9,12 @@ Thanks for taking a toy duck seriously. Two kinds of contribution matter most: *
 git clone https://github.com/rokbenko/quackd && cd quackd
 uv sync --extra dev            # add --extra anthropic etc. if you want a real provider
 uv run pre-commit install
-uv run pytest                  # 360 tests, about 70 s, no network, no keys
+uv run pytest                  # 421 tests, about 80 s, no network, no keys
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
 
 Windows, macOS and Linux are all first-class. Tests must never touch the network. Most of
-those 70 seconds are the four seeded acceptance sweeps, which CI holds at 10 of 10 by setting
+those seconds are the five seeded acceptance sweeps, which CI holds at 10 of 10 by setting
 `QUACKD_STRICT_SEEDS=1`; locally they pass at 8 of 10 so a slow machine does not block you.
 
 Touching `quackd/lan/` or `quackd/flock/mqtt_bus.py`? Neither imports its library at module

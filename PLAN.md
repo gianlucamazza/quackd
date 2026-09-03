@@ -64,6 +64,24 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ CHANGELOG 0.1.0; tag `v0.1.0`
 - ✅ Definition of done: `uvx quackd run find-and-kick --provider fake` from README alone; `tests/test_upstream_api.py` proves no UNVERIFIED ref is reachable outside `jsonrpc`/`websocket`/`doctor`
 
+## M6 — The first robot you can actually build 🔨
+
+- ✅ `open_duck` adapter (ADR-0024): manifest, verbs, `sim2d` and `mock`; `kick` `grab`
+  `sit` `stand` `stand_up` never declared, because this robot has none of them
+- ✅ `fix(cli)`: `run` validates a `.duck` against its robot before connecting, instead of
+  raising a bare `VerbNotFound` mid-run and leaving an empty run directory
+- ✅ `open-duck-scout` 10 of 10 seeds, `open-duck-lookout` (moves no legs, for bring-up)
+- ✅ `open_duck:bridge` and `bridge/open_duck/`, the first quackd code that runs on a robot:
+  upstream's own walk loop with its gamepad class rebound to a socket, a deadman evaluated
+  by the control loop, head control off by default, protocol exercised end to end over
+  loopback against the real daemon
+- ✅ Docs: ADR-0024, `docs/adapters/open_duck.md`, the hardware checklist, the issue
+  template, licences and NOTICE for two upstreams (one of which has no LICENSE file)
+- ⏸ Only a human can: run `open_duck:bridge` against a duck they built, work the checklist
+  in `docs/open-duck-hardware-checklist.md`, and confirm the deadman by pulling Wi-Fi
+  mid-walk. Flip the `bridge` row in `docs/adapter-status.md` only after
+- ⬜ Flock mode does not know `open_duck` yet (`flock/runner.py` knows two adapters)
+
 ## Open after v0.1.0
 
 - ⏸ Real-model hero recording (needs an API key) — `quackd record find-and-kick --provider anthropic --seed 3`

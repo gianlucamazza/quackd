@@ -231,6 +231,7 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
     )
 
     from quackd.adapters.lerobot import upstream_api as lerobot_api
+    from quackd.adapters.open_duck import upstream_api as open_duck_api
     from quackd.adapters.reachy_mini import upstream_api as reachy
     from quackd.adapters.rosbridge import upstream_api as rosbridge_api
 
@@ -238,6 +239,7 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
         ("reachy_mini", reachy, "sdk", "a robot"),
         ("lerobot", lerobot_api, "real", "an arm"),
         ("rosbridge", rosbridge_api, "ws", "a bridge"),
+        ("open_duck", open_duck_api, "bridge", "a duck"),
     ):
         unverified = api.refs_by_status("UNVERIFIED")
         t = Table(

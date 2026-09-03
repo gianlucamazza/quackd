@@ -111,8 +111,8 @@ over its own local HTTP endpoint, not literally air-gapped. See
 
 **Can quackd drive something that is not a duck?** Since 0.4, yes: a robot is an adapter
 that returns a manifest, and the verbs come from the manifest. `quackd list-adapters`
-shows the four that ship (Microduck, Reachy Mini, a LeRobot arm, any base over
-rosbridge), `quackd list-verbs --robot reachy_mini:sim2d` shows what one of them can do,
+shows the five that ship (Microduck, Reachy Mini, a LeRobot arm, any base over
+rosbridge, and an Open Duck Mini v2), `quackd list-verbs --robot reachy_mini:sim2d` shows what one of them can do,
 and `quackd validate your.duck --robot lerobot:mock` tells you, field by field, whether
 your task fits that body. The rule never bends: a verb that is not in the manifest does
 not exist on that robot. Writing one: [adapters.md](adapters.md).

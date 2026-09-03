@@ -45,7 +45,7 @@ def test_adapter_guide_and_manifest_spec_match_the_code() -> None:
     assert "manifest.schema.json" in spec and "digest()" in spec
 
 
-@pytest.mark.parametrize("adapter", ["reachy_mini", "lerobot", "rosbridge"])
+@pytest.mark.parametrize("adapter", ["reachy_mini", "lerobot", "rosbridge", "open_duck"])
 def test_adapter_doc_lists_every_upstream_ref(adapter: str) -> None:
     api = importlib.import_module(f"quackd.adapters.{adapter}.upstream_api")
     doc = (REPO / "docs" / "adapters" / f"{adapter}.md").read_text(encoding="utf-8")

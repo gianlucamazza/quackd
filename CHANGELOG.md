@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The Open Duck Mini v2 adapter** (`--robot open_duck:sim2d`, `open_duck:mock`): the
+- **The Open Duck Mini v2 adapter** (`--robot open_duck:sim2d`, `open_duck:mock`,
+  `open_duck:bridge`): the
   first robot quackd supports that anyone can build today. It is an open hardware 3D
   printed biped that walks on its own 50 Hz ONNX policy on a Raspberry Pi Zero 2 W. Its
   manifest is a strict subset and says so: this robot has no beak, no gripper, no kick
@@ -19,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are clamped to the ranges read from the robot's own runtime (0.15 m/s forward, 0.2 m/s
   sideways, 1.0 rad/s turning), and a fallen duck refuses to move with a message saying a
   human must stand it up, because nothing quackd can call will.
+- **A bridge daemon that runs on the robot** (`bridge/open_duck/`), which is a first for
+  quackd: every other adapter talks to someone else's daemon, and this robot has none. It
+  does not reimplement the 50 Hz control loop, it *is* that loop, with the class upstream
+  imports to read a gamepad rebound to read a socket instead. One process, so the servo bus
+  keeps one owner, and nothing of upstream's is copied. Going limp is unreachable rather
+  than forbidden: the only channel from the network to the body is seven floats and a few
+  buttons. The deadman is quackd's own, it runs on the robot, and it is evaluated by the
+  control loop rather than a timer, so a server thread that is starved, wedged or dead still
+  stops the duck. Standard library plus numpy, so it installs on a 512 MB Pi, and
+  `--fake` runs the whole protocol on a laptop with no robot at all.
+- **Two starter tasks**, `open-duck-scout` (find the ball, walk up, report, 10 of 10 seeds)
+  and `open-duck-lookout`, whose allowlist moves no legs at all and which exists to be the
+  first thing anyone points at a physical duck.
+- ADR-0024, `docs/adapters/open_duck.md`, and a hardware checklist and issue template for
+  the first person to run this on a duck they built.
 
 ### Fixed
 
