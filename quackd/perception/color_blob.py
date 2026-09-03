@@ -69,7 +69,11 @@ class ColorBlobDetector:
         out: list[Detection] = []
         for target in self.targets:
             r = target.hsv
-            mask = cv2.inRange(hsv, (r.h_lo, r.s_lo, r.v_lo), (r.h_hi, 255, 255))
+            # uint8 arrays, not tuples: OpenCV accepts both, but the stubs only type the
+            # array overload, and which stub version resolves depends on the Python minor
+            lo = np.array([r.h_lo, r.s_lo, r.v_lo], dtype=np.uint8)
+            hi = np.array([r.h_hi, 255, 255], dtype=np.uint8)
+            mask = cv2.inRange(hsv, lo, hi)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             blobs = sorted(contours, key=cv2.contourArea, reverse=True)[: self.max_per_label]
             for c in blobs:
