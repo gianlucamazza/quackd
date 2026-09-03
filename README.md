@@ -238,7 +238,7 @@ Five robots, and one table for how far each one has actually got. The distinctio
   <sub><code>open-duck-scout</code> on <code>open_duck:sim2d</code>, seed 3, driven by the <em>scripted</em> pilot. It finds the ball and walks up to it, because this duck has no kick.</sub>
 </p>
 
-**If you own one of these, the Open Duck Mini is where help is worth the most.** It is the only body in the table a stranger can build from scratch, the daemon and the protocol are already exercised against each other, and the only untested part left is the duck. [docs/open-duck-hardware-checklist.md](docs/open-duck-hardware-checklist.md) is the order to try it in, feet off the ground until step 8.
+**If you own one of these, the Open Duck Mini is where help is worth the most.** It is the only body in the table a stranger can build from scratch, the daemon and the protocol are already exercised against each other, and the only untested part left is the duck. [docs/open-duck-hardware-checklist.md](docs/open-duck-hardware-checklist.md) is the order to try it in, feet off the ground until step 10.
 
 <br>
 

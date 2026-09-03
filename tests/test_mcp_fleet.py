@@ -259,3 +259,37 @@ def test_build_needs_a_robot_and_a_known_default() -> None:
         build_fleet_server({})
     with pytest.raises(ValueError, match="default robot"):
         build_fleet_server({"a": MockTransport()}, default="zz")
+
+
+@pytest.mark.parametrize("spec", ["open_duck:mock", "microduck:mock", "reachy_mini:mock"])
+async def test_a_camera_robot_that_is_not_the_simulator_gets_a_detector(spec: str) -> None:
+    """The 0.5 fix landed in `quackd run` and missed this entry point.
+
+    `build_fleet_server` still keyed the detector on the backend being `sim2d`, so every
+    hardware body over MCP fetched frames, detected nothing because nothing was detecting,
+    and reported that it could not see. The decision now happens after connect, against
+    what the robot said it has."""
+    robot = make_adapter(spec)
+    async with connected({"r": robot}) as (client, fleet):
+        session = fleet.sessions["r"]
+        assert robot.manifest is not None and "camera" in robot.manifest.sensors
+        assert session.detector is not None, f"{spec} runs blind over MCP"
+        assert session.executor.detector is session.detector
+        # and the verbs that need one no longer refuse
+        res = _data(await client.call_tool("robot_run_verb", {"verb": "search_scan"}))
+        assert "needs a detector" not in res["summary"]
+
+
+def test_the_detector_policy_is_the_camera_and_nothing_else() -> None:
+    """Both entry points call one function so they cannot drift again. Every body that can
+    connect offline has a camera, so the two negative cases are pinned here: a body with no
+    camera gets nothing, and an explicit `--detector` is never overruled."""
+    from quackd.perception import detector_for
+    from quackd.perception.color_blob import ColorBlobDetector
+
+    assert detector_for(["camera", "imu"]) is not None
+    assert detector_for(["joint_state"]) is None  # lerobot:real
+    assert detector_for(["odometry"]) is None  # rosbridge:ws before it connects
+    mine = ColorBlobDetector()
+    assert detector_for(["camera"], mine) is mine
+    assert detector_for(["odometry"], mine) is mine

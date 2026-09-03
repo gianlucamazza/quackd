@@ -104,7 +104,7 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ v0.5.0 (2026-09-03): the Open Duck Mini v2, the first robot anyone can build (ADR-0024,
   [design](docs/design/open-duck.md)); the first quackd code that runs on a robot; four
   hardware-path blockers fixed; `--transport` and the `duck_*` tools removed as promised;
-  451 tests, five seeded sweeps at 10 of 10, still offline
+  457 tests, five seeded sweeps at 10 of 10, still offline
 - ⏸ Only a human can: run `open_duck:bridge` against a duck they built, work the checklist
   in `docs/open-duck-hardware-checklist.md`, and confirm the deadman by pulling Wi-Fi
   mid-walk. Flip the `bridge` row in `docs/adapter-status.md` only after

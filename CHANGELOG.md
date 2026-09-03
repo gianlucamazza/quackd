@@ -80,7 +80,11 @@ Still nothing has run on a duck. What is new is that everything except the duck 
 - **Perception was attached only for the simulator.** Every hardware backend with a camera
   ran blind: it fetched frames, detected nothing because nothing was detecting, and reported
   that it could not see. The detector now follows the camera rather than the backend, which
-  also fixes `microduck:jsonrpc` and `rosbridge:ws`.
+  also fixes `microduck:jsonrpc` and `rosbridge:ws`. Both entry points ask one function,
+  `perception.detector_for`, and both ask it at *connect*: the first cut of this fix keyed
+  `quackd run` on the camera and left `serve-mcp` keyed on the backend, so every hardware
+  body over MCP still ran blind, and deciding from the static description would still have
+  missed a `rosbridge:ws` base, which only reports its camera once it has connected.
 - **A robot that reports fewer capabilities at connect than its description claims** used to
   crash the run. `validate` checks the static manifest, which describes a fully built robot,
   so a duck with no camera got past it and then raised a bare `VerbNotFound` when the agent
@@ -92,6 +96,20 @@ Still nothing has run on a duck. What is new is that everything except the duck 
   reach the agent loop and raise a bare `VerbNotFound` with the robot already connected and
   an empty run directory already written. It now refuses up front with the validator's own
   sentence and writes nothing.
+- **Two commands still told users to pass `--transport`**, the flag this release removes: a
+  `doctor` table title and the `TransportError` the WebSocket stub raises. The guard that
+  swept the documentation for it could not see a Python string, and now reads
+  `quackd/**/*.py` too. Six other user-visible strings were still dated "in 0.4", and
+  `doctor` printed the extra as `quackd` because rich ate the `[lan]` as markup.
+- **The PyPI summary and keywords never mentioned the Open Duck Mini**, the robot this
+  release is named for, and no test had ever read `pyproject.toml`. One now does. The
+  `Framework :: Robot Framework` classifier is also gone: that is the test-automation tool
+  of the same name, not robotics, and it filed quackd under the wrong ecosystem.
+- `quackd doctor` reported `?` for opencv and Pillow, which are not optional and were plainly
+  installed. An import name is not a distribution name, so it now asks the installer which
+  distribution provides the module before giving up.
+- The Open Duck bring-up checklist keeps the feet off the ground through step 9 and puts
+  them down at step 10. Three documents said step 8.
 - `mypy` failed on Python 3.12 (the opencv stubs that resolve there type only the array
   overload of `cv2.inRange`, so the tuple bounds in `perception/color_blob.py` matched no
   variant). Bounds are now `uint8` arrays. OpenCV accepts both, so nothing about detection

@@ -107,7 +107,7 @@ widen it. **You are responsible for your robot.**
   **no authentication at all**. It binds loopback and warns if you bind it wider, because
   it shows whatever the robot can see. Tunnel it rather than exposing it.
 - The only e-stop is the power switch.
-- The order to bring one up in, feet off the ground until step 8, with an abort condition
+- The order to bring one up in, feet off the ground until step 10, with an abort condition
   at every step: [open-duck-hardware-checklist.md](open-duck-hardware-checklist.md).
 
 ## On other bodies

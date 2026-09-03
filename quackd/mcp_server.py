@@ -27,6 +27,7 @@ from quackd.agent.transcript import png_bytes
 from quackd.duckfile.parser import DuckParseError, load_duck
 from quackd.duckfile.schema import DuckFile
 from quackd.duckfile.validate import validate_duck
+from quackd.perception import detector_for
 from quackd.perception.base import Detector
 from quackd.safety import (
     Aborted,
@@ -369,6 +370,7 @@ def build_fleet_server(
         reg = registry or default_registry()
         det = detector
         if det is None and backend_name(transport) == "sim2d":
+            # a bare transport has no manifest to ask; an adapter is upgraded after connect
             from quackd.perception.color_blob import ColorBlobDetector
 
             det = ColorBlobDetector()
@@ -408,6 +410,12 @@ def build_fleet_server(
     async def lifespan(_server: MCPServer) -> AsyncIterator[Fleet]:
         await fleet.connect_all()
         for session in fleet.sessions.values():
+            # now that the robot has said what it actually has, not what its description
+            # claims. `build_fleet_server` can only see a bare transport's backend.
+            live = getattr(session.transport, "manifest", None)
+            if live is not None:
+                session.detector = detector_for(live.sensors, session.detector)
+                session.executor.detector = session.detector
             log.info(
                 "quackd MCP server up: robot=%s transport=%s dry_run=%s",
                 session.name,

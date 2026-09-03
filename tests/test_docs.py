@@ -186,6 +186,28 @@ def test_no_document_claims_the_wrong_number_of_adapters(name: str) -> None:
             )
 
 
+def test_the_pypi_summary_names_every_robot() -> None:
+    """The one sentence on the PyPI page shipped 0.5 without the Open Duck Mini in it.
+
+    That line and the keywords are how someone searching for their robot finds quackd, and
+    nothing in the test suite had ever read pyproject.toml."""
+    import tomllib
+
+    from quackd.adapters.factory import ADAPTER_NAMES
+
+    project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    haystack = (project["description"] + " " + " ".join(project["keywords"])).lower()
+    # the summary names bodies, not adapter identifiers: microduck -> "microduck",
+    # open_duck -> "open duck", rosbridge -> "ros"
+    for adapter in ADAPTER_NAMES:
+        needle = {"open_duck": "open duck", "rosbridge": "ros", "reachy_mini": "reachy"}.get(
+            adapter, adapter
+        )
+        assert needle in haystack, (
+            f"pyproject describes quackd without {needle!r}; it ships a {adapter} adapter"
+        )
+
+
 def test_the_readme_starter_table_lists_every_bundled_duck() -> None:
     """`open-duck-lookout` shipped in 0.5 and appeared nowhere in the README."""
     from quackd.duckfile.parser import list_bundled_ducks
@@ -211,6 +233,12 @@ def test_no_document_still_promises_a_removal_that_happened() -> None:
     from quackd.mcp_server import TOOL_NAMES
 
     assert not [n for n in TOOL_NAMES if n.startswith("duck_")]
+    # a table title and a TransportError still told users to pass it, and no doc test could
+    # see a Python string, so the same rule now covers the source that prints to a terminal
+    for src in sorted((REPO / "quackd").rglob("*.py")):
+        assert "--transport" not in src.read_text(encoding="utf-8"), (
+            f"quackd/{src.relative_to(REPO / 'quackd').as_posix()} still offers --transport"
+        )
     for path in _living_docs():
         text = _prose(path.read_text(encoding="utf-8"))
         assert "--transport" not in text, f"{path.name} still documents --transport"

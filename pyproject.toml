@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "quackd"
 dynamic = ["version"]
-description = "Give your small robot a brain. Any LLM, one .duck file. Microduck, Reachy Mini, LeRobot arms and ROS bases."
+description = "Give your small robot a brain. Any LLM, one .duck file. Microduck, Open Duck Mini, Reachy Mini, LeRobot arms and ROS bases."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 authors = [{ name = "Rok Benko" }]
 keywords = [
-  "microduck", "reachy-mini", "lerobot", "ros", "rosbridge",
+  "microduck", "open-duck-mini", "reachy-mini", "lerobot", "ros", "rosbridge",
   "robotics", "embodied-ai", "physical-ai", "llm-agents",
   "mcp", "model-context-protocol", "reinforcement-learning", "sim2real",
   "claude", "openai", "ollama", "vllm", "llama-cpp", "local-llm",
@@ -25,7 +25,6 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Framework :: Robot Framework",
 ]
 # The default install must stay light so `uvx quackd` is fast.
 # Provider SDKs, YOLO and the live window are extras.

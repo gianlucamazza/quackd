@@ -95,7 +95,7 @@ class LeRobotReal:
         if not self.port:
             raise TransportError("lerobot real: --address must be the arm's serial port")
         if self.robot_type != up.ROBOT_TYPE_SO101.name:
-            raise TransportError(f"lerobot real: only {up.ROBOT_TYPE_SO101.name} is wired in 0.4")
+            raise TransportError(f"lerobot real: only {up.ROBOT_TYPE_SO101.name} is wired")
         config = SO101FollowerConfig(port=self.port, id=self.robot_id)
         return make_robot_from_config(config)
 

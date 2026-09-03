@@ -2,7 +2,7 @@
 
 Nobody has run quackd against a physical Open Duck Mini v2. If you have one, this page is
 the order to do it in. Every step has an abort condition, and they are ordered so that the
-duck's feet do not touch the ground until step 8.
+duck's feet do not touch the ground until step 10.
 
 **Before anything else.** This robot has no get-up-after-fall policy. If it goes over, quackd
 cannot recover it and every verb that moves it will refuse until you pick it up. Work with

@@ -89,7 +89,7 @@ def make_sim_flock(
     heads = [n for n in ordered if specs[n].adapter == "reachy_mini"]
     unknown = [n for n in ordered if n not in ducks and n not in heads]
     if unknown:
-        raise ValueError(f"flock mode knows microduck and reachy_mini in 0.4, not {unknown}")
+        raise ValueError(f"flock mode knows microduck and reachy_mini, not {unknown}")
     adapters: dict[str, Any] = {}
     if not heads:
         transports = make_flock(len(ducks), seed=seed, live=live, person=person)
@@ -138,9 +138,7 @@ async def run_flock(
     specs = member_specs(members, robots, duck.frontmatter.robots)
     for name, spec in specs.items():
         if spec.backend != "sim2d":
-            raise ValueError(
-                f"flock mode is simulator only in 0.4 (docs/flock.md): {name} is {spec.key}"
-            )
+            raise ValueError(f"flock mode is simulator only (docs/flock.md): {name} is {spec.key}")
     manifests = {name: describe(spec) for name, spec in specs.items()}
     mobile = [name for name in members if manifests[name].mobility != "none"]
     policy = AuctionPolicy.from_flock(flock)

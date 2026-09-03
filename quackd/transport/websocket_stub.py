@@ -31,7 +31,7 @@ class WebSocketTransport:
             "the WebSocket agent gateway is designed upstream but not shipped "
             f"({up.WEBSOCKET_GATEWAY.status}: {up.WEBSOCKET_GATEWAY.note}). "
             f"Track it at {up.WEBSOCKET_GATEWAY.source} and {up.ROADMAP}. "
-            "Use --transport jsonrpc (experimental) or --transport sim2d."
+            "Use --robot microduck:jsonrpc (experimental) or --robot microduck:sim2d."
         )
 
     async def connect(self) -> None:

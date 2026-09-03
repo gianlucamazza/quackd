@@ -167,7 +167,7 @@ class FlockRole(BaseModel):
     requires: list[str] = Field(
         default=..., min_length=1, description="Verbs a robot must provide to bid for this role."
     )
-    count: Literal[1] = Field(default=1, description="Robots per role. Only 1 in 0.4.")
+    count: Literal[1] = Field(default=1, description="Robots per role. Only 1 so far.")
 
     @field_validator("requires")
     @classmethod

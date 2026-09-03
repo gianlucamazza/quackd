@@ -21,7 +21,7 @@ from quackd import __version__
 
 app = typer.Typer(
     name="quackd",
-    help="Give your Microduck a brain. Any LLM, one .duck file. 🦆🧠",
+    help="Give your small robot a brain. Any LLM, one .duck file. 🦆🧠",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -268,6 +268,7 @@ def _run_impl(
     from quackd.agent.providers.factory import make_provider
     from quackd.duckfile.parser import DuckParseError, duck_from_goal, load_duck
     from quackd.duckfile.validate import validate_duck
+    from quackd.perception import detector_for
     from quackd.safety import KillSwitch, allow_all
     from quackd.transport.base import TransportError
 
@@ -344,14 +345,11 @@ def _run_impl(
         return
 
     recorder = None
-    detector = None
     # Any robot with a camera needs something to look at its frames with, not just the
-    # simulator. Without this every camera verb on a hardware backend runs blind: it fetches
-    # a frame, finds no detections because nothing is detecting, and reports nothing seen.
-    if "camera" in manifests[0].sensors:
-        from quackd.perception.color_blob import ColorBlobDetector
-
-        detector = ColorBlobDetector()
+    # simulator. This is the static manifest, so it is only a head start: the loop asks
+    # again with the live one at connect, where a robot may report a camera this does not
+    # know about (a rosbridge base) or lack one this promises (a duck built without a head).
+    detector = detector_for(manifests[0].sensors)
     # the recorder is sim2d only: it draws the world, and only the simulator has one
     if spec.backend == "sim2d" and gif:
         from quackd.sim2d.recorder import FrameRecorder
@@ -452,7 +450,7 @@ def _run_flock_impl(
 
     if any(spec.backend != "sim2d" for spec in specs):
         _fail(
-            "flock mode is simulator only in 0.4 (docs/flock.md); "
+            "flock mode is simulator only (docs/flock.md); "
             "every member must be an <adapter>:sim2d robot"
         )
         return

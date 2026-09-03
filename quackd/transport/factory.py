@@ -1,8 +1,8 @@
-"""`--transport <name>` → a `DuckTransport`.
+"""A backend name → a `DuckTransport`.
 
 The default is the simulator, because the north-star demo needs no hardware. The two
 robot-facing transports are reachable only by name, which is how the "no UNVERIFIED
-upstream call without `--transport jsonrpc|websocket`" promise is kept.
+upstream call without `--robot microduck:jsonrpc|websocket`" promise is kept.
 """
 
 from __future__ import annotations

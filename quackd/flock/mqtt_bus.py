@@ -18,7 +18,7 @@ network thread; consumers still `drain()` between sim sleeps. Four invariants:
   `call_soon_threadsafe` before it is tapped and pushed. Without a running loop (a
   synchronous test) it is delivered inline.
 
-Library-only in 0.4: `run_flock(bus_factory=...)`. There is no `--bus` flag because a
+Library-only: `run_flock(bus_factory=...)`. There is no `--bus` flag because a
 distributed flock also needs a distributed clock, which is out of scope.
 """
 

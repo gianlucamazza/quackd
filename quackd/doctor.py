@@ -60,7 +60,16 @@ def _installed(module: str) -> str | None:
     try:
         return md.version(dist)
     except md.PackageNotFoundError:
-        return "?"
+        pass
+    # An import name is not a distribution name: `cv2` ships as opencv-python-headless here
+    # and as opencv-python elsewhere, `PIL` as pillow. Ask the installer which one it was,
+    # rather than printing "?" next to a package that is plainly installed and working.
+    for candidate in md.packages_distributions().get(module.split(".")[0], []):
+        try:
+            return md.version(candidate)
+        except md.PackageNotFoundError:
+            continue
+    return "?"
 
 
 def _mask(value: str) -> str:
@@ -250,7 +259,7 @@ def run_doctor(
             if address:
                 ok &= _probe(console, robot, manifest, address, camera_url, token)
 
-    t = Table(title="transports (Microduck backends; --transport X is --robot microduck:X)")
+    t = Table(title="transports (Microduck backends; --robot microduck:<name>)")
     t.add_column("name")
     t.add_column("status")
     t.add_column("notes")
@@ -274,7 +283,7 @@ def run_doctor(
     console.print(t)
     console.print(
         "[dim]flock mode (--flock, flock.roles): sim2d only, in-process bus by default. "
-        "The MQTT bus (quackd[lan]) is library-only in 0.4 (docs/lan.md).[/dim]"
+        "The MQTT bus (" + escape("quackd[lan]") + ") is library-only (docs/lan.md).[/dim]"
     )
 
     t = Table(title="optional extras", show_header=False)

@@ -34,6 +34,7 @@ from quackd.agent.providers.base import (
 )
 from quackd.agent.transcript import Transcript, new_run_dir, png_bytes
 from quackd.duckfile.schema import DuckFile
+from quackd.perception import detector_for
 from quackd.perception.base import Detection, Detector
 from quackd.safety import (
     Aborted,
@@ -186,6 +187,9 @@ class AgentLoop:
                 self.registry = registry_from_manifest(manifest, cfg.transport)
                 self.executor.registry = self.registry
             self.executor.manifest = manifest
+            # the CLI guessed from the description; this is what the robot actually has
+            cfg.detector = detector_for(manifest.sensors, cfg.detector)
+            self.executor.detector = cfg.detector
         registry = self.registry
         allow = self.fm.verbs.allow
         # `validate` and the CLI check the STATIC manifest, which describes a fully built

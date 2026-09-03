@@ -92,7 +92,7 @@
         "count": {
           "const": 1,
           "default": 1,
-          "description": "Robots per role. Only 1 in 0.4.",
+          "description": "Robots per role. Only 1 so far.",
           "title": "Count",
           "type": "integer"
         }
