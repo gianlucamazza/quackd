@@ -112,6 +112,8 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
   `v0.5.0 "open duck"` created on `main` with the wheel and sdist attached (2026-09-03).
   A pre-release audit of the note against the code fixed a half-applied detector fix, two
   commands still advertising `--transport`, and a PyPI summary with no Open Duck in it
-- ⏸ Publish 0.5.0 to PyPI (needs `UV_PUBLISH_TOKEN` in `.env`), and update the GitHub About
-  description and Topics for five bodies
+- ✅ Published `quackd 0.5.0` to PyPI (2026-09-03), the same two files attached to the
+  release; `uvx quackd run open-duck-scout --provider fake` verified from a clean install.
+  About description and Topics updated for five bodies (`open-duck-mini` and
+  `bipedal-robot` in, `python` and `llama-cpp` out, at GitHub's cap of 20)
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)
