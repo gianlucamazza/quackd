@@ -46,8 +46,14 @@ def conditions() -> dict[str, Precondition]: ...
 
 # the backend, imported lazily
 def make(
-    backend: str, *, robot_id=None, seed=None, address=None, live=False,
-    camera_url=None, token=None,
+    backend: str,
+    *,
+    robot_id=None,
+    seed=None,
+    address=None,
+    live=False,
+    camera_url=None,
+    token=None,
 ) -> RobotAdapter: ...
 ```
 

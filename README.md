@@ -232,6 +232,12 @@ Five robots, and one table for how far each one has actually got. The distinctio
 | **Any ROS base** | `rosbridge:mock` | any wheeled base that takes a Twist | ✅ mock |
 | | `rosbridge:ws` | the real one, over `rosbridge_server` | 🧪 names, behind `quackd[rosbridge]` |
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/open-duck.gif" alt="An Open Duck Mini v2 in the simulator turns to find the ball, walks up to it and reports where it is. Left: the world from above. Right: what the duck's camera sees." width="600">
+  <br>
+  <sub><code>open-duck-scout</code> on <code>open_duck:sim2d</code>, seed 3, driven by the <em>scripted</em> pilot. It finds the ball and walks up to it, because this duck has no kick.</sub>
+</p>
+
 **If you own one of these, the Open Duck Mini is where help is worth the most.** It is the only body in the table a stranger can build from scratch, the daemon and the protocol are already exercised against each other, and the only untested part left is the duck. [docs/open-duck-hardware-checklist.md](docs/open-duck-hardware-checklist.md) is the order to try it in, feet off the ground until step 8.
 
 <br>

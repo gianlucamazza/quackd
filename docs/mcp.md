@@ -59,7 +59,6 @@ claude mcp add quackd -- uvx quackd serve-mcp --robot microduck:sim2d
 }
 ```
 
-(`--transport sim2d` still works for one release; it is the same thing with a warning.)
 
 (No `"type"` key: Claude Code reads an entry with `command` as a stdio server.)
 

@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-09-03
+
+The first robot you can actually build. Every hardware backend before this one targeted a
+robot you could not buy or had not assembled: the Microduck ships around Christmas 2026, and
+the Reachy, LeRobot and rosbridge backends have only ever talked to fakes. The Open Duck
+Mini v2 is open hardware people are printing at home today, so for the first time a stranger
+can follow these instructions all the way to a walking robot. That also makes this the first
+release where quackd ships code that runs **on** a robot. Design: `docs/adr/0024-open-duck-mini.md`.
+
+Still nothing has run on a duck. What is new is that everything except the duck is tested.
 
 ### Added
 
@@ -41,6 +50,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first thing anyone points at a physical duck.
 - ADR-0024, `docs/adapters/open_duck.md`, and a hardware checklist and issue template for
   the first person to run this on a duck they built.
+- **`--camera-url`** on `run`, `serve-mcp` and `doctor`, for a robot whose camera is an HTTP
+  snapshot rather than something the control socket can serve.
+- **`--token` and `QUACKD_DUCK_TOKEN`** for a robot that wants authentication. The Open Duck
+  bridge's own installer writes one, so until now a duck set up by the book refused every
+  client and no document explained why.
+- **`quackd doctor --robot X --address Y` connects.** Everything else in `doctor` is offline
+  and reads the static manifest, which describes a fully built robot. This prints what your
+  robot actually reported: its capabilities, which verbs it does and does not have, and
+  whether its control loop is healthy. It is the only way to see that difference before a
+  run does.
+
+### Removed
+
+- **`--transport X`**, the 0.4 alias of `--robot microduck:X`, along with `resolve_robot`'s
+  transport branch and the warn-once machinery that existed only to support it. 0.4 said in
+  ten places that it would go in 0.5.
+- **The eight `duck_*` MCP tools**, 0.3 aliases pinned to the default robot. Omitting the
+  `robot` argument to a `robot_*` tool does the same thing. `duck_get_frame` has no exact
+  replacement by design: `robot_observe` does the same job but goes through the executor, so
+  frames are now budgeted and logged like every other verb.
+- Removing them broke the MCP system prompt, which named three of the removed tools and
+  hardcoded "a small biped duck robot (25 cm, 800 g)" for every body. It now names the robot
+  and takes its description from the manifest's own `blurb`, so a lone Open Duck introduces
+  itself as the duck that cannot pick anything up and cannot get back up if it falls.
 
 ### Fixed
 
@@ -62,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mypy` failed on Python 3.12 (the opencv stubs that resolve there type only the array
   overload of `cv2.inRange`, so the tuple bounds in `perception/color_blob.py` matched no
   variant). Bounds are now `uint8` arrays. OpenCV accepts both, so nothing about detection
-  changes: the seeded goldens are byte-identical and all four sweeps still pass 10 of 10.
+  changes: the seeded goldens are byte-identical and all five sweeps still pass 10 of 10.
   This landed just after the v0.4.0 tag, so the tagged commit and the 0.4.0 files on PyPI
   still carry it. It is a type-check-only issue and does not affect the released package at
   runtime.
@@ -343,7 +376,8 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/rokbenko/quackd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rokbenko/quackd/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rokbenko/quackd/compare/v0.1.0...v0.2.0

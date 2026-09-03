@@ -19,6 +19,9 @@ body:
         - "microduck:mock"
         - "microduck:jsonrpc (real robot, experimental)"
         - "microduck:websocket (stub)"
+        - "open_duck:sim2d"
+        - "open_duck:mock"
+        - "open_duck:bridge (real duck, experimental)"
         - "reachy_mini:sim2d"
         - "reachy_mini:mock"
         - "reachy_mini:sdk (real robot, experimental)"
@@ -26,9 +29,6 @@ body:
         - "lerobot:real (real arm, experimental)"
         - "rosbridge:mock"
         - "rosbridge:ws (real bridge, experimental)"
-        - "open_duck:sim2d"
-        - "open_duck:mock"
-        - "open_duck:bridge (real duck, experimental)"
         - "not robot specific (CLI, docs, validation, MCP)"
     validations:
       required: true

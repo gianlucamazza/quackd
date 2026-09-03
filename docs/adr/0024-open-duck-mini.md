@@ -1,6 +1,6 @@
 # ADR-0024: Open Duck Mini v2: quackd ships the daemon that runs on the robot, and vendors nothing
 
-**Status:** accepted · **Date:** 2026-09-03 · Extends ADR-0017, ADR-0022 · Follows the `say` precedent of ADR-0023
+**Status:** accepted · **Date:** 2026-09-03 · Extends ADR-0017, ADR-0022 · Amends ADR-0003 · Follows the `say` precedent of ADR-0023 · Implemented in 0.5 ([design](../design/open-duck.md))
 
 ## Context
 

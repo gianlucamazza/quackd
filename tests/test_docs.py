@@ -140,3 +140,58 @@ def test_adr_links_resolve() -> None:
         text = md.read_text(encoding="utf-8")
         for target in re.findall(r"\]\((adr/[^)]+\.md)\)", text):
             assert (REPO / "docs" / target).exists(), f"{md.name} links to missing {target}"
+
+
+# ── counts, so a release cannot ship a number the code disagrees with ────────────────────
+
+_NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight"}
+
+
+def _prose(text: str) -> str:
+    return re.sub(r"```.*?```", "", text, flags=re.S)
+
+
+@pytest.mark.parametrize("name", ["README.md", "docs/adapters.md", "docs/faq.md", "LAUNCH.md"])
+def test_no_document_claims_the_wrong_number_of_adapters(name: str) -> None:
+    """Half of the 0.5 documentation audit was stale counts that no test could see.
+
+    "four adapters" was written in six places while five shipped. This does not police
+    prose, only the specific claim that quackd has N adapters."""
+    from quackd.adapters.factory import ADAPTER_NAMES
+
+    right = _NUMBER_WORDS[len(ADAPTER_NAMES)]
+    prose = _prose((REPO / name).read_text(encoding="utf-8")).lower()
+    # only claim shapes that are unambiguously about how many adapters exist. "two robots
+    # under one contract" is a heterogeneous flock, not a count of adapters.
+    shapes = ("{w} adapters", "{w} robots supported", "{w} robots today")
+    for count, word in _NUMBER_WORDS.items():
+        if count == len(ADAPTER_NAMES):
+            continue
+        for shape in shapes:
+            claim = shape.format(w=word)
+            assert claim not in prose, (
+                f"{name} says {claim!r}; quackd ships {right} ({', '.join(ADAPTER_NAMES)})"
+            )
+
+
+def test_the_readme_starter_table_lists_every_bundled_duck() -> None:
+    """`open-duck-lookout` shipped in 0.5 and appeared nowhere in the README."""
+    from quackd.duckfile.parser import list_bundled_ducks
+
+    missing = [p.stem for p in list_bundled_ducks() if f"`{p.stem}`" not in README]
+    assert not missing, f"README does not mention: {missing}"
+
+
+def test_no_document_still_promises_a_removal_that_happened() -> None:
+    """0.4 said `--transport` and the duck_* tools go in 0.5. They did, so nothing should
+    still be promising it, and nothing should still be offering them."""
+    from quackd.mcp_server import TOOL_NAMES
+
+    assert not [n for n in TOOL_NAMES if n.startswith("duck_")]
+    for path in sorted(REPO.glob("*.md")) + sorted((REPO / "docs").rglob("*.md")):
+        if path.name in ("CHANGELOG.md", "PLAN.md") or {"design", "adr"} & set(path.parts):
+            continue  # history and decisions record what was true when written
+        text = _prose(path.read_text(encoding="utf-8"))
+        assert "--transport" not in text, f"{path.name} still documents --transport"
+        for promise in ("go away in 0.5", "gone in 0.5", "are removed in 0.5", "for one release"):
+            assert promise not in text, f"{path.name} still promises {promise!r}, which happened"

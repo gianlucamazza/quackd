@@ -64,7 +64,7 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ CHANGELOG 0.1.0; tag `v0.1.0`
 - ✅ Definition of done: `uvx quackd run find-and-kick --provider fake` from README alone; `tests/test_upstream_api.py` proves no UNVERIFIED ref is reachable outside `jsonrpc`/`websocket`/`doctor`
 
-## M6 — The first robot you can actually build 🔨
+## M6 — The first robot you can actually build ✅
 
 - ✅ `open_duck` adapter (ADR-0024): manifest, verbs, `sim2d` and `mock`; `kick` `grab`
   `sit` `stand` `stand_up` never declared, because this robot has none of them
@@ -80,13 +80,17 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ⏸ Only a human can: run `open_duck:bridge` against a duck they built, work the checklist
   in `docs/open-duck-hardware-checklist.md`, and confirm the deadman by pulling Wi-Fi
   mid-walk. Flip the `bridge` row in `docs/adapter-status.md` only after
+- ✅ 0.5 docs pass: README leads with the buildable robot and gains a `Which robots work`
+  table, SECURITY covers the two on-robot services, three claims that had become false are
+  corrected, and every command in the Open Duck docs was run before it shipped
+- ✅ `--transport` and the eight `duck_*` MCP tools removed, as 0.4 promised in ten places
 - ⬜ Flock mode does not know `open_duck` yet (`flock/runner.py` knows two adapters)
 
 ## Open after v0.1.0
 
 - ⏸ Real-model hero recording (needs an API key) — `quackd record find-and-kick --provider anthropic --seed 3`
 - ⏸ Verify `gpt-5` / `grok-4` / `gemini-2.5-pro` default IDs against vendor docs
-- ⏸ Run `--robot microduck:jsonrpc` against a real Microduck (Christmas 2026) and flip its rows in `docs/adapter-status.md` (see the 0.4 human-only list below, which covers all four adapters)
+- ⏸ Run `--robot microduck:jsonrpc` against a real Microduck (Christmas 2026) and flip its rows in `docs/adapter-status.md` (see the human-only list below, which covers all five adapters)
 - ✅ Published `quackd 0.1.0` to PyPI (2026-08-28); `uvx quackd --version` resolves
 - ✅ v0.2.0 (2026-08-29): local and open-source LLM providers, `--goal`, README rewrite, logo
 - ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
@@ -97,4 +101,13 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ Published `quackd 0.4.0` to PyPI (2026-09-02), tagged `v0.4.0` (annotated), GitHub Release `v0.4.0 "adapters"` created on `main` with the wheel and sdist attached, About description and Topics updated for four bodies
 - ⏸ Only a human can: run `reachy_mini:sdk` against a Reachy Mini (or `reachy-mini-daemon --mockup-sim`), `lerobot:real` against an SO-101, `rosbridge:ws` against a bridge, `microduck:jsonrpc` against a robotd; a flock across two machines needs a distributed clock first; flip rows in `docs/adapter-status.md` only after
 - ✅ Pushed `main` + `v0.1.0`; repo public; About/Topics/homepage set; GitHub Release created
+- ✅ v0.5.0 (2026-09-03): the Open Duck Mini v2, the first robot anyone can build (ADR-0024,
+  [design](docs/design/open-duck.md)); the first quackd code that runs on a robot; four
+  hardware-path blockers fixed; `--transport` and the `duck_*` tools removed as promised;
+  445 tests, five seeded sweeps at 10 of 10, still offline
+- ⏸ Only a human can: run `open_duck:bridge` against a duck they built, work the checklist
+  in `docs/open-duck-hardware-checklist.md`, and confirm the deadman by pulling Wi-Fi
+  mid-walk. Flip the `bridge` row in `docs/adapter-status.md` only after
+- ⏸ Publish 0.5.0 to PyPI (needs `UV_PUBLISH_TOKEN`), tag `v0.5.0`, and update the GitHub
+  About description and Topics for five bodies
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)
