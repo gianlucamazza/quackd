@@ -597,6 +597,7 @@ def serve(
     seed: int | None = None,
     address: str | None = None,
     camera_url: str | None = None,
+    token: str | None = None,
     dry_run: bool = False,
     yes: bool = False,
     *,
@@ -647,7 +648,11 @@ def serve(
     )
     adapters = {
         name: make_adapter(
-            spec, seed=seed if seed is not None else 0, address=address, camera_url=camera_url
+            spec,
+            seed=seed if seed is not None else 0,
+            address=address,
+            camera_url=camera_url,
+            token=token,
         )
         for name, spec in zip(manifests, specs, strict=True)
     }

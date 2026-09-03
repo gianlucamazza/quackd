@@ -306,3 +306,14 @@ async def test_a_verb_a_task_merely_allows_is_dropped_not_fatal(
         ticking.set()
         server.stop()
         server.join(timeout=2)
+
+
+# ── the camera is not on the network unless you ask ─────────────────────────────────────
+
+
+def test_the_camera_binds_loopback_by_default(camd: ModuleType) -> None:
+    """It serves a live view of wherever the robot is, with no authentication, so the
+    default must not be the LAN. The shipped systemd unit has to agree."""
+    assert camd.parser().parse_args([]).bind == "127.0.0.1"
+    unit = (REPO / "bridge" / "open_duck" / "quackd-duck-camd.service").read_text(encoding="utf-8")
+    assert "--bind 127.0.0.1" in unit and "--bind 0.0.0.0" not in unit

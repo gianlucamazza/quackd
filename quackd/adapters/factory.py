@@ -188,6 +188,7 @@ def make_adapter(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> RobotAdapter:
     if isinstance(spec, str):
         spec = parse_robot_spec(spec)
@@ -198,6 +199,7 @@ def make_adapter(
         address=address,
         live=live,
         camera_url=camera_url,
+        token=token,
     )
     return adapter
 

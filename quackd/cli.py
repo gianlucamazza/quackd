@@ -256,6 +256,7 @@ def _run_impl(
     live: bool,
     address: str | None,
     camera_url: str | None,
+    token: str | None,
     gif: bool,
     gif_size: int,
     verbose: bool,
@@ -337,7 +338,12 @@ def _run_impl(
             vision=vision,
         )
         duck_transport = make_adapter(
-            spec, seed=seed, address=address, live=live, camera_url=camera_url
+            spec,
+            seed=seed,
+            address=address,
+            live=live,
+            camera_url=camera_url,
+            token=token,
         )
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
@@ -627,6 +633,12 @@ _RUNS = typer.Option("runs", "--runs-dir", help="Where run directories go.")
 _YES = typer.Option(False, "--yes", "-y", help="Auto-confirm gated verbs (careful on hardware).")
 _LIVE = typer.Option(False, "--live", help="sim2d: open a live pygame window (needs quackd[live]).")
 _ADDR = typer.Option(None, "--address", help="jsonrpc: unix:///run/robotd.sock or tcp://host:port")
+_TOKEN = typer.Option(
+    None,
+    "--token",
+    help="The bridge token for a robot that wants one. Its installer writes one on the "
+    "robot. Reads QUACKD_DUCK_TOKEN when the flag is absent.",
+)
 _CAMERA_URL = typer.Option(
     None,
     "--camera-url",
@@ -653,6 +665,7 @@ def run(
     live: bool = _LIVE,
     address: str | None = _ADDR,
     camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
     gif: bool = typer.Option(True, "--gif/--no-gif", help="sim2d: write run.gif into the run dir."),
     gif_size: int = _GIFSIZE,
     verbose: bool = _VERBOSE,
@@ -676,6 +689,7 @@ def run(
         live,
         address,
         camera_url,
+        token,
         gif,
         gif_size,
         verbose,
@@ -719,6 +733,7 @@ def record(
         live=False,
         address=None,
         camera_url=None,
+        token=None,
         gif=True,
         gif_size=gif_size,
         verbose=verbose,
@@ -738,11 +753,24 @@ def doctor(
     robot: str | None = typer.Option(
         None, "--robot", "-r", help="Also show one robot's manifest (<adapter>:<backend>)."
     ),
+    address: str | None = typer.Option(
+        None,
+        "--address",
+        help="With --robot, connect to a real robot and report what it says about itself.",
+    ),
+    camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
 ) -> None:
-    """Check the environment: keys, optional extras, adapters, upstream assumptions."""
+    """Check the environment: keys, optional extras, adapters, upstream assumptions.
+
+    With `--robot X --address Y` it also connects, which is the only way to see what a
+    robot actually reports before a run does."""
     from quackd.doctor import run_doctor
 
-    ok = run_doctor(console, robot=robot)
+    if address and not robot:
+        _fail("--address needs --robot, so quackd knows what it is connecting to")
+        return
+    ok = run_doctor(console, robot=robot, address=address, camera_url=camera_url, token=token)
     if not ok:
         raise typer.Exit(code=1)
 
@@ -762,6 +790,7 @@ def serve_mcp(
     seed: int | None = _SEED,
     address: str | None = _ADDR,
     camera_url: str | None = _CAMERA_URL,
+    token: str | None = _TOKEN,
     dry_run: bool = _DRY,
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Allow confirm-gated verbs (there is no terminal to ask)."
@@ -780,6 +809,7 @@ def serve_mcp(
             seed=seed,
             address=address,
             camera_url=camera_url,
+            token=token,
             dry_run=dry_run,
             yes=yes,
             warn=_deprecated,

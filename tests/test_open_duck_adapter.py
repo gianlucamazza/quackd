@@ -295,3 +295,14 @@ def test_the_factory_makes_every_backend() -> None:
         from quackd.adapters.open_duck import make
 
         make("mujoco")
+
+
+def test_the_bring_up_task_does_not_require_the_dangerous_flag() -> None:
+    """`open-duck-lookout` is what you point at a real duck first. Head control is off by
+    default and is the one thing that can damage this robot, so the task must not need it."""
+    lookout = load_duck("open-duck-lookout")
+    assert "gaze" not in lookout.frontmatter.requires
+    assert "gaze" in lookout.frontmatter.verbs.allow, "still used when the duck has a head"
+    headless = open_duck_manifest("bridge", head=False)
+    assert not headless.provides("gaze")
+    assert not [v for v in lookout.frontmatter.requires if not headless.provides(v)]

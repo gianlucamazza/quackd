@@ -323,6 +323,7 @@ def make(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> OpenDuckAdapter:
     if backend == "sim2d":
         from quackd.adapters.open_duck.sim2d import OpenDuckSim2D
@@ -338,7 +339,8 @@ def make(
         from quackd.adapters.open_duck.bridge import OpenDuckBridge
 
         return OpenDuckAdapter(
-            OpenDuckBridge(address=address, camera_url=camera_url), robot_id=robot_id
+            OpenDuckBridge(address=address, camera_url=camera_url, token=token),
+            robot_id=robot_id,
         )
     raise ValueError(f"unknown open_duck backend {backend!r}; choose one of {BACKENDS}")
 

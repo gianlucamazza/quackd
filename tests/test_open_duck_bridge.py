@@ -21,6 +21,7 @@ from quackd.adapters.open_duck.bridge import (
     MIN_LOOP_HZ,
     PROTOCOL,
     PROTOCOL_VERSION,
+    TOKEN_ENV,
     OpenDuckBridge,
     parse_address,
 )
@@ -50,12 +51,14 @@ class FakeBridge:
         healthy: bool = True,
         loop_hz: float = 49.8,
         fallen: bool | None = False,
+        token: str | None = None,
     ) -> None:
         self.protocol_version = protocol_version
         self.capabilities = FULL_DUCK if capabilities is None else capabilities
         self.healthy = healthy
         self.loop_hz = loop_hz
         self.fallen = fallen
+        self.token = token
         self.notifications: list[dict[str, Any]] = []
         self.requests: list[dict[str, Any]] = []
         self.server: asyncio.AbstractServer | None = None
@@ -96,6 +99,12 @@ class FakeBridge:
             method, params = msg["method"], msg.get("params") or {}
             result: Any
             if method == "duck.hello":
+                if self.token is not None and params.get("token") != self.token:
+                    error = {"code": 2, "message": "bad or missing token; see the token file"}
+                    payload = {"jsonrpc": "2.0", "id": msg["id"], "error": error}
+                    writer.write((json.dumps(payload) + "\n").encode())
+                    await writer.drain()
+                    continue
                 result = {
                     "protocol": PROTOCOL,
                     "protocol_version": self.protocol_version,
@@ -350,5 +359,49 @@ async def test_a_bridge_that_cannot_see_falls_reports_unknown_not_standing() -> 
     state = await t.get_state()
     assert state.posture == "unknown" and state.fallen is False
     assert state.extras["fall_detection"] is False
+    await t.close()
+    await fake.stop()
+
+
+# ── the token the installer writes ──────────────────────────────────────────────────────
+
+
+async def test_the_token_travels_in_the_handshake_not_the_address() -> None:
+    fake = FakeBridge(token="s3cret")
+    await fake.start()
+    t = OpenDuckBridge(fake.address, token="s3cret")
+    await t.connect()
+    assert fake.requests[0]["params"]["token"] == "s3cret"
+    assert "s3cret" not in t.address, "an address is printed and lands in transcripts"
+    await t.close()
+    await fake.stop()
+
+
+async def test_a_missing_token_says_which_flag_to_use() -> None:
+    """The bridge's own installer writes a token, so this is what a by-the-book duck does."""
+    fake = FakeBridge(token="s3cret")
+    await fake.start()
+    t = OpenDuckBridge(fake.address)
+    with pytest.raises(TransportError, match="--token"):
+        await t.connect()
+    assert TOKEN_ENV in str(await _caught(fake.address))
+    await fake.stop()
+
+
+async def _caught(address: str) -> Exception:
+    try:
+        await OpenDuckBridge(address).connect()
+    except TransportError as e:
+        return e
+    raise AssertionError("expected a refusal")
+
+
+async def test_the_token_can_come_from_the_environment(monkeypatch) -> None:
+    fake = FakeBridge(token="from-the-env")
+    await fake.start()
+    monkeypatch.setenv(TOKEN_ENV, "from-the-env")
+    t = OpenDuckBridge(fake.address)
+    await t.connect()
+    assert fake.requests[0]["params"]["token"] == "from-the-env"
     await t.close()
     await fake.stop()

@@ -23,6 +23,7 @@ import contextlib
 import io
 import json
 import math
+import os
 import time
 import urllib.request
 from collections.abc import AsyncIterator
@@ -55,6 +56,8 @@ PROTOCOL = "quackd-open-duck-bridge"
 PROTOCOL_VERSION = 1
 JSONRPC_VERSION = "2.0"
 DEFAULT_PORT = 9871
+#: Where the client looks for the bridge token when no --token was given.
+TOKEN_ENV = "QUACKD_DUCK_TOKEN"
 
 HELLO = "duck.hello"
 COMMAND = "duck.command"  # notification, re-sent at 10 Hz; feeds the daemon's deadman
@@ -94,10 +97,15 @@ class OpenDuckBridge:
         address: str | None = None,
         *,
         camera_url: str | None = None,
+        token: str | None = None,
         request_timeout_s: float = 2.0,
     ) -> None:
         self.address = address or f"tcp://open-duck.local:{DEFAULT_PORT}"
         self.camera_url = camera_url
+        # The bridge's installer writes a token to the robot, so a duck set up by the book
+        # refuses an unauthenticated client. It travels in the handshake and never in the
+        # address, because addresses are printed and land in transcripts.
+        self.token = token or os.environ.get(TOKEN_ENV) or None
         self.request_timeout_s = request_timeout_s
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -126,9 +134,20 @@ class OpenDuckBridge:
                 "quackd-duck-bridge running on the duck's Pi?"
             ) from e
         self._pump = asyncio.create_task(self._read_loop(), name="quackd-open-duck-pump")
-        result = await self.request(
-            HELLO, {"protocol": PROTOCOL, "protocol_version": PROTOCOL_VERSION}
-        )
+        hello: dict[str, Any] = {"protocol": PROTOCOL, "protocol_version": PROTOCOL_VERSION}
+        if self.token:
+            hello["token"] = self.token
+        try:
+            result = await self.request(HELLO, hello)
+        except TransportError as e:
+            await self.close()
+            if "2:" in str(e) and not self.token:
+                raise TransportError(
+                    f"the bridge at {self.address} wants a token and none was given. Its "
+                    f"installer writes one on the robot; pass it with --token or "
+                    f"{TOKEN_ENV}. Original answer: {e}"
+                ) from e
+            raise
         self.hello = result if isinstance(result, dict) else {}
         remote = self.hello.get("protocol_version")
         if remote is not None and int(remote) != PROTOCOL_VERSION:

@@ -7,7 +7,7 @@ name: open-duck-lookout
 description: Stand still, look around with the head only, and say what you can see.
 author: rok
 robots: open_duck:sim2d
-requires: [observe, gaze, say]
+requires: [observe, say]
 verbs:
   allow: [gaze, observe, say, quack, report_state, stop]
   confirm: []
@@ -41,5 +41,8 @@ and say what you can see.
   A gaze past that is refused rather than forced, which protects the neck servos.
 - `search_scan` is not in your allowlist on purpose. On this robot it turns the whole body,
   and this task is the one you run with the duck on a stand or before you trust it to walk.
+- `gaze` may not exist at all. Head control is off unless the robot's owner turned it on,
+  because moving this neck is the one thing that can damage the robot. If you have no `gaze`,
+  say what is in front of you and stop. That is a complete answer, not a failure.
 - You have no voice. `say` logs your text and plays the closest duck sound.
 - Saying "no ball in view" is a perfectly good answer. Do not invent one.

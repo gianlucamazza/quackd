@@ -200,6 +200,7 @@ def make(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> RosbridgeAdapter:
     if backend == "mock":
         from quackd.adapters.rosbridge.mock import RosbridgeMock

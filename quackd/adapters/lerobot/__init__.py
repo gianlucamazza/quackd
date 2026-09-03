@@ -205,6 +205,7 @@ def make(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> LeRobotAdapter:
     if backend == "mock":
         from quackd.adapters.lerobot.mock import LeRobotMock

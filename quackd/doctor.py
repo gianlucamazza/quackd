@@ -13,6 +13,7 @@ import os
 import platform
 import sys
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
@@ -85,7 +86,74 @@ def _probe_models(base_url: str, timeout_s: float = 1.5) -> str:
     return f"[green]up[/green] · {shown}{more}" if ids else "[green]up[/green] · no models loaded"
 
 
-def run_doctor(console: Console, robot: str | None = None) -> bool:
+def _probe(
+    console: Console,
+    robot: str,
+    static: Any,
+    address: str,
+    camera_url: str | None,
+    token: str | None,
+) -> bool:
+    """Connect, and report what the robot itself said.
+
+    Everything else in this file is offline and reads the *static* manifest, which describes
+    a fully built robot. A real one is whatever its owner assembled, so this is the only way
+    to see the difference before a run does."""
+    import asyncio
+
+    from quackd.adapters.factory import make_adapter, parse_robot_spec
+    from quackd.transport.base import TransportError
+
+    async def go() -> tuple[Any, Any, str | None]:
+        adapter = make_adapter(
+            parse_robot_spec(robot), address=address, camera_url=camera_url, token=token
+        )
+        live = await adapter.connect()
+        try:
+            health = await adapter.health()
+            return live, health, None
+        finally:
+            await adapter.disconnect()
+
+    try:
+        live, health, _ = asyncio.run(go())
+    except (TransportError, OSError) as e:
+        console.print(f"[red]{robot} at {address}: {escape(str(e))}[/red]")
+        return False
+
+    t = Table(title=f"{robot} at {address} (what the robot itself reported)")
+    t.add_column("what")
+    t.add_column("value")
+    t.add_row("connected", "[green]yes[/green]")
+    t.add_row("health", "[green]ok[/green]" if health.ok else f"[red]{health.reason}[/red]")
+    for key, value in (health.extras or {}).items():
+        t.add_row(f"  {key}", "" if value is None else str(value))
+    gained = sorted(set(live.verb_names()) - set(static.verb_names()))
+    lost = sorted(set(static.verb_names()) - set(live.verb_names()))
+    t.add_row("verbs", f"{len(live.verb_names())} of {len(static.verb_names())} described")
+    if lost:
+        t.add_row("  not on this robot", f"[yellow]{', '.join(lost)}[/yellow]")
+    if gained:
+        t.add_row("  beyond the description", f"[green]{', '.join(gained)}[/green]")
+    for key, value in (live.extras.get("expression_features") or {}).items():
+        t.add_row(f"  {key}", "[green]yes[/green]" if value else "[dim]no[/dim]")
+    console.print(t)
+    if lost:
+        console.print(
+            f"[dim]a .duck that requires {lost[0]} will be refused on this robot, and one "
+            "that merely allows it runs without it[/dim]"
+        )
+    return bool(health.ok)
+
+
+def run_doctor(
+    console: Console,
+    robot: str | None = None,
+    *,
+    address: str | None = None,
+    camera_url: str | None = None,
+    token: str | None = None,
+) -> bool:
     ok = True
     console.print(
         f"[bold]quackd {__version__}[/bold] · Python {platform.python_version()} · "
@@ -179,6 +247,8 @@ def run_doctor(console: Console, robot: str | None = None) -> bool:
                     ", ".join(manifest.preconditions.get(spec.name, [])),
                 )
             console.print(t)
+            if address:
+                ok &= _probe(console, robot, manifest, address, camera_url, token)
 
     t = Table(title="transports (Microduck backends; --transport X is --robot microduck:X)")
     t.add_column("name")

@@ -140,6 +140,9 @@ def open_duck_lookout_strategy(obs: Observation, step: int, history: list[Exchan
     balls = _detections(obs, "ball")
     if balls:
         return ToolCall(name="say", arguments={"text": _where(balls[0])})
+    # head control is off by default on a real duck, so gaze may not exist at all
+    if "gaze" not in obs.features.get("allowed", []):
+        return ToolCall(name="say", arguments={"text": "no ball in view, and no head to look"})
     looks = _count_calls(history, "gaze")
     if looks >= len(_LOOKOUT_SWEEP):
         return ToolCall(name="say", arguments={"text": "no ball in view"})

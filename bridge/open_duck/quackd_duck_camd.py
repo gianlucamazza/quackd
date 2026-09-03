@@ -262,7 +262,12 @@ def runtime_owns_the_camera(duck_config_path: str) -> bool:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="quackd-duck-camd", description=__doc__)
-    p.add_argument("--bind", default="0.0.0.0", help="the laptop has to reach this one")
+    p.add_argument(
+        "--bind",
+        default="127.0.0.1",
+        help="loopback by default: this serves a live view of wherever your robot is, and "
+        "there is no authentication. Prefer an ssh tunnel over binding 0.0.0.0.",
+    )
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     p.add_argument(
         "--fps", type=float, default=DEFAULT_FPS, help="quackd looks about once a second"
@@ -299,6 +304,13 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             log.error("no camera: %s. Try --fake to check the plumbing without one.", e)
             return 2
+
+    if args.bind not in ("127.0.0.1", "localhost"):
+        log.warning(
+            "binding %s: this serves a live view of wherever your robot is, to anyone on "
+            "that network, with no authentication. Prefer --bind 127.0.0.1 and an ssh tunnel.",
+            args.bind,
+        )
 
     stop = threading.Event()
     threading.Thread(

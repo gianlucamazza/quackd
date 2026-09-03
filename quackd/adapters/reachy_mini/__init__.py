@@ -221,6 +221,7 @@ def make(
     address: str | None = None,
     live: bool = False,
     camera_url: str | None = None,
+    token: str | None = None,
 ) -> ReachyMiniAdapter:
     if backend == "sim2d":
         from quackd.adapters.reachy_mini.sim2d import ReachyMiniSim2D
