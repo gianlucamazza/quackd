@@ -7,7 +7,6 @@ chain. That is what turns `observe` from a promise into a picture.
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import json
 import sys
@@ -271,22 +270,26 @@ async def test_a_verb_a_task_merely_allows_is_dropped_not_fatal(
     server = daemon.Server(core, "127.0.0.1", 0)
     server.start()
     controller = daemon.NetworkController(core, 20)
-    # a stand-in for upstream's loop, so the bridge reports a healthy control rate
+    # A stand-in for upstream's loop, so the bridge reports a healthy control rate.
+    #
+    # The rate is a fixture, so state it rather than trying to achieve it. A `time.sleep`
+    # loop in a Python thread is not a real-time loop: sleeping 0.02 to imitate the robot's
+    # 50 Hz measured 25 Hz on a loaded macOS runner, the client refused a loop under
+    # MIN_LOOP_HZ (35), and the test failed for a reason that says nothing about the duck.
+    # Pinning it each tick is stable at any load, because the daemon's own EWMA moves at
+    # most 10% toward the instantaneous rate, so a health poll can never read below
+    # 0.9 * 49.8 however starved the machine is. Everything else here stays real: the
+    # snapshot, the sequence numbers and the deadman all run on the wall clock.
+    core.loop_hz = 49.8  # before the thread starts, so the first health poll is never 0.0
     ticking = threading.Event()
-
-    settled = threading.Event()
 
     def tick() -> None:
         while not ticking.is_set():
             controller.get_last_command()
-            if core.loop_hz >= 40.0:
-                settled.set()
-            time.sleep(0.02)
+            core.loop_hz = 49.8
+            time.sleep(0.005)
 
     threading.Thread(target=tick, daemon=True).start()
-    # the heartbeat refuses a starved loop, and under a loaded suite the first tick can
-    # arrive after the first health poll, so wait for a real rate before connecting
-    assert await asyncio.to_thread(settled.wait, 5.0), "the stand-in loop never got going"
     lines: list[str] = []
     try:
         adapter = OpenDuckAdapter(OpenDuckBridge(f"tcp://127.0.0.1:{server.port}"))
