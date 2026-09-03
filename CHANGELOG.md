@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- `mypy` failed on Python 3.12 (the opencv stubs that resolve there type only the array
+  overload of `cv2.inRange`, so the tuple bounds in `perception/color_blob.py` matched no
+  variant). Bounds are now `uint8` arrays. OpenCV accepts both, so nothing about detection
+  changes: the seeded goldens are byte-identical and all four sweeps still pass 10 of 10.
+  This landed just after the v0.4.0 tag, so the tagged commit and the 0.4.0 files on PyPI
+  still carry it. It is a type-check-only issue and does not affect the released package at
+  runtime.
 
 ## [0.4.0] — 2026-09-02
 
