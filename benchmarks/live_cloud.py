@@ -43,6 +43,7 @@ def run_one(
     affective_context: bool,
     repeat: int,
     run_retries: int,
+    run_timeout: int,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="quackd-live-") as tmp:
         root = Path(tmp)
@@ -74,10 +75,29 @@ def run_one(
         attempts = 0
         for attempt in range(1, run_retries + 2):
             attempts = attempt
-            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            try:
+                completed = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=run_timeout,
+                )
+            except subprocess.TimeoutExpired as exc:
+                completed = subprocess.CompletedProcess(
+                    command,
+                    124,
+                    stdout=exc.stdout or "",
+                    stderr=f"TimeoutExpired after {run_timeout}s",
+                )
             transient = any(
                 marker in completed.stderr
-                for marker in ("APIConnectionError", "APITimeoutError", "RateLimitError")
+                for marker in (
+                    "APIConnectionError",
+                    "APITimeoutError",
+                    "RateLimitError",
+                    "TimeoutExpired",
+                )
             )
             if completed.returncode == 0 or not transient:
                 break
@@ -115,6 +135,7 @@ def main() -> None:
     parser.add_argument("--seed", action="append", type=int, dest="seeds", default=None)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--run-retries", type=int, default=2)
+    parser.add_argument("--run-timeout", type=int, default=180)
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
     models = tuple(args.models or DEFAULT_MODELS)
@@ -124,6 +145,8 @@ def main() -> None:
         parser.error("--repeats must be positive")
     if args.run_retries < 0:
         parser.error("--run-retries must not be negative")
+    if args.run_timeout < 1:
+        parser.error("--run-timeout must be positive")
 
     load_dotenv()
     try:
@@ -139,7 +162,7 @@ def main() -> None:
         raise SystemExit(2)
 
     rows = [
-        run_one(model, scenario, seed, affective, repeat, args.run_retries)
+        run_one(model, scenario, seed, affective, repeat, args.run_retries, args.run_timeout)
         for model in models
         for scenario in scenarios
         for seed in seeds
@@ -156,6 +179,7 @@ def main() -> None:
         "seeds": seeds,
         "repeats": args.repeats,
         "run_retries": args.run_retries,
+        "run_timeout": args.run_timeout,
         "rows": rows,
     }
     grouped: dict[tuple[object, ...], dict[bool, dict[str, object]]] = {}
