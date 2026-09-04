@@ -78,3 +78,12 @@ async def test_appraisal_is_capped_and_observations_do_not_call_it(tmp_path) -> 
     assert appraisal.calls == 1
     assert capped["appraisal_status"] == "cap_reached"
     runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_ephemeral_runtime_does_not_persist_to_disk(tmp_path) -> None:
+    config = AffectiveConfig(enabled=True, directory=tmp_path)
+    runtime = AffectiveRuntime.for_robot("microduck:sim2d", config, ephemeral=True)
+    await runtime.observe("success", text="ephemeral run", ok=True)
+    runtime.close()
+    assert not list(tmp_path.glob("*.sqlite"))
