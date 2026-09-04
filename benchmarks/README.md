@@ -37,6 +37,9 @@ context experiment, select `fetch`, `follow-me` and `patrol-and-quack` explicitl
 exercise recovery, persistence and repeated observations. Treat the output as an experiment,
 not as evidence of a default quality improvement.
 
+DeepSeek uses the same runner with `--provider deepseek` and the `DEEPSEEK_API_KEY` environment
+variable; its default model is `deepseek-v4-pro`.
+
 The promotion gate requires a positive paired success delta with a 95% confidence interval,
 no more than 5% median token/cost growth, no more than 5% median latency growth, and no new
 budget or safety failures, replicated in two independent live sessions.

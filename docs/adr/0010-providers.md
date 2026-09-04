@@ -21,6 +21,7 @@ of where an image goes in a tool result. quackd's loop must not know any of that
 | anthropic | `quackd[anthropic]` | `AsyncAnthropic().messages.create` (`beta.messages.create` with `fallbacks="default"` when available) | `tool_choice={"type":"any","disable_parallel_tool_use":true}` | `claude-opus-5` |
 | openai | `quackd[openai]` | `AsyncOpenAI().chat.completions.create` | `tool_choice="required"`, `parallel_tool_calls=False` | `gpt-5.6-terra` (verify) |
 | grok | `quackd[grok]` | OpenAI client, `base_url=https://api.x.ai/v1`, `XAI_API_KEY` | same as openai | `grok-4` (verify) |
+| deepseek | `quackd[deepseek]` | OpenAI client, `base_url=https://api.deepseek.com`, `DEEPSEEK_API_KEY` | same as openai | `deepseek-v4-pro` |
 | gemini | `quackd[gemini]` | `genai.Client().aio.models.generate_content` | `tool_config.function_calling_config.mode="ANY"` | `gemini-2.5-pro` (verify) |
 
 - Anthropic specifics (per the current API, 2026): no `thinking` param (adaptive is the

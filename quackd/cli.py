@@ -943,12 +943,9 @@ def run(
         memory_dir=memory_dir,
         emotional=emotional,
         emotional_dir=emotional_dir,
-<<<<<<< HEAD
+        emotional_context=emotional_context,
         trace=trace,
         trace_prompt=trace_prompt,
-=======
-        emotional_context=emotional_context,
->>>>>>> 336d15a (feat(affective): add opt-in experimental context)
     )
 
 
