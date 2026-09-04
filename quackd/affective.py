@@ -137,6 +137,7 @@ class AffectiveRuntime:
     def summary(self) -> dict[str, Any]:
         state = self._state
         return {
+            "schema_version": 1,
             "valence": round(state.core_affect.valence, 3),
             "arousal": round(state.core_affect.arousal, 3),
             "dominance": round(state.core_affect.dominance, 3),
@@ -194,6 +195,7 @@ class AffectiveRuntime:
         )
         self._store.save(self._state)
         return {
+            "schema_version": 1,
             "event": kind,
             "appraisal": appraisal_used,
             "appraisal_status": appraisal_status,

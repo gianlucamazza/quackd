@@ -167,6 +167,7 @@ class AgentLoop:
         self.history: list[Exchange] = []
         self.usage = Usage()
         self.highlights: list[str] = []
+        self._affective_snapshot: dict[str, Any] | None = None
         """Verb results worth carrying into the episode memory (the last few that went ok)."""
 
     # ── narration ───────────────────────────────────────────────────────────────────
@@ -196,11 +197,13 @@ class AgentLoop:
             if self.cfg.detector is not None:
                 detections = self.cfg.detector.detect(img)
             self._on_frame(img, f"step {self.budget.steps}: {last_verb or 'start'}")
-        affective_snapshot = None
-        if self.cfg.affective_context and self.cfg.affective is not None:
-            affective_snapshot = await self.cfg.affective.observe(
-                "observation", text="", context={"detections": len(detections)}
-            )
+        affective_snapshot = self._affective_snapshot if self.cfg.affective_context else None
+        if (
+            self.cfg.affective_context
+            and self.cfg.affective is not None
+            and affective_snapshot is None
+        ):
+            affective_snapshot = self.cfg.affective.summary()
         text = build_observation_text(
             step=self.budget.steps,
             max_steps=self.fm.budgets.max_steps,
@@ -504,6 +507,7 @@ class AgentLoop:
                         ok=last_result.ok,
                         context={"verb": call.name},
                     )
+                    self._affective_snapshot = affective
                     self.transcript.write("affective", event=call.name, state=affective)
                 self._emit(
                     "verb",
@@ -542,6 +546,7 @@ class AgentLoop:
             if cfg.affective is not None:
                 with contextlib.suppress(Exception):
                     affective = await cfg.affective.observe(outcome, text=reason)
+                    self._affective_snapshot = affective
                     self.transcript.write("affective", event=outcome, state=affective)
             await self.heartbeat.stop()
             with contextlib.suppress(Exception):
