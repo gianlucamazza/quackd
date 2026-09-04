@@ -188,6 +188,30 @@ class FakeOpenAI:
         self.chat = NS(completions=NS(create=create))
 
 
+class FakeResponses:
+    def __init__(self, *, arguments: str = '{"vx": 0.3}') -> None:
+        self.kwargs: dict[str, Any] = {}
+        self._arguments = arguments
+
+        async def create(**kwargs: Any) -> Any:
+            self.kwargs = kwargs
+            return NS(
+                output=[
+                    NS(
+                        type="function_call",
+                        call_id="call_9",
+                        name="walk",
+                        arguments=self._arguments,
+                    )
+                ],
+                output_text=None,
+                usage=NS(input_tokens=50, output_tokens=9),
+                status="completed",
+            )
+
+        self.create = create
+
+
 def openai_response(name: str, args: str, content: str | None = None) -> Any:
     tc = NS(id="call_9", function=NS(name=name, arguments=args))
     return NS(
@@ -212,8 +236,17 @@ async def test_openai_request_and_response_mapping() -> None:
     assert turn.usage.input_tokens == 50 and turn.stop_reason == "tool_calls"
 
 
+async def test_modern_openai_tool_calls_use_responses_api() -> None:
+    responses = FakeResponses()
+    client = NS(responses=responses)
+    turn = await OpenAIProvider(model="gpt-5.6-terra", client=client).step("SYS", history(), TOOLS)
+    assert responses.kwargs["reasoning"] == {"effort": "none"}
+    assert responses.kwargs["tools"][0]["type"] == "function"
+    assert turn.tool_calls == [ToolCall(id="call_9", name="walk", arguments={"vx": 0.3})]
+
+
 async def test_openai_bad_json_arguments_do_not_crash() -> None:
-    p = OpenAIProvider(client=FakeOpenAI(openai_response("walk", "{not json")))
+    p = OpenAIProvider(model="gpt-5", client=FakeOpenAI(openai_response("walk", "{not json")))
     turn = await p.step("S", history()[:1], TOOLS)
     assert "_unparsed" in turn.tool_calls[0].arguments
 
