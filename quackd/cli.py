@@ -41,7 +41,7 @@ def _main(
         False, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version."
     ),
 ) -> None:
-    """quackd — pilot a Microduck (real or simulated) with any LLM."""
+    """quackd — pilot a small robot (real or simulated) with any LLM."""
     load_dotenv()
 
 
@@ -57,10 +57,6 @@ def _fail(msg: str, code: int = 1) -> None:
     # escape: messages contain things like quackd[anthropic], which Rich would eat as markup
     err_console.print(f"[red]error:[/red] {escape(msg)}")
     raise typer.Exit(code=code)
-
-
-def _deprecated(msg: str) -> None:
-    err_console.print(f"[yellow]{escape(msg)}[/yellow]")
 
 
 def _robot_specs(robot: str | None, robots: str | None, duck: Any) -> list:
@@ -793,7 +789,7 @@ def serve_mcp(
     robots: str | None = typer.Option(
         None,
         "--robots",
-        help="A fleet: name=<adapter>:<backend>,... (six robot_* tools, one executor each).",
+        help="A fleet: name=<adapter>:<backend>,... (eight robot_* tools, one executor each).",
     ),
     duckfile: str | None = typer.Option(
         None, "--duckfile", help="Load a .duck contract at startup (on the default robot)."
@@ -842,10 +838,15 @@ app.add_typer(memory_app, name="memory")
 
 
 def _memory_for(robot: str | None, memory_dir: str | None) -> Any:
+    from quackd.adapters.base import AdapterError
     from quackd.adapters.factory import resolve_robot
     from quackd.memory import RobotMemory
 
-    return RobotMemory(resolve_robot(robot).key, memory_dir)
+    try:
+        spec = resolve_robot(robot)
+    except AdapterError as e:  # every other --robot command answers in one line, not a traceback
+        _fail(str(e))
+    return RobotMemory(spec.key, memory_dir)
 
 
 @memory_app.command("show")
@@ -858,7 +859,9 @@ def memory_show(
     mem = _memory_for(robot, memory_dir)
     if raw:
         if mem.path.exists():
-            console.print(mem.path.read_text(encoding="utf-8"), end="")
+            # "as is" means as is: a note saying "the ball is [bold]behind[/bold] the sofa"
+            # is markup Rich would silently eat, and an unpaired tag would raise.
+            print(mem.path.read_text(encoding="utf-8"), end="")
         return
     info = mem.summary()
     console.print(

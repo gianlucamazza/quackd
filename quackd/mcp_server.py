@@ -3,7 +3,7 @@
 This is the second wow-demo — "I asked Claude to make the duck patrol my desk" — and it
 goes through the *same* `Executor` as `.duck` runs, so allowlists, confirm gates, budgets
 and the heartbeat apply to an interactive session too. Since 0.4 one server can front
-several robots (`--robots duck=microduck:sim2d,reachy=reachy_mini:mock`): six `robot_*`
+several robots (`--robots duck=microduck:sim2d,reachy=reachy_mini:mock`): eight `robot_*`
 tools take a robot name and every robot has its own executor, budget, heartbeat and
 contract. stdout is the wire, and every log line goes to stderr.
 """
@@ -71,9 +71,10 @@ do is what it lists and nothing else. Every action is a *verb*; the executor enf
 allowlist, budgets and confirmation gates, so a refused call is a rule, not a bug. Prefer
 composite verbs (search_scan, go_to) over micro-managing velocities. Load a .duck file with
 robot_load_duckfile(path) to adopt a task contract; then follow its body as your
-instructions. Call robot_recall early: it is what this robot learned in earlier sessions,
-and robot_remember(text) keeps one short fact for the next one. Call
-robot_run_verb(verb="stop") if anything looks wrong."""
+instructions.{memory} Call robot_run_verb(verb="stop") if anything looks wrong."""
+
+SOLO_MEMORY = """ Call robot_recall early: it is what this robot learned in earlier
+sessions, and robot_remember(text) keeps one short fact for the next one."""
 
 FLEET_INSTRUCTIONS = """You are piloting {n} robot(s) through quackd: {names}.
 Call robot_list first, then robot_list_verbs(robot) for each body you will use: verbs come
@@ -81,10 +82,12 @@ from each robot's own manifest, so they differ per robot. Every action is a *ver
 robot's executor enforces its own allowlist, budgets and confirmation gates, so a refused
 call is a rule, not a bug. Prefer composite verbs (search_scan, go_to) over micro-managing
 velocities. Load a .duck file with robot_load_duckfile(path, robot) to adopt a task
-contract on one robot; then follow its body as your instructions. robot_recall(robot) is
-what that robot learned in earlier sessions; robot_remember(text, robot) keeps one short
-fact for the next one. Without a robot argument a tool acts on the default, {default}.
+contract on one robot; then follow its body as your instructions.{memory} Without a robot
+argument a tool acts on the default, {default}.
 Call robot_run_verb(verb="stop", robot=...) if anything looks wrong."""
+
+FLEET_MEMORY = """ robot_recall(robot) is what that robot learned in earlier sessions;
+robot_remember(text, robot) keeps one short fact for the next one."""
 
 
 def _prefixed(emit: Callable[..., None], name: str) -> Callable[[str], None]:
@@ -360,8 +363,8 @@ class Fleet:
 
 
 def _pick_default(robots: Mapping[str, Any]) -> str:
-    """The only robot; else the first Microduck (the `duck_*` aliases mean a duck); else
-    the first declared."""
+    """The only robot; else the first Microduck, because a caller that names no robot on
+    a mixed fleet most likely means the duck; else the first declared."""
     names = list(robots)
     if len(names) == 1:
         return names[0]
@@ -376,13 +379,21 @@ def _instructions(fleet: Fleet) -> str:
 
     Until 0.5 the solo prompt was hardcoded to a 25 cm Microduck, which was wrong for every
     other body. The description now comes from the manifest's own blurb."""
+    # with --no-memory both tools answer "memory is off", so telling the pilot to call
+    # them early is an instruction to waste a turn
+    on = any(s.memory is not None for s in fleet.sessions.values())
     if len(fleet.sessions) == 1:
         solo = fleet.sessions[fleet.default]
         manifest = solo.manifest
         blurb = manifest.blurb if manifest and manifest.blurb else "a small robot"
-        return INSTRUCTIONS.format(names=fleet.default, blurb=blurb)
+        return INSTRUCTIONS.format(
+            names=fleet.default, blurb=blurb, memory=SOLO_MEMORY if on else ""
+        )
     return FLEET_INSTRUCTIONS.format(
-        n=len(fleet.sessions), names=", ".join(fleet.sessions), default=fleet.default
+        n=len(fleet.sessions),
+        names=", ".join(fleet.sessions),
+        default=fleet.default,
+        memory=FLEET_MEMORY if on else "",
     )
 
 

@@ -110,8 +110,9 @@ def build_system_prompt(
 {remembered}
 
 Call `remember` (one short sentence) when you learn something worth keeping for next time:
-where an object usually is, which strategy worked, what to avoid. It is free: it moves
-nothing and costs no step. Do not save what is already listed above.
+where an object usually is, which strategy worked, what to avoid. It moves nothing and
+costs no step, though it does use one of your calls. Do not save what is already listed
+above.
 """
     sim_note = (
         "\nYou are in the built-in 2D simulator: a cartoon top-down world. Distances are metres, "
