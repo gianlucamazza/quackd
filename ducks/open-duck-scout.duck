@@ -36,7 +36,7 @@ Find the ball, walk up to it, and say where it is.
 2. When the ball is in view, `go_to` it with a `stop_distance` of about 0.3. It closes the
    loop on the camera itself, so call it once and let it work.
 3. `say` the bearing and distance, for example "ball at 12 degrees left, about 0.3 m".
-4. Declare success once you have arrived and said it.
+4. `remember` where the ball was, then declare success once you have arrived and said it.
 
 ## Notes
 
@@ -48,3 +48,9 @@ Find the ball, walk up to it, and say where it is.
   Every verb that moves you will refuse until a human stands you up, so do not thrash: if
   moving keeps failing, declare failure and say a human is needed.
 - If `search_scan` finds nothing twice in a row, declare failure rather than looping.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: where the ball was, or which move kept failing so the next run avoids it.
+Skip it if the prompt already remembers the same thing. It costs no step.

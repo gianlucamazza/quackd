@@ -9,7 +9,7 @@ Works with the built-in simulator out of the box — no hardware, no extra insta
 
 ## Tools
 
-Six tools. `robot` is the name from `--robots name=<adapter>:<backend>`; omit
+Eight tools. `robot` is the name from `--robots name=<adapter>:<backend>`; omit
 it (or pass `null`) to address the default robot, which is the only robot when there is
 one, else the first Microduck, else the first declared.
 
@@ -21,6 +21,8 @@ one, else the first Microduck, else the first declared.
 | `robot_observe(robot?)` | The `observe` verb through the executor (it counts against the budget), returning the camera frame as a PNG image plus a one-line detection summary. |
 | `robot_say(robot?, text)` | The `say` verb. No robot here has text to speech, so it degrades: one of seven tones on a Microduck, an expressive sound on a Reachy Mini, one of the duck's own sounds on an Open Duck. A robot without a `sound` intent refuses with `ok: false`. |
 | `robot_load_duckfile(robot?, path)` | Adopt a `.duck` contract on one robot: its `requires` (or, for `duck: 0`, its allowlist) is checked against that robot's manifest first, then allowlist and budgets are enforced for that robot only; the body is returned as instructions. Flock ducks are refused. |
+| `robot_recall(robot?)` | What that robot remembers from earlier sessions and runs: the notes a pilot saved and how its recent runs ended ([memory.md](memory.md)). Costs no step; the server's instructions ask the model to call it early. |
+| `robot_remember(robot?, text, tags?)` | Keep one short fact for future sessions on that robot. Moves nothing, costs no step; the same sentence twice updates the old note. Off with `--no-memory`. |
 
 0.3 shipped eight `duck_*` tools pinned to the default robot. 0.4 kept them as deprecated
 aliases and said they would go in 0.5, and they have. Omit the `robot` argument to address

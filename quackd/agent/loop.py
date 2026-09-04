@@ -20,6 +20,8 @@ from quackd.adapters.manifest import RobotManifest
 from quackd.agent.prompts import (
     META_TOOL_NAMES,
     META_TOOLS,
+    REMEMBER,
+    REMEMBER_NAME,
     build_observation_text,
     build_system_prompt,
     observation_features,
@@ -34,6 +36,7 @@ from quackd.agent.providers.base import (
 )
 from quackd.agent.transcript import Transcript, new_run_dir, png_bytes
 from quackd.duckfile.schema import DuckFile
+from quackd.memory import RobotMemory
 from quackd.perception import detector_for
 from quackd.perception.base import Detection, Detector
 from quackd.safety import (
@@ -78,6 +81,9 @@ class RunConfig:
     on_frame: Any = None
     """Optional callback (img, caption) for a recorder (M2). Called on every captured frame."""
     keep_images_for_last_n: int = 2
+    memory: RobotMemory | None = None
+    """What this robot remembers between runs. None = off: no `remember` tool, no
+    episode written at the end, the prompt says nothing about earlier runs."""
 
 
 @dataclass
@@ -125,6 +131,8 @@ class AgentLoop:
         )
         self.history: list[Exchange] = []
         self.usage = Usage()
+        self.highlights: list[str] = []
+        """Verb results worth carrying into the episode memory (the last few that went ok)."""
 
     # ── frames ──────────────────────────────────────────────────────────────────────
 
@@ -161,6 +169,22 @@ class AgentLoop:
         )
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
+
+    def _remember(self, arguments: dict[str, Any]) -> VerbResult:
+        memory = self.cfg.memory
+        if memory is None:
+            return VerbResult.fail("memory is off for this run; nothing saved")
+        text = str(arguments.get("text", "")).strip()
+        tags_raw = arguments.get("tags") or []
+        tags = [str(t) for t in tags_raw] if isinstance(tags_raw, list) else []
+        try:
+            entry = memory.remember(text, tags=tags, duck=self.fm.name, run_dir=self.run_dir)
+        except (ValueError, OSError) as e:
+            return VerbResult.fail(f"could not remember: {e}")
+        self.cfg.log(f"remembered: {entry.text}")
+        return VerbResult.success(
+            f"remembered for future runs: {entry.text}", notes=len(memory.notes())
+        )
 
     def _history_for_provider(self) -> list[Exchange]:
         """Older images are dropped to keep context small; the last N keep theirs."""
@@ -214,11 +238,16 @@ class AgentLoop:
             allow = [n for n in allow if n in registry]
             cfg.log(f"this robot does not have {', '.join(dropped)}; running without")
         tools = registry.tool_schemas(allow) + META_TOOLS
+        memory_text: str | None = None
+        if cfg.memory is not None:
+            tools = [*tools, REMEMBER]
+            memory_text = cfg.memory.recall()
         system = build_system_prompt(
             self.duck,
             [registry.view(n) for n in allow],
             backend_name(cfg.transport),
             manifest=manifest,
+            memory_text=memory_text,
         )
         system += getattr(cfg.provider, "prompt_hint", "") or ""  # e.g. the local JSON fallback
         self.transcript.write(
@@ -234,6 +263,7 @@ class AgentLoop:
             contract=self.fm.model_dump(),
             system_prompt=system,
             tools=[t["name"] for t in tools],
+            memory=cfg.memory.summary() if cfg.memory is not None else None,
         )
         outcome: Outcome = "error"
         reason = "loop exited unexpectedly"
@@ -311,6 +341,19 @@ class AgentLoop:
                 call: ToolCall = turn.tool_calls[0]
                 self.history[-1].decision = Decision(tool_call=call, text=turn.text, raw=turn.raw)
 
+                if call.name == REMEMBER_NAME:
+                    # a note for next time: no robot motion, no step against the budget
+                    last_verb = REMEMBER_NAME
+                    last_result = self._remember(call.arguments)
+                    self.transcript.write(
+                        "memory",
+                        step=self.budget.steps,
+                        ok=last_result.ok,
+                        text=call.arguments.get("text"),
+                        summary=last_result.summary,
+                    )
+                    continue
+
                 if call.name in META_TOOL_NAMES:
                     outcome = "success" if call.name == "declare_success" else "failure"
                     reason = str(call.arguments.get("reason", ""))
@@ -338,6 +381,9 @@ class AgentLoop:
                     summary=last_result.summary,
                     data=last_result.data,
                 )
+                if last_result.ok and last_result.summary:
+                    self.highlights.append(f"{call.name}: {last_result.summary}")
+                    self.highlights = self.highlights[-4:]
         except BudgetExceeded as e:
             outcome, reason = "budget", str(e)
         except Aborted as e:
@@ -371,6 +417,16 @@ class AgentLoop:
             self.transcript.write("run_end", **summary)
             self.transcript.write_summary(summary)
             self.transcript.close()
+            if cfg.memory is not None and not cfg.dry_run:
+                with contextlib.suppress(Exception):  # memory must never turn a run into a crash
+                    cfg.memory.record_episode(
+                        duck=self.fm.name,
+                        outcome=outcome,
+                        reason=reason,
+                        steps=self.budget.steps,
+                        highlights=self.highlights,
+                        run_dir=self.run_dir,
+                    )
         return RunResult(
             outcome=outcome,
             reason=reason,

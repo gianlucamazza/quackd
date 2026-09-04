@@ -36,7 +36,8 @@ gaze and say where it is.
 2. When the ball is in view, `say` its bearing and distance, for example
    "ball at 12 degrees left, about 0.8 m". Bearings are relative to where the camera
    points; the `search_scan` result carries the head yaw too.
-3. Declare success once you have said it. One clear sentence is enough.
+3. `remember` the head yaw where the ball sat, then declare success once you have said
+   it. One clear sentence is enough.
 
 ## Notes
 
@@ -44,3 +45,9 @@ gaze and say where it is.
   to look again or centre the ball.
 - If `search_scan` finds nothing twice in a row, declare failure rather than looping.
 - You have no voice: `say` plays the closest expressive sound and logs the text.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: the head yaw where the ball tends to sit, or that it was out of view. Skip it
+if the prompt already remembers the same thing. It costs no step.

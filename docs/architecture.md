@@ -64,6 +64,7 @@ sequenceDiagram
 | `quackd/sim2d/` | The cartoon world, two renders (top-down, duck-cam), the GIF recorder, the optional live window. |
 | `quackd/perception/` | `Detection` + `Detector`; the HSV colour-blob default; the lazy YOLO extra. |
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
+| `quackd/memory.py` | What a robot keeps between runs: one JSONL file per `adapter:backend` with the notes the pilot saved (`remember`) and an episode per run; rendered into the prompt next time ([memory.md](memory.md), ADR-0025). |
 | `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: six `robot_*` tools through one executor per robot, the eight `duck_*` tools kept as aliases of the default robot. |
 | `bridge/open_duck/` | **The only quackd code that runs on a robot.** Two daemons for an Open Duck Mini v2's Raspberry Pi: the bridge, which is upstream's own walk loop with the gamepad it reads replaced by a socket, and the camera server, which serves one JPEG over HTTP. Standard library plus numpy, never imported by quackd, shipped in the sdist and never in the wheel ([ADR-0024](adr/0024-open-duck-mini.md)). |
 | `quackd/lan/` | LAN discovery over zeroconf (`_quackd._tcp.local.`): a pure TXT wire format, `announce`, `discover`; behind `quackd[lan]` ([lan.md](lan.md)). |

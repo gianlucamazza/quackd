@@ -50,13 +50,42 @@ DECLARE_FAILURE = {
 META_TOOLS = [DECLARE_SUCCESS, DECLARE_FAILURE]
 META_TOOL_NAMES = {t["name"] for t in META_TOOLS}
 
+REMEMBER = {
+    "name": "remember",
+    "description": (
+        "Save one short fact for FUTURE runs on this robot (where things usually are, what "
+        "worked, what to avoid). It does not move the robot and does not count as a step. "
+        "Do not repeat what the prompt already remembers."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "One sentence, concrete and reusable, e.g. 'the ball is usually near the left wall'.",
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional short labels (place, object, strategy).",
+            },
+        },
+        "required": ["text"],
+        "additionalProperties": False,
+    },
+}
+REMEMBER_NAME = REMEMBER["name"]
+
 
 def build_system_prompt(
     duck: DuckFile,
     verbs: list[Verb],
     transport_name: str,
     manifest: RobotManifest | None = None,
+    memory_text: str | None = None,
 ) -> str:
+    """`memory_text` is what the robot remembers from earlier runs (`RobotMemory.recall`);
+    None means memory is off for this run, "" means on but empty."""
     fm = duck.frontmatter
     blurb = manifest.blurb if manifest is not None and manifest.blurb else DUCK_BLURB
     names = {v.name for v in verbs}
@@ -73,6 +102,17 @@ def build_system_prompt(
         "\n".join(f"- {a}" for a in advisory) if advisory else "- (none beyond the enforced ones)"
     )
     persona = f"\n## Persona\n{fm.persona}\n" if fm.persona else ""
+    memory = ""
+    if memory_text is not None:
+        remembered = memory_text.strip() or "(nothing yet — this is the first run on this robot)"
+        memory = f"""
+## What you remember from earlier runs on this robot
+{remembered}
+
+Call `remember` (one short sentence) when you learn something worth keeping for next time:
+where an object usually is, which strategy worked, what to avoid. It is free: it moves
+nothing and costs no step. Do not save what is already listed above.
+"""
     sim_note = (
         "\nYou are in the built-in 2D simulator: a cartoon top-down world. Distances are metres, "
         "the arena is about 2 m across, and the ball is orange.\n"
@@ -98,7 +138,7 @@ verbs like `{loop_verb}` close their own loops on the camera. Do not micro-manag
 
 ## Verbs
 {verb_lines}
-{persona}{sim_note}
+{persona}{memory}{sim_note}
 ## Task file: {fm.name} — {fm.description}
 
 {duck.body}

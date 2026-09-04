@@ -38,4 +38,11 @@ You are piloting a small biped duck robot. Fetch the ball.
    `walk_to` again (maybe from a slightly different angle) and retry `grab`. Do not retry
    more than three times.
 5. Once the ball is gone from view, `walk` backward (`vx` -0.1) for about 3 seconds,
-   quack, and declare success.
+   `remember` where the ball was and what made the grab work, quack, and declare success.
+
+## Memory
+
+Before you declare success or failure, call `remember` once with one short fact a future
+run can use: where the ball was, or the approach distance and angle that made `grab`
+work (or kept missing). Skip it if the prompt already remembers the same thing. It costs
+no step.
