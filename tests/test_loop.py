@@ -76,6 +76,43 @@ class ClockAdvancingProvider:
         )
 
 
+class PassiveAffectiveSpy:
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def observe(self, kind: str, **_kwargs: Any) -> dict[str, Any]:
+        self.events.append(kind)
+        return {"valence": 0.0, "arousal": 0.1, "dominance": 0.5, "mood": {}}
+
+    def summary(self) -> dict[str, Any]:
+        return {"valence": 0.0, "arousal": 0.1, "dominance": 0.5, "mood": {}}
+
+    def close(self) -> None:
+        pass
+
+
+async def test_affective_runtime_is_passive_in_observation_loop(
+    hello_duck: DuckFile, tmp_path: Path
+) -> None:
+    affective = PassiveAffectiveSpy()
+    result = await run_duck(
+        RunConfig(
+            duck=hello_duck,
+            provider=FakeProvider.for_duck("hello-world"),
+            transport=MockTransport(),
+            runs_dir=tmp_path,
+            affective=affective,
+        )
+    )
+    assert result.ok
+    assert "observation" not in affective.events
+    assert affective.events == ["verb_success"] * 3 + ["success"]
+    events = Transcript.read(result.run_dir / "transcript.jsonl")
+    assert all(
+        "affective" not in event["features"] for event in events if event["kind"] == "observation"
+    )
+
+
 async def test_no_tool_call_is_reprompted_once_then_failure(
     hello_duck: DuckFile, tmp_path: Path
 ) -> None:

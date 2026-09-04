@@ -60,7 +60,7 @@ jobs:
       - name: Validate starter ducks
         run: uv run quackd validate ducks/*.duck
       - name: Affective benchmark matrix
-        run: uv run python benchmarks/affective_runtime.py --output "${{ runner.temp }}/quackd-affective-benchmark.json"
+        run: uv run python benchmarks/affective_runtime.py --repeats 3 --output "${{ runner.temp }}/quackd-affective-benchmark.json"
       - name: Upload affective benchmark
         uses: actions/upload-artifact@v4
         with:
