@@ -46,6 +46,7 @@ jobs:
         # a glob for an external command, so this would hand quackd the literal `ducks/*.duck`.
         shell: bash
         run: uv run quackd validate ducks/*.duck
+<<<<<<< HEAD
 
   physics:
     name: physics · mujoco + osmesa
@@ -100,6 +101,8 @@ jobs:
           name: affective-benchmark-py${{ matrix.python }}
           path: ${{ runner.temp }}/quackd-affective-benchmark.json
 
+=======
+>>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
   emotional:
     name: emotional · py${{ matrix.python }} · ubuntu
     runs-on: ubuntu-latest
