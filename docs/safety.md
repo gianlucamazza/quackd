@@ -133,4 +133,16 @@ they move the whole body under a controller quackd does not write.
 
 A model that is *allowed* to `walk` can walk into a wall; the sim has walls, your living
 room has stairs. The allowlist is your tool: a `.duck` for a new space should start small.
+
+Since 0.6 there is one more thing to know about. A robot's memory
+([memory.md](memory.md)) is text a model wrote, kept on disk, and handed to the *next*
+model as part of its system prompt. The executor never reads it, so a note cannot widen an
+allowlist, lift a budget or open a confirm gate: none of the guarantees above depend on it
+being true. What a note can do is persuade a later run, including a later run of a different
+task on the same body. A model that concludes something wrong ("the sofa is safe to walk
+under") will keep telling itself so until somebody deletes the line. That is the whole point
+of the feature and also its whole risk, which is why the file is plain text you can read,
+`quackd memory show` prints exactly what the pilot was told, `quackd memory clear` forgets
+it, and `--no-memory` runs as if it were never there.
+
 Report anything that lets a model bypass the executor — see [`SECURITY.md`](../SECURITY.md).

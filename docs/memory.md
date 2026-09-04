@@ -4,8 +4,8 @@ Until 0.5 every run started from nothing. The transcript recorded every prompt, 
 and frame, and the next run never read it. A pilot that had found the ball behind the sofa
 three times in a row would search the whole room a fourth time.
 
-Since this release each robot has a small **memory file** that the loop reads at the start
-of a run and appends to at the end. Two kinds of entry live in it:
+Since 0.6 each robot has a small **memory file** that the loop reads at the start of a run
+and appends to at the end. Two kinds of entry live in it:
 
 | Kind | Who writes it | Example |
 |---|---|---|
@@ -28,6 +28,10 @@ never share notes (a note about the cartoon arena is wrong for your living room)
 ~/.quackd/memory/reachy-mini-mock.jsonl
 ```
 
+The key is the body, not the name you gave it, so two members of one fleet that are the
+same `adapter:backend` share a file. That is the same rule that keeps `microduck:sim2d` and
+`microduck:jsonrpc` apart, read the other way round.
+
 Override the directory with `--memory-dir` or `QUACKD_MEMORY_DIR`. Turn it off for one run
 with `--no-memory`. The file is plain text, one JSON object per line, meant to be read and
 edited by hand; a line that is not JSON is skipped, not fatal. It is capped at 400 entries,
@@ -43,7 +47,10 @@ When memory is on, the model gets one extra tool next to `declare_success` and
 ```
 
 It is deliberately cheap: it moves nothing, it counts as an LLM call but **not as a step**,
-and the same sentence twice refreshes the old note instead of duplicating it. The reply
+and the same sentence twice refreshes the old note instead of duplicating it (and moves it
+to the newest position, because newest is what `recall` and the cap both read). Under
+`--dry-run` it saves nothing and says so, like every other intent a dry run refuses to
+send: an inert run must not leave a permanent conclusion drawn from results it invented. The reply
 lands in the next observation like any verb result (`last verb remember: ok — remembered
 for future runs: …`) and in the transcript as a `memory` event, so a run's provenance still
 shows every fact it saved.
@@ -51,7 +58,8 @@ shows every fact it saved.
 ## The starter ducks ask for it
 
 Telling the model about `remember` in the prompt is not enough for a small local model: in
-our runs Qwen 2.5 Coder 14B read the memory block and never wrote to it. What works is
+the runs this feature's contributor did, Qwen 2.5 Coder 14B read the memory block and never
+wrote to it. What works is
 putting the call **inside the numbered strategy** of the `.duck` body, right before the
 declaration (`5. When the ball has moved ≥ 0.3 m, \`remember\` where you found the ball,
 \`quack\` once and declare success.`), plus a short *Memory* section saying what is worth
@@ -76,7 +84,8 @@ always know what the pilot was told.
 
 ## Over MCP
 
-`quackd serve-mcp` gives every robot in the fleet its own memory behind two tools:
+`quackd serve-mcp` gives every `adapter:backend` in the fleet its own memory behind two
+tools:
 `robot_recall(robot?)` returns the notes and recent episodes (the server's instructions
 tell the model to call it early), `robot_remember(text, tags?, robot?)` saves one note.
 `--no-memory` and `--memory-dir` apply to the server too. A note saved from Claude Desktop
@@ -90,7 +99,10 @@ is read by the next `quackd run` on the same `adapter:backend`, and the other wa
   ([learned-verbs.md](learned-verbs.md)).
 - **Not retrieval.** There is no embedding, no search: the newest entries win, and the cap
   keeps the prompt small. If you need a map of your house, write it as a few notes.
-- **Not shared between bodies.** By design. Use `quackd memory add` on the other robot if
-  a fact really transfers.
+- **Not shared between bodies.** By design, where a body means an `adapter:backend`. Use
+  `quackd memory add` on the other robot if a fact really transfers.
+- **Not written by the scripted pilot.** `--provider fake` has no `remember` in its script,
+  so it accumulates episodes and never a note. Notes have been exercised by one local model
+  on one machine and by no cloud model at all.
 - **Not trusted.** A note is text the model wrote; the executor never reads it. Safety
   lives in the contract, as before ([safety.md](safety.md)).

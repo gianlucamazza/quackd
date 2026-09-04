@@ -44,6 +44,14 @@ slug name · `allow` lists only verbs the robot provides (`quackd list-verbs --r
 phrasings if you want them enforced · body starts with `# Task` · `quackd validate
 your.duck --robot <adapter>:<backend>` passes for the robot you mean.
 
+**Ask for a note.** Since 0.6 every solo starter ends its numbered strategy with a
+`remember` and carries a short *Memory* section saying what is worth keeping for next time.
+Put the call in the strategy rather than only in a Memory section: a 14B local model read a
+prompt-level hint and never wrote to memory, and followed the same instruction on its first
+run once it was step 5. `remember` is offered automatically when memory is on and needs
+nothing in your `allow` list. Skip it for a smoke test, the way `hello-world` does
+([docs/memory.md](docs/memory.md)).
+
 ## Add a verb
 
 1. Decide the kind. **Core** (`quackd/verbs/core.py`) = the same on every robot whose
@@ -51,7 +59,10 @@ your.duck --robot <adapter>:<backend>` passes for the robot you mean.
    `Requirement` to `REQUIREMENTS`. **Extension** = one robot's own behaviour, in that
    adapter's `verbs.py` (Microduck: `quackd/adapters/microduck/verbs.py`; it needs a
    VERIFIED upstream method in the adapter's `upstream_api.py`). **Learned** = v2, see
-   [docs/learned-verbs.md](docs/learned-verbs.md).
+   [docs/learned-verbs.md](docs/learned-verbs.md). If the thing you are adding never
+   touches the body, it is probably not a verb at all: `remember` sits next to
+   `declare_success` as a *meta tool* precisely so that the rule "the vocabulary comes from
+   the manifest" keeps meaning something ([ADR-0025](docs/adr/0025-memory-between-runs.md)).
 2. Write a pydantic params model (`extra="forbid"`, ranges on every number) and an
    `async def my_verb(ctx: VerbContext, p: MyParams) -> VerbResult`. Use
    `ctx.transport.send_intent(...)`, `ctx.transport.sleep(...)`, `ctx.detector`,

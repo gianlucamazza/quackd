@@ -96,7 +96,13 @@ servers reject image parts. The text observation already carries what the camera
 
 - Which local model pilots the duck well is an open question we have not measured. The
   loop was designed so that a weak planner degrades the task, never the robot's balance.
-  If you run one, please share the transcript in a Discussion.
+  There is exactly one data point, and it is not ours: the contributor who built memory
+  between runs ran `find-and-kick` against **Qwen 2.5 Coder 14B on LM Studio**, seeds 5 and
+  6, both successes with memory read and written, and reported that the model ignored a
+  memory hint sitting in the system prompt but followed the same instruction once it was a
+  numbered step in the `.duck` body. That is one model, one machine, two seeds, and no
+  transcript in this repository. If you run one, please share the transcript in a
+  Discussion: it is the cheapest way to make this section shorter.
 - The cloud providers keep their stricter settings (`tool_choice="required"`,
   `parallel_tool_calls=False`). Only the local presets use the relaxed ones.
 - Ollama, vLLM, llama.cpp and LM Studio evolve quickly. If a flag above is stale, open an

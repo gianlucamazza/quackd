@@ -9,7 +9,7 @@ Works with the built-in simulator out of the box — no hardware, no extra insta
 
 ## Tools
 
-Eight tools. `robot` is the name from `--robots name=<adapter>:<backend>`; omit
+Eight `robot_*` tools. `robot` is the name from `--robots name=<adapter>:<backend>`; omit
 it (or pass `null`) to address the default robot, which is the only robot when there is
 one, else the first Microduck, else the first declared.
 

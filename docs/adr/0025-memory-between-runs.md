@@ -6,9 +6,11 @@
 
 Every run started from nothing. The transcript recorded each prompt, tool call and frame
 and no later run ever read it, so a pilot that had found the ball behind the sofa three
-times searched the whole room a fourth time. The README listed this among the honest
-limitations. Two things were wanted: a place for the model to keep a fact on purpose, and
-a record of how earlier runs ended that the next run sees without anyone curating it.
+times searched the whole room a fourth time. The README never listed this among its
+limitations, which was its own small failure: a gap nobody had written down is a gap
+nobody is accounting for. Two things were wanted: a place for the model to keep a fact on
+purpose, and a record of how earlier runs ended that the next run sees without anyone
+curating it.
 
 The obvious bigger designs were rejected for now: a vector store (an embedding model in
 the default install, a second thing to keep in sync, and nothing to search yet at the scale
@@ -33,13 +35,19 @@ would relive a run instead of remembering its lesson).
   vocabulary comes from the manifest still holds for everything that touches the body.
 - **The prompt carries the newest entries**, up to 20 notes and 5 episodes, under one
   heading, with one paragraph saying how to add to them. Memory off means no heading, no
-  tool, no episode: the prompt is byte-for-byte what it was.
+  tool, no episode, so the scaffolding costs a memory-off run nothing. It does *not* make
+  the whole prompt byte-for-byte what it was: the starter ducks' own bodies ask for a
+  `remember` either way, and a duck body is part of the prompt. A pilot that obeys one with
+  memory off is refused in a sentence, at the price of an LLM call and no step.
 - **The starter ducks ask for it inside the strategy.** A prompt-level hint alone was
   ignored by a 14B local model; a `remember` in the last numbered step is followed. The
   flock ducks are unchanged because the coordinator does not run the deliberation loop.
 - **Over MCP the same file sits behind `robot_recall` and `robot_remember`**, one memory
-  per robot in the fleet, so a note saved from Claude Desktop is read by the next
-  `quackd run` and the other way round.
+  per `adapter:backend` in the fleet, so a note saved from Claude Desktop is read by the
+  next `quackd run` and the other way round. Two fleet members of the *same* kind
+  (`--robots a=microduck:sim2d,b=microduck:sim2d`) therefore share one file, which follows
+  from keying on the body rather than the member name and is the same reason a simulated
+  duck and a real one do not.
 - **Memory is never trusted by the executor.** A note is text the model wrote. The
   allowlist, budgets and confirmation gates read the contract, as before.
 
@@ -49,5 +57,6 @@ would relive a run instead of remembering its lesson).
   and `run_start` records how much memory the prompt was given.
 - Tests must isolate `QUACKD_MEMORY_DIR` (the conftest does, for every test), because the
   CLI's default is the developer's home directory.
-- Learned verbs (ADR-0019 territory, unshipped) are unaffected: memory changes what the
+- Learned verbs ([learned-verbs.md](../learned-verbs.md), unshipped) are unaffected:
+  memory changes what the
   pilot knows, not what the body can do.

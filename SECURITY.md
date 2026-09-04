@@ -21,7 +21,14 @@ v2's Raspberry Pi, and they are in scope in their own right.
 
 Also in scope:
 
-- API keys leaking into transcripts, GIFs, logs, or run directories.
+- API keys leaking into transcripts, GIFs, logs, run directories, or a robot's memory file.
+- **The memory file** (`~/.quackd/memory/<adapter>-<backend>.jsonl`, since 0.6). It holds
+  sentences a model wrote about a place it has been, it persists between runs, and it is
+  read back into the next system prompt. It never leaves the machine and the executor never
+  reads it, so a note cannot widen an allowlist, lift a budget or open a confirm gate. What
+  would be a security issue: memory reaching the executor, a note from one robot appearing
+  in another robot's prompt, or the file escaping the directory `--memory-dir` names.
+  `--no-memory` writes nothing at all, and `quackd memory clear` deletes the file.
 - The MCP server executing verbs a loaded `.duck` contract does not allow.
 - Anything that lets a `.duck` file (untrusted input — people will share them) execute
   code, read files, or reach the network.

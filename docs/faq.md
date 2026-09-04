@@ -31,9 +31,9 @@ detector. Composite verbs steer on detections at 10 Hz and never wait for the mo
 that calls the LLM and runs the detector, never runs on the robot itself — you run
 `quackd run` on a laptop or a server, a network hop away, and it talks to the robot (or the
 simulator) from there. The Open Duck Mini's official target, a Raspberry Pi Zero 2 W, only
-ever runs its existing 50 Hz walk policy plus a small relay daemon that does run on the Pi
-but does no perception and no inference of its own, just enough to swap the gamepad for a
-socket ([`bridge/open_duck/`](../bridge/open_duck/README.md)). The Microduck's onboard
+ever runs its existing 50 Hz walk policy plus two small daemons that do run on the Pi, a
+bridge and a camera server, and neither does any perception or inference of its own: just
+enough to swap the gamepad for a socket and to serve a JPEG ([`bridge/open_duck/`](../bridge/open_duck/README.md)). The Microduck's onboard
 computer works the same way, through `robotd`. Nothing here needs an NPU or a bigger board
 to keep up, because nothing model-shaped runs on the robot's own board in the first place.
 
@@ -52,6 +52,16 @@ in OpenCV HSV (H 0–180). Photograph the ball under your light, sample its hue,
 set `fov_deg=62` for the IMX219. Distance comes from apparent size: measure the pixel radius
 at 1 m once and adjust `size_m` until it reads 1.00. Or install `quackd[yolo]` and use
 `YoloDetector`.
+
+**Does it remember anything between runs?** Since 0.6, a little, per robot. Each
+`adapter:backend` has a JSONL file under `~/.quackd/memory/` holding two kinds of line: the
+notes the pilot chose to keep with the `remember` tool, and one line per earlier run that
+quackd writes itself (outcome, reason, the last few verb results). The newest twenty notes
+and five episodes go into the next run's system prompt. It is deliberately not a memory
+*system*: no embeddings, no search, newest wins, nothing shared between bodies, and the
+executor never reads it, so a note can never widen an allowlist or lift a budget. The
+scripted pilot has no `remember` in its script, so `--provider fake` accumulates run
+outcomes and never a note. [memory.md](memory.md), [ADR-0025](adr/0025-memory-between-runs.md)
 
 **Who decides the run succeeded?** The LLM, via `declare_success(reason)` — that is the
 honest state of the art. In `sim2d` the run summary also records ground truth
@@ -129,7 +139,11 @@ thermal clamps, and on the Microduck a deadman) — see [safety.md](safety.md).
 OpenAI, Gemini and Grok each send the camera frame and prompt to that provider's API over
 the network, under its own terms; the `fake` pilot and any local model (`ollama`, `vllm`,
 `llamacpp`, `lmstudio`) never do and need no API key, though a local model is still served
-over its own local HTTP endpoint, not literally air-gapped. See
+over its own local HTTP endpoint, not literally air-gapped. Since 0.6 one thing also stays
+behind on your machine: `~/.quackd/memory/<robot>.jsonl`, a plain text file of sentences
+about where things are, which is then part of the prompt on the next run and so part of what
+a cloud provider sees. `quackd memory show` prints it, `quackd memory clear` deletes it, and
+`--no-memory` never writes it. See [memory.md](memory.md) and
 [local-llms.md](local-llms.md).
 
 **Can quackd drive something that is not a duck?** Since 0.4, yes: a robot is an adapter

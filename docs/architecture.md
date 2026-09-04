@@ -17,8 +17,9 @@ adapter owns time, so the steering loop runs at sim speed in the simulator and i
 time on hardware without changing verb code. ([ADR-0003](adr/0003-three-loops.md))
 
 None of this needs to run on the robot's own computer. The only quackd code that ever runs
-on a robot is the Open Duck Mini's relay daemon (`bridge/open_duck/`, see Modules below),
-and it carries no model or perception code of its own.
+on a robot is the Open Duck Mini's pair of daemons, a bridge and a camera server
+(`bridge/open_duck/`, see Modules below), and neither carries model or perception code of
+its own.
 
 Since 0.4 the robot side is an **adapter** that declares a **manifest**: what body it has,
 which intents and sensors, which verbs. The registry, the tool list, the allowlist universe
@@ -55,7 +56,7 @@ sequenceDiagram
 
 | Path | Why it exists |
 |---|---|
-| `quackd/cli.py` | The front door: `run · validate · doctor · serve-mcp · list-verbs · list-adapters · record · discover · announce`. `--robot <adapter>:<backend>` everywhere, with `--address`, `--camera-url` and `--token` for a real robot. |
+| `quackd/cli.py` | The front door: `run · validate · doctor · serve-mcp · list-verbs · list-adapters · record · memory · discover · announce`. `--robot <adapter>:<backend>` everywhere, with `--address`, `--camera-url` and `--token` for a real robot. |
 | `quackd/duckfile/` | The `.duck` contract (v0 and v1): strict pydantic frontmatter, parser, generated `schema.json`, `validate.py` (a task against one or more manifests). |
 | `quackd/adapters/` | `RobotManifest` (data: what a robot is and can do), the `RobotAdapter` protocol, the factory behind `--robot`, and one package per robot: `microduck/` wraps the four transports and declares its manifest and extension verbs; `reachy_mini/` is a stationary head (`sim2d`, `mock`, `sdk`) with its own `upstream_api.py` ([adapters/reachy_mini.md](adapters/reachy_mini.md)); `lerobot/` is a desktop arm (`mock`, `real`, [adapters/lerobot.md](adapters/lerobot.md)); `rosbridge/` is any wheeled base over rosbridge (`mock`, `ws`, [adapters/rosbridge.md](adapters/rosbridge.md)); `open_duck/` is an Open Duck Mini v2 (`sim2d`, `mock`, `bridge`, [adapters/open_duck.md](adapters/open_duck.md)), the one body whose robot side quackd also ships, in `bridge/open_duck/`, because its runtime has no network control API. Every SDK-touching package owns an `upstream_api.py` and a containment test. |
 | `quackd/verbs/` | `core.py`: the verbs any robot can carry and what each requires; `aliases.py`: the one alias table; `registry.py`: built from a manifest at connect time; `learned.py`: the v2 interface. |
@@ -65,7 +66,7 @@ sequenceDiagram
 | `quackd/perception/` | `Detection` + `Detector`; the HSV colour-blob default; the lazy YOLO extra. |
 | `quackd/agent/` | The loop, the prompts, the transcript, and one provider per vendor behind `LLMProvider`. |
 | `quackd/memory.py` | What a robot keeps between runs: one JSONL file per `adapter:backend` with the notes the pilot saved (`remember`) and an episode per run; rendered into the prompt next time ([memory.md](memory.md), ADR-0025). |
-| `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: six `robot_*` tools through one executor per robot, the eight `duck_*` tools kept as aliases of the default robot. |
+| `quackd/mcp_server.py` | A robot, or a fleet (`--robots`), as MCP tools: eight `robot_*` tools through one executor per robot. The eight `duck_*` aliases 0.3 pinned to the default robot were removed in 0.5. |
 | `bridge/open_duck/` | **The only quackd code that runs on a robot.** Two daemons for an Open Duck Mini v2's Raspberry Pi: the bridge, which is upstream's own walk loop with the gamepad it reads replaced by a socket, and the camera server, which serves one JPEG over HTTP. Standard library plus numpy, never imported by quackd, shipped in the sdist and never in the wheel ([ADR-0024](adr/0024-open-duck-mini.md)). |
 | `quackd/lan/` | LAN discovery over zeroconf (`_quackd._tcp.local.`): a pure TXT wire format, `announce`, `discover`; behind `quackd[lan]` ([lan.md](lan.md)). |
 | `quackd/flock/` | Many robots on one task: the in-process `Bus`, the typed messages, the Contract Net `Auction` and the role auction, the deterministic coordinator, the scripted member FSM, the one-call planner and the runner that judges from ground truth ([flock.md](flock.md)). |
@@ -78,16 +79,19 @@ sequenceDiagram
    `detector.detect()` → `[Detection]`. The frame is saved to `runs/<ts>/frames/`.
 2. **Think.** The provider gets: the system prompt (contract in prose + the `.duck` body),
    the vendor-neutral history (`Exchange` = observation + decision), and the tool list
-   (allowed verbs' JSON schemas + `declare_success` / `declare_failure`). Only the last two
-   observations keep their images. The provider must return one tool call.
+   (allowed verbs' JSON schemas + `declare_success` / `declare_failure`, plus `remember` when
+   memory is on). With memory on the prompt also carries what this robot remembers from
+   earlier runs. Only the last two observations keep their images. The provider must return
+   one tool call.
 3. **Enforce.** Zero tool calls → one re-prompt, then failure. Several → the first. Then
    `Executor.run_verb`: abort flag → allowlist → params → confirm → budget → machine-enforced
    `abort_when` → preconditions → dry-run → execute with timeout.
 4. **Act.** The verb runs; composites loop on the camera at 10 Hz; `move` re-sends its
    velocity every 100 ms to feed the robot's deadman.
 5. **Record.** `transcript.jsonl` gets `observation`, `llm` (with usage), `verb` events
-   (`name` as called plus `canonical`); `summary.json` at the end; `run.gif` from the
-   recorder on sim2d.
+   (`name` as called plus `canonical`) and a `memory` event for every `remember`;
+   `summary.json` at the end; `run.gif` from the recorder on sim2d. With memory on, the
+   run ends by appending one episode line to the robot's memory file ([memory.md](memory.md)).
 
 Step 0, before all of that: the loop calls `connect()` and, when an adapter answers with a
 manifest, builds the registry from it (`registry_from_manifest`). A bare transport answers
