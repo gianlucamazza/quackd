@@ -277,6 +277,7 @@ class AgentLoop:
                     usage=turn.usage.model_dump(),
                     stop_reason=turn.stop_reason,
                 )
+                self.budget.check_time()
 
                 if not turn.tool_calls:
                     if not retry_prompted:
