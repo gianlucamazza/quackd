@@ -261,6 +261,7 @@ def _run_impl(
     memory_dir: str | None = None,
     emotional: bool = False,
     emotional_dir: str | None = None,
+    emotional_context: bool = False,
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -297,12 +298,15 @@ def _run_impl(
             + "; ".join(p.message for p in problems)
         )
         return
+    if emotional_context and not emotional:
+        _fail("--emotional-context requires --emotional-state")
+        return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
     if flock is not None or duck.frontmatter.flock is not None:
-        if emotional:
-            _fail("--emotional-state is currently available for single-robot runs only")
+        if emotional or emotional_context:
+            _fail("emotional state/context is currently available for single-robot runs only")
             return
         _run_flock_impl(
             duck,
@@ -397,6 +401,7 @@ def _run_impl(
         on_frame=recorder.capture if recorder is not None else None,
         memory=robot_memory,
         affective=affective,
+        affective_context=emotional_context,
     )
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
@@ -634,6 +639,11 @@ _EMOTIONAL_DIR = typer.Option(
     "--emotional-dir",
     help="Where affective state SQLite files live (default: ~/.quackd/affective).",
 )
+_EMOTIONAL_CONTEXT = typer.Option(
+    False,
+    "--emotional-context",
+    help="EXPERIMENTAL: expose affective state to the model (requires --emotional-state).",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -714,6 +724,7 @@ def run(
     memory_dir: str | None = _MEMORY_DIR,
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
+    emotional_context: bool = _EMOTIONAL_CONTEXT,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -743,6 +754,7 @@ def run(
         memory_dir=memory_dir,
         emotional=emotional,
         emotional_dir=emotional_dir,
+        emotional_context=emotional_context,
     )
 
 

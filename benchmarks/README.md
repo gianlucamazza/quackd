@@ -22,10 +22,11 @@ This command performs real OpenAI calls and is never part of the offline CI job:
 
 ```bash
 uv run --extra openai --extra emotional python benchmarks/live_cloud.py \
-  --model gpt-5.6-luna --seed 0 --seed 1 --seed 2 \
+  --model gpt-5.6-sol --seed 0 --seed 1 --seed 2 --repeats 3 \
   --output /tmp/quackd-live-openai.json
 ```
 
-It checks `/v1/models` first, runs only the simulator with `--yes` (never hardware), and records model,
-outcome, latency, calls, token usage and affective-state presence. `gpt-5.6-sol` is the quality
-lane; use it explicitly for the acceptance run after the `gpt-5.6-luna` pilot passes.
+It checks `/v1/models` first, runs only the simulator with `--yes` (never hardware), and compares
+baseline runs against the explicit `--emotional-context` lane over 10 seeds and 3 repeats by
+default. It records model, repeat, outcome, latency, calls, token usage and affective-state
+presence. Treat the output as an experiment, not as evidence of a default quality improvement.

@@ -8,6 +8,10 @@ uvx --from "quackd[emotional]" quackd run hello-world \
   --provider fake --emotional-state
 ```
 
+The experimental `--emotional-context` flag additionally exposes the snapshot to the
+model and requires `--emotional-state`. It is disabled by default and is intended only for
+controlled A/B evaluation.
+
 The state uses valence, arousal and dominance with mood decay. Successful and failed verb
 results and run outcomes update it. The current snapshot is written to
 `summary.json`/`transcript.jsonl` as an `affective` event.

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   persistence, prompt/transcript summaries, CLI/MCP flags, CI coverage, and a deterministic
   on/off benchmark matrix. See [docs/emotional-state.md](docs/emotional-state.md) and
   [ADR 0026](docs/adr/0026-affective-runtime.md).
+- Experimental `--emotional-context` keeps model-facing affective context separate from the
+  passive runtime, enabling controlled A/B quality experiments without changing defaults.
 - OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`
   family. Chat Completions explicitly disables reasoning for tool calls; reasoning-enabled
   Responses API support remains a separate future adapter.
