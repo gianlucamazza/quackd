@@ -88,8 +88,13 @@ class MemoryEntry:
 
 
 class RobotMemory:
-    """One robot's memory file. Every method re-reads the file: cheap, and safe across
-    a CLI run and an MCP server pointing at the same robot."""
+    """One robot's memory file. Every method re-reads the file, so a `quackd run` and an
+    MCP server pointing at the same robot always see each other's latest writes, and a
+    replaced file is never half-read: each write goes to a temporary file and is renamed
+    over the old one. It is *not* serialised. Two processes writing at the same instant is
+    a read-modify-write race and the later rename wins, so one of the two notes is lost.
+    That is the accepted cost of a file you can also edit in a text editor, and it is why
+    nothing here is a database."""
 
     def __init__(self, robot_key: str, base_dir: str | Path | None = None) -> None:
         self.robot_key = robot_key
@@ -106,9 +111,15 @@ class RobotMemory:
             if not line:
                 continue
             try:
-                out.append(MemoryEntry.from_json(json.loads(line)))
-            except (json.JSONDecodeError, TypeError, ValueError):
+                loaded = json.loads(line)
+            except json.JSONDecodeError:
                 continue  # a hand-edited line that is not JSON is skipped, not fatal
+            if not isinstance(loaded, dict):
+                continue  # nor is a line that is valid JSON but not an entry (`"hi"`, `[]`)
+            try:
+                out.append(MemoryEntry.from_json(loaded))
+            except (TypeError, ValueError):
+                continue  # nor is an object whose fields are the wrong shape
         return out
 
     def _write_all(self, entries: list[MemoryEntry]) -> None:
@@ -163,12 +174,15 @@ class RobotMemory:
             raise ValueError("nothing to remember")
         ts = time.time() if now is None else now
         entries = self.entries()
-        for e in entries:
+        for i, e in enumerate(entries):
             if e.kind == "note" and e.text.lower() == clean.lower():
                 e.ts = ts
                 e.tags = sorted(set(e.tags) | set(tags or []))
                 if duck:
                     e.duck = duck
+                # a refreshed note is the newest note, so it has to move to the end: file
+                # order *is* the order, for `recall`'s newest-first window and for the cap
+                entries.append(entries.pop(i))
                 self._write_all(entries)
                 return e
         entry = MemoryEntry(

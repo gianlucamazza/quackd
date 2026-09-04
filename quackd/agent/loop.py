@@ -174,6 +174,12 @@ class AgentLoop:
         memory = self.cfg.memory
         if memory is None:
             return VerbResult.fail("memory is off for this run; nothing saved")
+        if self.cfg.dry_run:
+            # `--dry-run` sends nothing and leaves nothing behind. A note here would be a
+            # permanent conclusion drawn from verb results the dry run itself invented.
+            text = " ".join(str(arguments.get("text", "")).split())
+            self.cfg.log(f"[dry-run] would remember: {text}")
+            return VerbResult.success(f"[dry-run] not saved: {text}", dry_run=True)
         text = str(arguments.get("text", "")).strip()
         tags_raw = arguments.get("tags") or []
         tags = [str(t) for t in tags_raw] if isinstance(tags_raw, list) else []
