@@ -1,4 +1,4 @@
-"""A fleet over MCP: six robot_* tools, one executor, budget and heartbeat per robot.
+"""A fleet over MCP: eight robot_* tools, one executor, budget and heartbeat per robot.
 
 Driven in-process by the SDK's own client over memory streams, exactly like the one-robot
 tests. Two bodies: a simulated Microduck and a mocked Reachy Mini, each with its own

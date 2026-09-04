@@ -54,3 +54,20 @@ async def test_memory_off(tmp_path: Path) -> None:
         assert not saved["ok"]
         assert fleet.sessions["duck"].memory is None
     assert os.listdir(tmp_path) == []
+
+
+async def test_the_instructions_only_sell_memory_when_it_is_on(tmp_path: Path) -> None:
+    """Both tools stay registered with `--no-memory` and both answer "memory is off", so an
+    instruction to call robot_recall early is an instruction to waste a turn."""
+    from quackd.mcp_server import _instructions
+
+    async with connected(two_robots(), memory_dir=tmp_path) as (_client, fleet):
+        assert "robot_recall" in _instructions(fleet)
+    async with connected(two_robots(), memory=False, memory_dir=tmp_path) as (_client, fleet):
+        prompt = _instructions(fleet)
+        assert "robot_recall" not in prompt and "robot_remember" not in prompt
+        assert "robot_list" in prompt  # the rest of the briefing is untouched
+    # and the same for a lone robot, whose prompt is a different template
+    one = {"duck": two_robots()["duck"]}
+    async with connected(one, memory=False, memory_dir=tmp_path) as (_client, fleet):
+        assert "robot_recall" not in _instructions(fleet)

@@ -255,3 +255,40 @@ def test_no_document_still_promises_a_removal_that_happened() -> None:
         assert "--transport" not in text, f"{path.name} still documents --transport"
         for promise in ("go away in 0.5", "gone in 0.5", "are removed in 0.5", "for one release"):
             assert promise not in text, f"{path.name} still promises {promise!r}, which happened"
+
+
+def test_no_living_document_claims_the_wrong_number_of_mcp_tools() -> None:
+    """The guard above proves nothing still *offers* a removed tool. It could not see a
+    document still *describing* one, so architecture.md went through the whole of 0.5 saying
+    the server carried the old count plus the duck_* aliases that release deleted, and into
+    0.6, which added two more tools. Two README sentences, a --robots help string, a module
+    docstring and a test docstring carried the old count for the same reason: nothing counted
+    them. This file is scanned too, which is why the stale wordings are described here rather
+    than quoted."""
+    from quackd.mcp_server import TOOL_NAMES
+
+    right = _NUMBER_WORDS[len(TOOL_NAMES)]
+    # 0.5 learned that a doc-only guard cannot see a Python string a user reads: the count
+    # was also stale in a `--robots` help text, a module docstring and a test's docstring
+    # this file is skipped because it has to spell the wordings it forbids in order to
+    # forbid them; every other source file and living document is fair game
+    here = Path(__file__).resolve()
+    sources = [
+        p
+        for p in sorted((REPO / "quackd").rglob("*.py")) + sorted((REPO / "tests").glob("*.py"))
+        if p.resolve() != here
+    ]
+    for path in _living_docs() + sources:
+        text = path.read_text(encoding="utf-8")
+        haystack = (_prose(text) if path.suffix == ".md" else text).lower()
+        for count, word in _NUMBER_WORDS.items():
+            if count == len(TOOL_NAMES):
+                continue
+            for shape in (f"{word} `robot_*` tools", f"{word} robot_* tools"):
+                assert shape not in haystack, (
+                    f"{path.name} says {shape!r}; the server registers {right} "
+                    f"({', '.join(TOOL_NAMES)})"
+                )
+        # anything that still describes the removed aliases as present, in any wording
+        for stale in ("duck_* tools kept as aliases", "`duck_*` tools kept as aliases"):
+            assert stale not in haystack, f"{path.name} describes the duck_* aliases as present"

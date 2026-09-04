@@ -1,4 +1,5 @@
-"""Goldens recorded from v0.3.0 before the multi-robot refactor (0.4).
+"""Goldens recorded from v0.3.0 before the multi-robot refactor (0.4), except the four
+duck hashes regenerated in 0.6 when the solo starters gained a `remember` step.
 
 They turn three promises into machine checks: seeded single- and multi-duck worlds are
 byte-identical (poses, camera and top-down renders, RNG state), the six v0 starter ducks
