@@ -30,5 +30,6 @@ It checks `/v1/models` first, runs only the simulator with `--yes` (never hardwa
 baseline runs against the explicit `--emotional-context` lane over 10 seeds and 3 repeats by
 default. Transient API connection, timeout and rate-limit failures are retried twice and
 reported separately. Each run has a 180-second timeout by default. It records model, repeat,
-outcome, latency, calls, token usage and affective-state presence. Treat the output as an
-experiment, not as evidence of a default quality improvement.
+outcome, latency, calls, token usage, failure class and affective-state presence. Use
+`--resume` with the same output path after an interruption; quota exhaustion is recorded and is
+not retried. Treat the output as an experiment, not as evidence of a default quality improvement.
