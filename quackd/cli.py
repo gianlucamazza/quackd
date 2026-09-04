@@ -259,6 +259,8 @@ def _run_impl(
     robots: str | None = None,
     memory: bool = True,
     memory_dir: str | None = None,
+    emotional: bool = False,
+    emotional_dir: str | None = None,
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -299,6 +301,9 @@ def _run_impl(
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
     if flock is not None or duck.frontmatter.flock is not None:
+        if emotional:
+            _fail("--emotional-state is currently available for single-robot runs only")
+            return
         _run_flock_impl(
             duck,
             provider=provider,
@@ -364,6 +369,21 @@ def _run_impl(
 
         # keyed by adapter:backend, so a simulated duck never inherits a real one's notes
         robot_memory = RobotMemory(spec.key, memory_dir)
+    affective = None
+    if emotional:
+        from quackd.affective import AffectiveConfig, AffectiveRuntime
+
+        affective_config = AffectiveConfig(
+            enabled=True,
+            directory=emotional_dir or "~/.quackd/affective",
+        )
+        try:
+            affective = AffectiveRuntime.for_robot(
+                spec.key, affective_config, ephemeral=dry_run or not memory
+            )
+        except RuntimeError as e:
+            _fail(str(e))
+            return
     cfg = RunConfig(
         duck=duck,
         provider=llm,
@@ -376,6 +396,7 @@ def _run_impl(
         log=log,
         on_frame=recorder.capture if recorder is not None else None,
         memory=robot_memory,
+        affective=affective,
     )
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
@@ -603,6 +624,16 @@ _MEMORY_DIR = typer.Option(
     "--memory-dir",
     help="Where memory files live (default: $QUACKD_MEMORY_DIR or ~/.quackd/memory).",
 )
+_EMOTIONAL = typer.Option(
+    False,
+    "--emotional-state/--no-emotional-state",
+    help="Track this robot's affective runtime state (needs quackd[emotional]).",
+)
+_EMOTIONAL_DIR = typer.Option(
+    None,
+    "--emotional-dir",
+    help="Where affective state SQLite files live (default: ~/.quackd/affective).",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -681,6 +712,8 @@ def run(
     flock: int | None = _FLOCK,
     memory: bool = _MEMORY,
     memory_dir: str | None = _MEMORY_DIR,
+    emotional: bool = _EMOTIONAL,
+    emotional_dir: str | None = _EMOTIONAL_DIR,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -708,6 +741,8 @@ def run(
         robots=robots,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
     )
 
 
@@ -804,6 +839,8 @@ def serve_mcp(
     ),
     memory: bool = _MEMORY,
     memory_dir: str | None = _MEMORY_DIR,
+    emotional: bool = _EMOTIONAL,
+    emotional_dir: str | None = _EMOTIONAL_DIR,
 ) -> None:
     """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
     from quackd.adapters.base import AdapterError
@@ -822,8 +859,10 @@ def serve_mcp(
             yes=yes,
             memory=memory,
             memory_dir=memory_dir,
+            emotional=emotional,
+            emotional_dir=emotional_dir,
         )
-    except AdapterError as e:
+    except (AdapterError, RuntimeError) as e:
         _fail(str(e))
 
 
