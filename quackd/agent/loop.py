@@ -85,7 +85,7 @@ class RunConfig:
     """What this robot remembers between runs. None = off: no `remember` tool, no
     episode written at the end, the prompt says nothing about earlier runs."""
     affective: Any | None = None
-    """Optional emotional-memory runtime. It can enrich prompts but never controls safety."""
+    """Optional emotional-memory runtime for passive operational telemetry."""
 
 
 @dataclass
@@ -162,21 +162,6 @@ class AgentLoop:
             last_result=last_result,
             budget_status=self.budget.status(),
         )
-        affective_snapshot = None
-        if self.cfg.affective is not None:
-            affective_snapshot = await self.cfg.affective.observe(
-                "observation", text=text, context={"detections": len(detections)}
-            )
-            text = build_observation_text(
-                step=self.budget.steps,
-                max_steps=self.fm.budgets.max_steps,
-                state=state,
-                detections=detections,
-                last_verb=last_verb,
-                last_result=last_result,
-                budget_status=self.budget.status(),
-                affective=affective_snapshot,
-            )
         features = observation_features(
             state=state,
             detections=detections,
@@ -184,8 +169,6 @@ class AgentLoop:
             last_result=last_result,
             allowed=self.executor.allowed,
         )
-        if affective_snapshot is not None:
-            features["affective"] = affective_snapshot
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
 
