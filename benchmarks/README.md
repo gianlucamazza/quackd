@@ -28,5 +28,7 @@ uv run --extra openai --extra emotional python benchmarks/live_cloud.py \
 
 It checks `/v1/models` first, runs only the simulator with `--yes` (never hardware), and compares
 baseline runs against the explicit `--emotional-context` lane over 10 seeds and 3 repeats by
-default. It records model, repeat, outcome, latency, calls, token usage and affective-state
-presence. Treat the output as an experiment, not as evidence of a default quality improvement.
+default. Transient API connection, timeout and rate-limit failures are retried twice and
+reported separately. It records model, repeat, outcome, latency, calls, token usage and
+affective-state presence. Treat the output as an experiment, not as evidence of a default
+quality improvement.
