@@ -574,7 +574,7 @@ Why a task can refuse a body, whether two robots can share a task, and more: [do
 **Thank you to everyone who has sent quackd code.** 0.6 is the first release built on other people's pull requests, and both of them changed the project: one gave every robot a memory between runs, the other closed a budget a slow model could walk straight through. A bug report or a `.duck` that mostly fails counts too, because that is data.
 
 <p align="center">
-  <a href="https://github.com/rokbenko/quackd/graphs/contributors"><img src="https://contrib.nn.ci/api?repo=rokbenko/quackd" alt="People who have contributed to quackd"></a>
+  <a href="https://github.com/rokbenko/quackd/graphs/contributors"><img src="https://raw.githubusercontent.com/rokbenko/quackd/main/docs/assets/contributors.svg" alt="People who have contributed to quackd"></a>
 </p>
 
 <br>

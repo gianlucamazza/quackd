@@ -1,0 +1,40 @@
+name: contributors
+
+# Keeps docs/assets/contributors.svg in step with who has actually contributed.
+# Runs after anything lands on main, and weekly so that a contribution which arrives
+# some other way (a commit attributed later, a co-author) still shows up.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: contributors
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Regenerate the contributors image (humans only, one size)
+        run: python docs/assets/contributors.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Commit it only if it changed
+        run: |
+          if git diff --quiet -- docs/assets/contributors.svg; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/contributors.svg
+          git commit -m "docs: refresh the contributors image"
+          git push
