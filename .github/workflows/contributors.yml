@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # lines added is counted from the git history
       - name: Regenerate the contributors image (humans only, one size)
         run: python docs/assets/contributors.py
         env:
