@@ -120,7 +120,7 @@ packages = ["quackd"]
 # the one file it needs rather than installing quackd's whole dependency tree.
 [tool.hatch.build.targets.sdist]
 include = [
-  "quackd", "ducks", "bridge", "docs", "tests",
+  "quackd", "ducks", "bridge", "docs", "tests", "benchmarks",
   "README.md", "LICENSE", "NOTICE", "CHANGELOG.md", "hatch_build.py",
 ]
 # The README's images are served from raw.githubusercontent, so no published artefact ever
@@ -143,11 +143,15 @@ ignore = ["RUF012", "B008"]
 "quackd/cli.py" = ["T20"]
 "quackd/mcp_server.py" = ["T20"]
 "tests/**" = ["T20"]
+<<<<<<< HEAD
 # The two scripts that build the README's assets are run by hand and report as they go.
 "docs/assets/*.py" = ["T20"]
 # The browser demo's dev server. It is a command a person runs, and printing the URL it
 # mounted on is the whole of its user interface.
 "web/serve.py" = ["T20"]
+=======
+"benchmarks/**" = ["T20"]
+>>>>>>> 2aa68dd (test(benchmarks): add affective and live provider validation)
 # Prose-heavy files: upstream citations and LLM-facing prompt text read better unwrapped.
 "quackd/transport/upstream_api.py" = ["E501"]
 "quackd/agent/prompts.py" = ["E501"]
