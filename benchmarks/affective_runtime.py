@@ -21,7 +21,7 @@ SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter"
 SEEDS = range(10)
 
 
-def run_one(scenario: str, seed: int, affective: bool) -> dict[str, object]:
+def run_one(scenario: str, seed: int, affective: bool, repeat: int) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="quackd-bench-") as tmp:
         root = Path(tmp)
         command = [
@@ -63,6 +63,7 @@ def run_one(scenario: str, seed: int, affective: bool) -> dict[str, object]:
         return {
             "scenario": scenario,
             "seed": seed,
+            "repeat": repeat,
             "affective": affective,
             "returncode": completed.returncode,
             "success": completed.returncode == 0,
@@ -81,12 +82,16 @@ def run_one(scenario: str, seed: int, affective: bool) -> dict[str, object]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-affective-benchmark.json"))
     args = parser.parse_args()
+    if args.repeats < 1:
+        parser.error("--repeats must be positive")
     rows = [
-        run_one(scenario, seed, affective)
+        run_one(scenario, seed, affective, repeat)
         for scenario in SCENARIOS
         for seed in SEEDS
+        for repeat in range(args.repeats)
         for affective in (False, True)
     ]
     payload = {
@@ -96,6 +101,7 @@ def main() -> None:
         "platform": platform.platform(),
         "scenarios": SCENARIOS,
         "seeds": list(SEEDS),
+        "repeats": args.repeats,
         "rows": rows,
     }
     metrics: dict[str, dict[str, float]] = {}
@@ -118,6 +124,29 @@ def main() -> None:
         ((enabled / baseline) - 1) * 100 if baseline else 0.0,
         2,
     )
+    paired = {}
+    for row in rows:
+        key = (row["scenario"], row["seed"], row["repeat"])
+        paired.setdefault(key, {})[row["affective"]] = row
+    pairs = [pair for pair in paired.values() if False in pair and True in pair]
+    wall_deltas = [
+        ((float(pair[True]["wall_s"]) / float(pair[False]["wall_s"])) - 1) * 100
+        for pair in pairs
+        if float(pair[False]["wall_s"]) > 0
+    ]
+    payload["paired_metrics"] = {
+        "pairs": len(pairs),
+        "outcome_mismatches": sum(
+            pair[True]["outcome"] != pair[False]["outcome"] for pair in pairs
+        ),
+        "step_mismatches": sum(pair[True]["steps"] != pair[False]["steps"] for pair in pairs),
+        "llm_call_mismatches": sum(
+            pair[True]["llm_calls"] != pair[False]["llm_calls"] for pair in pairs
+        ),
+        "wall_overhead_median_pct": round(statistics.median(wall_deltas), 2)
+        if wall_deltas
+        else 0.0,
+    }
     payload["metrics"] = metrics
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")

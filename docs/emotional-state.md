@@ -9,9 +9,8 @@ uvx --from "quackd[emotional]" quackd run hello-world \
 ```
 
 The state uses valence, arousal and dominance with mood decay. Successful and failed verb
-results, observations, and run outcomes update it. The current snapshot is included in the
-observation sent to the model and in `summary.json`/`transcript.jsonl` as an `affective`
-event.
+results and run outcomes update it. The current snapshot is written to
+`summary.json`/`transcript.jsonl` as an `affective` event.
 
 State is stored separately from the text memory under `~/.quackd/affective/`, one SQLite
 file per robot. Override it with `--emotional-dir`. `--no-memory` and `--dry-run` keep the
