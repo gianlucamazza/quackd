@@ -24,6 +24,20 @@ SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter"
 DEFAULT_MODELS = ("gpt-5.6-sol",)
 
 
+def _failure_class(returncode: int, stderr: str, outcome: object) -> str | None:
+    if returncode == 0 and outcome == "success":
+        return None
+    if "insufficient_quota" in stderr or "credit_balance_exhausted" in stderr:
+        return "quota"
+    if "TimeoutExpired" in stderr or "APITimeoutError" in stderr:
+        return "timeout"
+    if "APIConnectionError" in stderr or "RateLimitError" in stderr:
+        return "transient_provider"
+    if "ProviderError" in stderr:
+        return "provider"
+    return "run"
+
+
 def _usage(summary: dict[str, object]) -> tuple[int | None, int | None]:
     usage = summary.get("usage")
     if not isinstance(usage, dict):
@@ -90,7 +104,7 @@ def run_one(
                     stdout=exc.stdout or "",
                     stderr=f"TimeoutExpired after {run_timeout}s",
                 )
-            transient = any(
+            transient = "insufficient_quota" not in completed.stderr and any(
                 marker in completed.stderr
                 for marker in (
                     "APIConnectionError",
@@ -117,6 +131,9 @@ def run_one(
             "success": completed.returncode == 0 and summary.get("outcome") == "success",
             "outcome": summary.get("outcome"),
             "reason": summary.get("reason"),
+            "failure_class": _failure_class(
+                completed.returncode, completed.stderr, summary.get("outcome")
+            ),
             "wall_s": round(time.perf_counter() - started, 3),
             "steps": summary.get("steps"),
             "llm_calls": summary.get("llm_calls"),
@@ -136,6 +153,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--run-retries", type=int, default=2)
     parser.add_argument("--run-timeout", type=int, default=180)
+    parser.add_argument("--resume", action="store_true", help="resume rows already in --output")
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
     models = tuple(args.models or DEFAULT_MODELS)
@@ -161,14 +179,55 @@ def main() -> None:
         print(f"preflight blocked: models unavailable: {', '.join(missing)}", file=sys.stderr)
         raise SystemExit(2)
 
-    rows = [
-        run_one(model, scenario, seed, affective, repeat, args.run_retries, args.run_timeout)
-        for model in models
-        for scenario in scenarios
-        for seed in seeds
-        for repeat in range(args.repeats)
-        for affective in (False, True)
-    ]
+    rows: list[dict[str, object]] = []
+    if args.resume and args.output.exists():
+        saved = json.loads(args.output.read_text(encoding="utf-8"))
+        if saved.get("kind") != "quackd-live-openai" or not isinstance(saved.get("rows"), list):
+            parser.error("--resume requires a compatible live benchmark artifact")
+        rows = [row for row in saved["rows"] if isinstance(row, dict)]
+    completed_keys = {
+        (
+            row.get("model"),
+            row.get("scenario"),
+            row.get("seed"),
+            row.get("repeat"),
+            row.get("affective_context"),
+        )
+        for row in rows
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    for model in models:
+        for scenario in scenarios:
+            for seed in seeds:
+                for repeat in range(args.repeats):
+                    for affective in (False, True):
+                        key = (model, scenario, seed, repeat, affective)
+                        if key in completed_keys:
+                            continue
+                        rows.append(
+                            run_one(
+                                model,
+                                scenario,
+                                seed,
+                                affective,
+                                repeat,
+                                args.run_retries,
+                                args.run_timeout,
+                            )
+                        )
+                        completed_keys.add(key)
+                        checkpoint = {
+                            "kind": "quackd-live-openai",
+                            "created_at": datetime.now(UTC).isoformat(),
+                            "models": models,
+                            "scenarios": scenarios,
+                            "seeds": seeds,
+                            "repeats": args.repeats,
+                            "run_retries": args.run_retries,
+                            "run_timeout": args.run_timeout,
+                            "rows": rows,
+                        }
+                        args.output.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
     payload = {
         "kind": "quackd-live-openai",
         "created_at": datetime.now(UTC).isoformat(),
@@ -214,9 +273,33 @@ def main() -> None:
         "wall_overhead_median_pct": round(statistics.median(latency_deltas), 2)
         if latency_deltas
         else 0.0,
+        "input_token_overhead_median_pct": round(
+            statistics.median(
+                [
+                    ((int(pair[True]["input_tokens"]) / int(pair[False]["input_tokens"])) - 1) * 100
+                    for pair in pairs
+                    if isinstance(pair[False]["input_tokens"], int)
+                    and int(pair[False]["input_tokens"]) > 0
+                    and isinstance(pair[True]["input_tokens"], int)
+                ]
+            ),
+            2,
+        )
+        if any(
+            isinstance(pair[False]["input_tokens"], int)
+            and isinstance(pair[True]["input_tokens"], int)
+            for pair in pairs
+        )
+        else 0.0,
         "pairs_with_transient_retry": sum(
             pair[False]["attempts"] > 1 or pair[True]["attempts"] > 1 for pair in pairs
         ),
+        "failure_classes": {
+            failure_class: sum(row["failure_class"] == failure_class for row in rows)
+            for failure_class in sorted(
+                {row["failure_class"] for row in rows if row["failure_class"] is not None}
+            )
+        },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
