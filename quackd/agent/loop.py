@@ -90,8 +90,7 @@ class RunConfig:
     """What this robot remembers between runs. None = off: no `remember` tool, no
     episode written at the end, the prompt says nothing about earlier runs."""
     affective: Any | None = None
-<<<<<<< HEAD
-    """Optional emotional-memory runtime. It can enrich prompts but never controls safety."""
+    """Optional emotional-memory runtime for passive operational telemetry."""
     fov_deg: float | None = None
     """The horizontal field of view of the camera actually in front of you. None falls back
     to the robot's manifest, then to the simulator's, which is flagged as uncalibrated."""
@@ -102,9 +101,12 @@ class RunConfig:
     trace: Sink | None = None
     """Where to show the run as it happens (the CLI passes a `ConsoleTrace`). The transcript
     gets every event whether this is set or not; this is a second reader of the same stream."""
+    affective_context: bool = False
+    """Enable experimental emotional-context enrichment for model-facing prompts."""
 =======
-    """Optional emotional-memory runtime for passive operational telemetry."""
->>>>>>> 2747527 (refactor(affective): make runtime context passive by default)
+    affective_context: bool = False
+    """Experimental opt-in: expose the affective snapshot to the provider."""
+>>>>>>> 336d15a (feat(affective): add opt-in experimental context)
 
 
 @dataclass
@@ -194,6 +196,11 @@ class AgentLoop:
             if self.cfg.detector is not None:
                 detections = self.cfg.detector.detect(img)
             self._on_frame(img, f"step {self.budget.steps}: {last_verb or 'start'}")
+        affective_snapshot = None
+        if self.cfg.affective_context and self.cfg.affective is not None:
+            affective_snapshot = await self.cfg.affective.observe(
+                "observation", text="", context={"detections": len(detections)}
+            )
         text = build_observation_text(
             step=self.budget.steps,
             max_steps=self.fm.budgets.max_steps,
@@ -202,6 +209,7 @@ class AgentLoop:
             last_verb=last_verb,
             last_result=last_result,
             budget_status=self.budget.status(),
+            affective=affective_snapshot,
         )
         features = observation_features(
             state=state,
@@ -210,6 +218,8 @@ class AgentLoop:
             last_result=last_result,
             allowed=self.executor.allowed,
         )
+        if affective_snapshot is not None:
+            features["affective"] = affective_snapshot
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
 
@@ -555,6 +565,7 @@ class AgentLoop:
                 "transport": backend_name(cfg.transport),
                 "robot": manifest.id if manifest is not None else None,
                 "dry_run": cfg.dry_run,
+                "affective_context": cfg.affective_context,
                 "final_state": final_state,
                 "affective_state": (cfg.affective.summary() if cfg.affective is not None else None),
                 # what a view could not show. The record has every one of them; a console

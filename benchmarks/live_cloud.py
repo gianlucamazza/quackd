@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter")
-DEFAULT_MODELS = ("gpt-5.6-luna", "gpt-5.6-terra")
+DEFAULT_MODELS = ("gpt-5.6-sol",)
 
 
 def _usage(summary: dict[str, object]) -> tuple[int | None, int | None]:
@@ -35,7 +36,9 @@ def _usage(summary: dict[str, object]) -> tuple[int | None, int | None]:
     )
 
 
-def run_one(model: str, scenario: str, seed: int, affective: bool) -> dict[str, object]:
+def run_one(
+    model: str, scenario: str, seed: int, affective_context: bool, repeat: int
+) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="quackd-live-") as tmp:
         root = Path(tmp)
         command = [
@@ -58,8 +61,9 @@ def run_one(model: str, scenario: str, seed: int, affective: bool) -> dict[str, 
             "--runs-dir",
             str(root / "runs"),
         ]
-        if affective:
+        if affective_context:
             command.extend(("--emotional-state", "--emotional-dir", str(root / "affective")))
+            command.append("--emotional-context")
         started = time.perf_counter()
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
         summaries = sorted((root / "runs").glob("*/summary.json"))
@@ -69,7 +73,9 @@ def run_one(model: str, scenario: str, seed: int, affective: bool) -> dict[str, 
             "model": model,
             "scenario": scenario,
             "seed": seed,
-            "affective": affective,
+            "repeat": repeat,
+            "affective": affective_context,
+            "affective_context": affective_context,
             "returncode": completed.returncode,
             "success": completed.returncode == 0 and summary.get("outcome") == "success",
             "outcome": summary.get("outcome"),
@@ -90,11 +96,14 @@ def main() -> None:
     parser.add_argument("--model", action="append", dest="models", default=None)
     parser.add_argument("--scenario", action="append", choices=SCENARIOS, default=None)
     parser.add_argument("--seed", action="append", type=int, dest="seeds", default=None)
+    parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
     models = tuple(args.models or DEFAULT_MODELS)
     scenarios = tuple(args.scenario or SCENARIOS)
-    seeds = tuple(args.seeds or (0, 1, 2))
+    seeds = tuple(args.seeds or range(10))
+    if args.repeats < 1:
+        parser.error("--repeats must be positive")
 
     load_dotenv()
     try:
@@ -110,10 +119,11 @@ def main() -> None:
         raise SystemExit(2)
 
     rows = [
-        run_one(model, scenario, seed, affective)
+        run_one(model, scenario, seed, affective, repeat)
         for model in models
         for scenario in scenarios
         for seed in seeds
+        for repeat in range(args.repeats)
         for affective in (False, True)
     ]
     payload = {
@@ -124,7 +134,41 @@ def main() -> None:
         "models": models,
         "scenarios": scenarios,
         "seeds": seeds,
+        "repeats": args.repeats,
         "rows": rows,
+    }
+    grouped: dict[tuple[object, ...], dict[bool, dict[str, object]]] = {}
+    for row in rows:
+        key = (row["model"], row["scenario"], row["seed"], row["repeat"])
+        grouped.setdefault(key, {})[bool(row["affective_context"])] = row
+    pairs = [pair for pair in grouped.values() if False in pair and True in pair]
+    latency_deltas = [
+        ((float(pair[True]["wall_s"]) / float(pair[False]["wall_s"])) - 1) * 100
+        for pair in pairs
+        if float(pair[False]["wall_s"]) > 0
+    ]
+    payload["paired_metrics"] = {
+        "pairs": len(pairs),
+        "success_rate_disabled": round(
+            statistics.mean(bool(pair[False]["success"]) for pair in pairs), 3
+        )
+        if pairs
+        else 0.0,
+        "success_rate_context": round(
+            statistics.mean(bool(pair[True]["success"]) for pair in pairs), 3
+        )
+        if pairs
+        else 0.0,
+        "outcome_mismatches": sum(
+            pair[True]["outcome"] != pair[False]["outcome"] for pair in pairs
+        ),
+        "step_mismatches": sum(pair[True]["steps"] != pair[False]["steps"] for pair in pairs),
+        "llm_call_mismatches": sum(
+            pair[True]["llm_calls"] != pair[False]["llm_calls"] for pair in pairs
+        ),
+        "wall_overhead_median_pct": round(statistics.median(latency_deltas), 2)
+        if latency_deltas
+        else 0.0,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
