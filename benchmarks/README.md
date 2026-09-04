@@ -32,4 +32,11 @@ default. Transient API connection, timeout and rate-limit failures are retried t
 reported separately. Each run has a 180-second timeout by default. It records model, repeat,
 outcome, latency, calls, token usage, failure class and affective-state presence. Use
 `--resume` with the same output path after an interruption; quota exhaustion is recorded and is
-not retried. Treat the output as an experiment, not as evidence of a default quality improvement.
+not retried. The default scenarios test basic navigation and reporting. For the targeted
+context experiment, select `fetch`, `follow-me` and `patrol-and-quack` explicitly; these tasks
+exercise recovery, persistence and repeated observations. Treat the output as an experiment,
+not as evidence of a default quality improvement.
+
+The promotion gate requires a positive paired success delta with a 95% confidence interval,
+no more than 5% median token/cost growth, no more than 5% median latency growth, and no new
+budget or safety failures, replicated in two independent live sessions.

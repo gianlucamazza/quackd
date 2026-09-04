@@ -21,6 +21,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter")
+TARGETED_SCENARIOS = ("fetch", "follow-me", "patrol-and-quack")
+ALL_SCENARIOS = SCENARIOS + TARGETED_SCENARIOS
 DEFAULT_MODELS = ("gpt-5.6-sol",)
 
 
@@ -148,7 +150,7 @@ def run_one(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", action="append", dest="models", default=None)
-    parser.add_argument("--scenario", action="append", choices=SCENARIOS, default=None)
+    parser.add_argument("--scenario", action="append", choices=ALL_SCENARIOS, default=None)
     parser.add_argument("--seed", action="append", type=int, dest="seeds", default=None)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--run-retries", type=int, default=2)
