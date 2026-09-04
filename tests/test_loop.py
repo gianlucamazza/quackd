@@ -113,6 +113,27 @@ async def test_affective_runtime_is_passive_in_observation_loop(
     )
 
 
+async def test_affective_context_uses_cached_event_snapshot(
+    hello_duck: DuckFile, tmp_path: Path
+) -> None:
+    affective = PassiveAffectiveSpy()
+    result = await run_duck(
+        RunConfig(
+            duck=hello_duck,
+            provider=FakeProvider.for_duck("hello-world"),
+            transport=MockTransport(),
+            runs_dir=tmp_path,
+            affective=affective,
+            affective_context=True,
+        )
+    )
+    assert result.ok
+    assert affective.events == ["verb_success"] * 3 + ["success"]
+    events = Transcript.read(result.run_dir / "transcript.jsonl")
+    observations = [event for event in events if event["kind"] == "observation"]
+    assert observations and all("affective" in event["features"] for event in observations)
+
+
 async def test_no_tool_call_is_reprompted_once_then_failure(
     hello_duck: DuckFile, tmp_path: Path
 ) -> None:
