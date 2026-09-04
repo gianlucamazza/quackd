@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional `quackd[emotional]` integration with per-robot affective runtime state, SQLite
+  persistence, prompt/transcript summaries, CLI/MCP flags, CI coverage, and a deterministic
+  on/off benchmark matrix. See [docs/emotional-state.md](docs/emotional-state.md) and
+  [ADR 0026](docs/adr/0026-affective-runtime.md).
+- OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`
+  family. Chat Completions explicitly disables reasoning for tool calls; reasoning-enabled
+  Responses API support remains a separate future adapter.
+
 ## [0.6.0] — 2026-09-04
 
 A run stops starting from nothing. Every release so far built a pilot with no past: the

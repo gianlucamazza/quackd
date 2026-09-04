@@ -130,6 +130,8 @@ class RobotSession:
     """A caller-supplied registry is kept as is; otherwise the manifest builds one."""
     memory: RobotMemory | None = None
     """What this robot keeps between sessions (`quackd memory`). None = off."""
+    affective: Any | None = None
+    """Optional emotional-memory state; never part of executor policy."""
 
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
@@ -163,6 +165,9 @@ class RobotSession:
             await self.transport.stop()
         with contextlib.suppress(Exception):
             await self.transport.close()
+        if self.affective is not None:
+            with contextlib.suppress(Exception):
+                self.affective.close()
 
     async def run(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
         self.calls += 1
@@ -183,6 +188,14 @@ class RobotSession:
             result = VerbResult.fail(f"budget exhausted: {e}")
         except Aborted as e:
             result = VerbResult.fail(f"aborted: {e}")
+        if self.affective is not None:
+            with contextlib.suppress(Exception):
+                await self.affective.observe(
+                    "verb_success" if result.ok else "verb_failure",
+                    text=result.summary,
+                    ok=result.ok,
+                    context={"verb": name},
+                )
         return _result(result)
 
     async def info(self, *, default: bool) -> dict[str, Any]:
@@ -211,6 +224,7 @@ class RobotSession:
             "health_reason": reason,
             "aborted": self.executor.abort.is_set(),
             "default": default,
+            "affective": self.affective.summary() if self.affective is not None else None,
         }
 
     def verbs_payload(self) -> dict[str, Any]:
@@ -409,6 +423,8 @@ def build_fleet_server(
     default: str | None = None,
     memory: bool = True,
     memory_dir: str | Path | None = None,
+    emotional: bool = False,
+    emotional_dir: str | Path | None = None,
 ) -> tuple[MCPServer, Fleet]:
     """One MCP server over several robots, each behind its own executor.
 
@@ -458,6 +474,18 @@ def build_fleet_server(
                 else None
             ),
         )
+        if emotional:
+            from quackd.affective import AffectiveConfig, AffectiveRuntime
+
+            affective_config = AffectiveConfig(
+                enabled=True,
+                directory=emotional_dir or "~/.quackd/affective",
+            )
+            session.affective = AffectiveRuntime.for_robot(
+                f"{adapter_name(transport) or name}:{backend_name(transport)}",
+                affective_config,
+                ephemeral=dry_run or not memory,
+            )
         executor.on_frame = _stash_frames(session)
         sessions[name] = session
     fleet = Fleet(sessions, default or _pick_default(robots))
@@ -586,6 +614,8 @@ def build_server(
     heartbeat_period_s: float = 0.5,
     memory: bool = True,
     memory_dir: str | Path | None = None,
+    emotional: bool = False,
+    emotional_dir: str | Path | None = None,
 ) -> tuple[MCPServer, RobotSession]:
     """One robot, the 0.3 entry point: a fleet of one named after its adapter."""
     name = adapter_name(transport) or "duck"
@@ -599,6 +629,8 @@ def build_server(
         heartbeat_period_s=heartbeat_period_s,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
     )
     return mcp, fleet.sessions[name]
 
@@ -617,6 +649,8 @@ def serve(
     warn: Any = None,
     memory: bool = True,
     memory_dir: str | None = None,
+    emotional: bool = False,
+    emotional_dir: str | None = None,
 ) -> None:
     from quackd.adapters.factory import (
         RobotSpec,
@@ -674,8 +708,13 @@ def serve(
         yes=yes,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
     )
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    except RuntimeError as e:
+        raise SystemExit(str(e)) from e
 
 
 class _Probe:

@@ -1045,6 +1045,20 @@ wheels = [
 ]
 
 [[package]]
+name = "emotional-memory"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c3/12/61f23eff7d7f5d784ea76672533a1972e82a93a98b52ba0c5bafb027e8a4/emotional_memory-0.18.0.tar.gz", hash = "sha256:12b7e5a44cea75b8fb0b594fbc74ed5a47e7e6f61b0e9dbbfa0d4fd4fc3ca661", size = 116244, upload-time = "2026-08-10T09:32:30.669Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/81/416d3f4e58c5d1467c0501e130bfdea5dd0fcce8f5868c7e98e1bae34fe3/emotional_memory-0.18.0-py3-none-any.whl", hash = "sha256:a76190b554bf2b5ec9f05a66d3426590ec5b61fe30cb23e121c308ff9a1a72f0", size = 124494, upload-time = "2026-08-10T09:32:29.247Z" },
+]
+
+[[package]]
 name = "farama-notifications"
 version = "0.0.6"
 source = { registry = "https://pypi.org/simple" }
@@ -4034,6 +4048,9 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+emotional = [
+    { name = "emotional-memory" },
+]
 gemini = [
     { name = "google-genai" },
 ]
@@ -4068,6 +4085,7 @@ yolo = [
 requires-dist = [
     { name = "anthropic", marker = "extra == 'all'", specifier = ">=1.0,<2" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.0,<2" },
+    { name = "emotional-memory", marker = "extra == 'emotional'", specifier = ">=0.18,<0.19" },
     { name = "google-genai", marker = "extra == 'all'", specifier = ">=1.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0" },
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.25" },
@@ -4097,7 +4115,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'yolo'", specifier = ">=8.2" },
     { name = "zeroconf", marker = "extra == 'lan'", specifier = ">=0.132" },
 ]
-provides-extras = ["all", "anthropic", "dev", "gemini", "grok", "lan", "lerobot", "live", "openai", "reachy", "rosbridge", "yolo"]
+provides-extras = ["all", "anthropic", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "openai", "reachy", "rosbridge", "yolo"]
 
 [[package]]
 name = "questionary"

@@ -47,6 +47,7 @@ grok = ["openai>=1.50"]
 all = ["anthropic>=1.0,<2", "openai>=1.50", "google-genai>=1.0"]
 yolo = ["ultralytics>=8.2"]
 live = ["pygame>=2.5"]
+emotional = ["emotional-memory>=0.18,<0.19"]
 # Robot SDKs are extras too: the default install never imports one. reachy-mini pulls
 # onnxruntime, FastAPI and a GStreamer bundle (read from the 1.10.0 wheel, 2026-09-02).
 reachy = ["reachy-mini>=1.10,<2"]
