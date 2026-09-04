@@ -76,6 +76,7 @@ The first of those also passes 10 of 10 on the physics simulator, with the duck 
   * [The `.duck` file](#the-duck-file)
   * [Pilot it from Claude (MCP)](#pilot-it-from-claude-mcp)
   * [What it remembers](#what-it-remembers)
+  * [Affective runtime state](docs/emotional-state.md)
 - [Any small robot](#any-small-robot)
 - [Flock mode (simulator)](#flock-mode-simulator)
 - [The browser demo](#the-browser-demo)
@@ -113,7 +114,7 @@ checkout, clone this repository, run `python web/serve.py` and open
 <http://localhost:8000/simulator/>. That server is one stdlib file, Python but not quackd. The
 page is [`web/`](web/), and [The browser demo](#the-browser-demo) says what it does.
 
-Put keys in the environment or in a `.env` file (copy [`.env.example`](.env.example)). `quackd doctor` tells you what is missing. Needs Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/), nothing else.
+Put keys in the project-root `.env` or in the environment (copy [`.env.example`](.env.example)). The project `.env` is gitignored and must not be symlinked to another application's configuration. `quackd doctor` tells you what is missing. Needs Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/), nothing else.
 
 <br>
 
@@ -207,6 +208,7 @@ Version 0.7, simulator and mocks. What has been built, and how far each piece ha
 | Manifests and core verbs (`quackd list-adapters`, `quackd list-verbs --robot`) | ✅ eight adapters, eight core verbs that appear only where the manifest meets their requirements, speed limits from the manifest, `manifest.schema.json` generated and drift tested |
 | MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, fleets with `--robots` (eight `robot_*` tools, tested in process against the simulator and the mocks), no Claude Desktop session on record |
 | Memory between runs (`quackd memory`, `remember`) | ✅ one JSONL file per `adapter:backend`, notes and run outcomes into the next prompt, tested end to end offline, 🧪 the `remember` tool itself exercised by one local model on one machine and by no cloud model ([docs/memory.md](docs/memory.md)) |
+| Affective runtime state (`--emotional-state`) | 🧪 opt-in PAD mood state per robot, persisted with `emotional-memory`, advisory only ([docs/emotional-state.md](docs/emotional-state.md)) |
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
 | Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 one live run by a contributor (Qwen 2.5 Coder 14B on LM Studio, two seeds), no transcript in the repo, more welcome |
 | Flock mode (multiple cooperating robots, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |

@@ -166,52 +166,10 @@ class RobotSession:
     """A caller-supplied registry is kept as is; otherwise the manifest builds one."""
     memory: RobotMemory | None = None
     """What this robot keeps between sessions (`quackd memory`). None = off."""
+    affective: Any | None = None
+    """Optional emotional-memory state; never part of executor policy."""
     tracer: Tracer | None = None
     """Narrates this robot's calls to stderr and into each result's `trace`. None = off."""
-
-    def _gate(self, name: str, gate: str, reason: str) -> None:
-        """A refusal the session makes before the executor sees the call, told the same way."""
-        if self.tracer is not None:
-            self.tracer.emit("gate", name=name, gate=gate, outcome="refused", reason=reason)
-
-    async def _call(
-        self, tool: str, args: dict[str, Any], fn: Callable[[], Awaitable[dict[str, Any]]]
-    ) -> dict[str, Any]:
-        """One tool call, narrated. The SDK runs every call as its own task, and `capturing`
-        is a context variable, so two calls on one robot never see each other's events.
-
-        stderr gets the call as one block when it ends, rather than line by line as they
-        happen: two concurrent calls sharing one coalescing view merged their bursts, and a
-        `verb_end` from one split the other's at an arbitrary point. The result's `trace` is
-        the same lines, capped."""
-        if self.tracer is None:
-            return await fn()
-        with capturing() as events:
-            started = time.perf_counter()
-            robot_started = self.executor._robot_now()
-            self.tracer.emit("tool_call", tool=tool, robot=self.name, **args)
-            payload = await fn()
-            budget = self.executor.budget
-            clocks: dict[str, Any] = {}
-            robot_now = self.executor._robot_now()
-            if robot_started is not None and robot_now is not None:
-                clocks["transport_s"] = round(robot_now - robot_started, 3)
-                if (label := self.executor._clock()) is not None:
-                    clocks["clock"] = label
-            self.tracer.emit(
-                "tool_result",
-                tool=tool,
-                ok=bool(payload.get("ok")),
-                summary=payload.get("summary"),
-                elapsed_s=round(time.perf_counter() - started, 3),
-                budget=budget.status() if budget is not None else None,
-                **clocks,
-            )
-        lines = call_lines(events)
-        for line in lines:
-            log.info("%s: %s", self.name, line)
-        payload["trace"] = cap_lines(lines)
-        return payload
 
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
@@ -265,6 +223,9 @@ class RobotSession:
             await self.transport.stop()
         with contextlib.suppress(Exception):
             await self.transport.close()
+        if self.affective is not None:
+            with contextlib.suppress(Exception):
+                self.affective.close()
 
     async def run(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
         """`robot_run_verb`: the verb through the executor, with its trace."""
@@ -308,6 +269,14 @@ class RobotSession:
             result = VerbResult.fail(
                 f"aborted: {e}" + (f" (the heartbeat failed: {why})" if why is not None else "")
             )
+        if self.affective is not None:
+            with contextlib.suppress(Exception):
+                await self.affective.observe(
+                    "verb_success" if result.ok else "verb_failure",
+                    text=result.summary,
+                    ok=result.ok,
+                    context={"verb": name},
+                )
         return _result(result)
 
     async def info(self, *, default: bool) -> dict[str, Any]:
@@ -336,6 +305,7 @@ class RobotSession:
             "health_reason": reason,
             "aborted": self.executor.abort.is_set(),
             "default": default,
+            "affective": self.affective.summary() if self.affective is not None else None,
         }
 
     def verbs_payload(self) -> dict[str, Any]:
@@ -548,6 +518,8 @@ def build_fleet_server(
     default: str | None = None,
     memory: bool = True,
     memory_dir: str | Path | None = None,
+    emotional: bool = False,
+    emotional_dir: str | Path | None = None,
     trace: bool = True,
 ) -> tuple[MCPServer, Fleet]:
     """One MCP server over several robots, each behind its own executor.
@@ -616,6 +588,18 @@ def build_fleet_server(
             ),
             tracer=tracer,
         )
+        if emotional:
+            from quackd.affective import AffectiveConfig, AffectiveRuntime
+
+            affective_config = AffectiveConfig(
+                enabled=True,
+                directory=emotional_dir or "~/.quackd/affective",
+            )
+            session.affective = AffectiveRuntime.for_robot(
+                f"{adapter_name(transport) or name}:{backend_name(transport)}",
+                affective_config,
+                ephemeral=dry_run or not memory,
+            )
         executor.on_frame = _stash_frames(session)
         sessions[name] = session
     fleet = Fleet(sessions, default or _pick_default(robots))
@@ -750,6 +734,8 @@ def build_server(
     heartbeat_period_s: float = 0.5,
     memory: bool = True,
     memory_dir: str | Path | None = None,
+    emotional: bool = False,
+    emotional_dir: str | Path | None = None,
     trace: bool = True,
 ) -> tuple[MCPServer, RobotSession]:
     """One robot, the 0.3 entry point: a fleet of one named after its adapter."""
@@ -764,6 +750,8 @@ def build_server(
         heartbeat_period_s=heartbeat_period_s,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
         trace=trace,
     )
     return mcp, fleet.sessions[name]
@@ -783,6 +771,8 @@ def serve(
     warn: Any = None,
     memory: bool = True,
     memory_dir: str | None = None,
+    emotional: bool = False,
+    emotional_dir: str | None = None,
     trace: bool | None = None,
 ) -> None:
     from quackd.adapters.factory import (
@@ -841,10 +831,15 @@ def serve(
         yes=yes,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
         # the env is the switch a desktop-spawned server has (no shell, no cwd `.env`)
         trace=trace if trace is not None else trace_enabled_default(),
     )
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    except RuntimeError as e:
+        raise SystemExit(str(e)) from e
 
 
 class _Probe:
