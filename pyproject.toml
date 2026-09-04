@@ -4,9 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quackd"
-dynamic = ["version"]
+dynamic = ["version", "readme"]
 description = "Give your small robot a brain. Any LLM, one .duck file. Microduck, Open Duck Mini, Reachy Mini, LeRobot arms and ROS bases."
-readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
@@ -57,6 +56,9 @@ lan = ["zeroconf>=0.132", "paho-mqtt>=2,<3"]
 lerobot = ["lerobot>=0.6; python_version >= '3.12'"]
 rosbridge = ["roslibpy>=2,<3"]
 dev = [
+  # hatchling is already the build backend; dev gets it so tests/test_pypi_readme.py
+  # can import the metadata hook that rewrites the README for PyPI.
+  "hatchling>=1.25",
   "pytest>=8.2",
   "pytest-asyncio>=0.23",
   "ruff>=0.5",
@@ -77,6 +79,12 @@ Changelog = "https://github.com/rokbenko/quackd/blob/main/CHANGELOG.md"
 [tool.hatch.version]
 path = "quackd/__init__.py"
 
+# README.md is the PyPI long description, and its links are relative because that is
+# what is correct on GitHub. `hatch_build.py` absolutises them at build time so they
+# resolve on the project page too (tests/test_pypi_readme.py holds it to that).
+[tool.hatch.metadata.hooks.custom]
+path = "hatch_build.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["quackd"]
 
@@ -91,7 +99,7 @@ packages = ["quackd"]
 [tool.hatch.build.targets.sdist]
 include = [
   "quackd", "ducks", "bridge", "docs", "tests",
-  "README.md", "LICENSE", "NOTICE", "CHANGELOG.md",
+  "README.md", "LICENSE", "NOTICE", "CHANGELOG.md", "hatch_build.py",
 ]
 
 [tool.ruff]
