@@ -37,7 +37,12 @@ def _usage(summary: dict[str, object]) -> tuple[int | None, int | None]:
 
 
 def run_one(
-    model: str, scenario: str, seed: int, affective_context: bool, repeat: int
+    model: str,
+    scenario: str,
+    seed: int,
+    affective_context: bool,
+    repeat: int,
+    run_retries: int,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="quackd-live-") as tmp:
         root = Path(tmp)
@@ -65,7 +70,18 @@ def run_one(
             command.extend(("--emotional-state", "--emotional-dir", str(root / "affective")))
             command.append("--emotional-context")
         started = time.perf_counter()
-        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        completed = None
+        attempts = 0
+        for attempt in range(1, run_retries + 2):
+            attempts = attempt
+            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            transient = any(
+                marker in completed.stderr
+                for marker in ("APIConnectionError", "APITimeoutError", "RateLimitError")
+            )
+            if completed.returncode == 0 or not transient:
+                break
+        assert completed is not None
         summaries = sorted((root / "runs").glob("*/summary.json"))
         summary = json.loads(summaries[-1].read_text(encoding="utf-8")) if summaries else {}
         input_tokens, output_tokens = _usage(summary)
@@ -74,6 +90,7 @@ def run_one(
             "scenario": scenario,
             "seed": seed,
             "repeat": repeat,
+            "attempts": attempts,
             "affective": affective_context,
             "affective_context": affective_context,
             "returncode": completed.returncode,
@@ -97,6 +114,7 @@ def main() -> None:
     parser.add_argument("--scenario", action="append", choices=SCENARIOS, default=None)
     parser.add_argument("--seed", action="append", type=int, dest="seeds", default=None)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--run-retries", type=int, default=2)
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
     models = tuple(args.models or DEFAULT_MODELS)
@@ -104,6 +122,8 @@ def main() -> None:
     seeds = tuple(args.seeds or range(10))
     if args.repeats < 1:
         parser.error("--repeats must be positive")
+    if args.run_retries < 0:
+        parser.error("--run-retries must not be negative")
 
     load_dotenv()
     try:
@@ -119,7 +139,7 @@ def main() -> None:
         raise SystemExit(2)
 
     rows = [
-        run_one(model, scenario, seed, affective, repeat)
+        run_one(model, scenario, seed, affective, repeat, args.run_retries)
         for model in models
         for scenario in scenarios
         for seed in seeds
@@ -135,6 +155,7 @@ def main() -> None:
         "scenarios": scenarios,
         "seeds": seeds,
         "repeats": args.repeats,
+        "run_retries": args.run_retries,
         "rows": rows,
     }
     grouped: dict[tuple[object, ...], dict[bool, dict[str, object]]] = {}
@@ -169,6 +190,9 @@ def main() -> None:
         "wall_overhead_median_pct": round(statistics.median(latency_deltas), 2)
         if latency_deltas
         else 0.0,
+        "pairs_with_transient_retry": sum(
+            pair[False]["attempts"] > 1 or pair[True]["attempts"] > 1 for pair in pairs
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
