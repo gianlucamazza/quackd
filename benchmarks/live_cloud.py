@@ -251,6 +251,13 @@ def main() -> None:
         for pair in pairs
         if float(pair[False]["wall_s"]) > 0
     ]
+    input_token_deltas = [
+        ((int(pair[True]["input_tokens"]) / int(pair[False]["input_tokens"])) - 1) * 100
+        for pair in pairs
+        if isinstance(pair[False]["input_tokens"], int)
+        and int(pair[False]["input_tokens"]) > 0
+        and isinstance(pair[True]["input_tokens"], int)
+    ]
     payload["paired_metrics"] = {
         "pairs": len(pairs),
         "success_rate_disabled": round(
@@ -274,22 +281,10 @@ def main() -> None:
         if latency_deltas
         else 0.0,
         "input_token_overhead_median_pct": round(
-            statistics.median(
-                [
-                    ((int(pair[True]["input_tokens"]) / int(pair[False]["input_tokens"])) - 1) * 100
-                    for pair in pairs
-                    if isinstance(pair[False]["input_tokens"], int)
-                    and int(pair[False]["input_tokens"]) > 0
-                    and isinstance(pair[True]["input_tokens"], int)
-                ]
-            ),
+            statistics.median(input_token_deltas),
             2,
         )
-        if any(
-            isinstance(pair[False]["input_tokens"], int)
-            and isinstance(pair[True]["input_tokens"], int)
-            for pair in pairs
-        )
+        if input_token_deltas
         else 0.0,
         "pairs_with_transient_retry": sum(
             pair[False]["attempts"] > 1 or pair[True]["attempts"] > 1 for pair in pairs
