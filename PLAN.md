@@ -94,7 +94,10 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
 - ✅ Published `quackd 0.1.0` to PyPI (2026-08-28); `uvx quackd --version` resolves
 - ✅ v0.2.0 (2026-08-29): local and open-source LLM providers, `--goal`, README rewrite, logo
 - ⏸ v0.2.0 PyPI publish needs `UV_PUBLISH_TOKEN` again (the line was removed from `.env` after 0.1.0)
-- ⏸ First transcript from a live local server (Ollama, vLLM, llama.cpp) — none available on the dev machine
+- 🔨 First transcript from a live local server (Ollama, vLLM, llama.cpp) — still none on the
+  dev machine, but PR #5's contributor reports `find-and-kick` against Qwen 2.5 Coder 14B
+  through LM Studio on seeds 5 and 6, both successes with memory read and written. No
+  transcript from it is in the repository, so the README says exactly that
 - ✅ v0.3.0 (2026-08-31): flock mode — multi-duck sim, lockstep clock, in-process bus, Contract Net auction, one planner LLM call, 10/10 seeded acceptance (ADR-0015/0016); hardened by a 69-agent adversarial review, 24 confirmed findings fixed pre-release
 - ⏸ Flock future work: hardware flocks when Microducks ship, real-provider planner recording
 - ✅ v0.4.0 (2026-09-02): "a brain for any small robot" — robot adapters and manifests (ADR-0017/0018), `.duck` v1 with `requires` and `robots` (ADR-0019), the Reachy Mini adapter (ADR-0023), heterogeneous flocks with `reachy-spots-duck-kicks` 10/10 (ADR-0020), multi-robot MCP (`--robots`, six `robot_*` tools), zeroconf discovery and an MQTT bus behind `quackd[lan]` (ADR-0021), LeRobot and rosbridge adapters (ADR-0022); 360 tests collected, still offline, four seeded sweeps at 10 of 10
@@ -116,4 +119,18 @@ Legend: ✅ done · 🔨 in progress · ⬜ todo · ⏸ blocked (with reason)
   release; `uvx quackd run open-duck-scout --provider fake` verified from a clean install.
   About description and Topics updated for five bodies (`open-duck-mini` and
   `bipedal-robot` in, `python` and `llama-cpp` out, at GitHub's cap of 20)
+- ✅ v0.6.0 (2026-09-04): memory between runs (ADR-0025, [docs/memory.md](docs/memory.md)),
+  and the first release assembled out of other people's contributions rather than written
+  here. One JSONL file per `adapter:backend` holds the notes a pilot saves with `remember`
+  and one line per earlier run, and the newest of both are in the prompt before the first
+  observation; `quackd memory show|add|clear`, `--no-memory`, `--memory-dir`, and
+  `robot_recall`/`robot_remember` taking the MCP surface to eight tools. Also: `max_minutes`
+  is now enforced against a provider that answers after the deadline, the README's 53
+  relative links are absolutised at build time so the PyPI page resolves them, and the two
+  CI actions move off deprecated Node 20. Reviewing the two contributions found fifteen
+  defects, two of them blockers, none of which their green checklists could see. 500 tests,
+  five seeded sweeps at 10 of 10, still offline
+- ⏸ Only a human can: exercise `remember` against a cloud model. The scripted pilot has no
+  script for it, so `--provider fake` writes episodes and never a note, and the only
+  evidence a model uses the tool is the contributor's Qwen 2.5 Coder 14B runs
 - ⏸ Upload `docs/assets/social-preview.png` under Settings → Social preview (no API for it)

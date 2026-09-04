@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-04
+
+A run stops starting from nothing. Every release so far built a pilot with no past: the
+transcript recorded each prompt, tool call and frame, and the next run never read a line of
+it, so a duck that had found the ball behind the sofa three times searched the whole room a
+fourth time. Now each robot keeps a small file of notes the pilot chose to save and one
+line per earlier run, and the newest of both are in the prompt before the first observation.
+This is also the first release built on other people's pull requests: memory (#5) and the
+`max_minutes` fix (#3) are both theirs. Design: `docs/adr/0025-memory-between-runs.md`,
+with the release's own notes in [docs/design/memory.md](docs/design/memory.md).
+
+Still nothing has run on a robot of any kind. What memory adds is tested end to end offline,
+and no cloud model has ever written a note.
+
 ### Added
 
 - **Memory between runs** (`quackd/memory.py`, [docs/memory.md](docs/memory.md)). Every
@@ -17,18 +31,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   system prompt at the next run. `remember` costs an LLM call but no step, and a repeated
   sentence refreshes the old note. `quackd run --no-memory` / `--memory-dir`,
   `quackd memory show|add|clear`, and over MCP `robot_recall` / `robot_remember` (eight
-  tools now). A simulated body never inherits a real one's notes.
+  tools now). A simulated body never inherits a real one's notes. Thanks to
+  [@Bayway](https://github.com/Bayway) (#5), whose design and implementation this is.
 - **The solo starter ducks ask for a note.** `find-and-kick`, `fetch`, `follow-me`,
   `patrol-and-quack`, `open-duck-scout`, `open-duck-lookout` and `reachy-spotter` carry
   `remember` in their last strategy step and a *Memory* section saying what is worth
   keeping, and `--goal` runs get the same line. A prompt-level hint alone was ignored by a
   14B local model; the strategy step is followed. The v0 duck goldens were regenerated
   for this. `hello-world` and the flock ducks are unchanged.
+- **A test that the PyPI project page's links resolve** (`tests/test_pypi_readme.py`),
+  because the rewrite below is invisible when it breaks: nothing in a normal run reads the
+  built metadata, and the only symptom is dead links on a page the maintainer rarely opens.
+
+### Changed
+
+- CI runs on `actions/checkout@v7` and `astral-sh/setup-uv@v7`. `checkout@v4` targets
+  Node 20, which GitHub deprecated and now force-runs on Node 24. Thanks to Dependabot
+  (#1, #2).
 
 ### Fixed
 
+- **`max_minutes` could be beaten by a slow provider.** The time budget was checked in
+  `note_llm_call()`, *before* `provider.step()`, and nothing looked at the clock again
+  before the answer was processed, so a provider that replied after the deadline still had
+  its `declare_success` honoured and the run recorded a success it had no right to. The
+  loop now re-checks the clock the moment a turn comes back, and a late declaration ends
+  the run as `budget`. Thanks to [@r0jin](https://github.com/r0jin) (#3).
+- **Every relative link in the README 404'd on the PyPI project page.** `README.md` is the
+  long description, and its 60 relative links are correct on GitHub, where a relative link
+  follows the branch you are reading, and meaningless anywhere else. A hatchling metadata
+  hook (`hatch_build.py`) absolutises them at build time, in both syntaxes this README
+  uses: 56 Markdown links and four raw `<a href>` in the centred HTML blocks. The first cut
+  of the hook handled only Markdown, so the test now checks both and would have caught it.
+  The repository's own README is unchanged, images were already absolute, and in-page
+  anchors are left alone.
+- **A hand-edited memory file could take the whole command down.** The file is documented
+  as one you may edit, and a line that is not JSON is skipped. A line that *was* JSON but
+  not an object (`"a note"`, `17`, `[]`) raised `AttributeError` out of every reader,
+  because only `JSONDecodeError` was caught. Now every such line is skipped, as promised.
+- **`--dry-run` wrote permanent notes.** The episode at the end of a run was guarded and
+  the `remember` tool was not, so a run that sent nothing to the robot could still leave a
+  permanent conclusion drawn from verb results the dry run itself invented. It now refuses
+  and says so, like every other intent a dry run declines to send.
+- **A refreshed note sorted as the oldest.** Repeating a sentence refreshes its timestamp
+  and used to leave it where it was in the file, and both the prompt's "newest notes" window
+  and the 400-entry cap read file order. So the note a model had just repeated was the first
+  one dropped. A refresh now moves the note to the newest position.
+- **`quackd memory show --raw` did not print the file as is.** It went through Rich, which
+  ate anything in square brackets: a note reading `the ball is [bold]behind[/bold] the sofa`
+  printed as `the ball is behind the sofa`. A note is text a model wrote, so it can contain
+  anything.
 - Tests set `QUACKD_MEMORY_DIR` to a temporary directory, so a test run no longer writes
   the developer's own `~/.quackd/memory`.
+- `quackd memory show|add|clear --robot <bad spec>` printed a Python traceback. Every other
+  command taking `--robot` answers in one line, and now these do too.
+- With `--no-memory` the MCP server still told the pilot to call `robot_recall` early, a
+  tool that would answer "memory is off". Those two sentences are now omitted.
+- The prompt told the model `remember` "is free". It costs an LLM call, which is a budget it
+  shares with every other turn, and the ADR and docs both said so.
+- **Claims that had gone stale before this release, found while auditing it.**
+  `docs/architecture.md` still described the `duck_*` MCP aliases 0.5 deleted, and had not
+  been updated for memory at all (no `memory` command, no `remember` tool, no `memory`
+  transcript event). The README's architecture diagram listed four adapters and omitted
+  `open_duck` and its `bridge` backend, which the adapter-count guard could not see because
+  it reads the phrase "N adapters" and not a list. The README, `docs/architecture.md` and
+  the FAQ each said one quackd daemon runs on a robot, while `bridge/open_duck/` has shipped
+  two since 0.5, and `docs/architecture.md` contradicted itself about it. `docs/duck-spec.md`
+  called `max_minutes` a cap without saying a verb already running is not interrupted.
+  `_deprecated()` in `quackd/cli.py` was dead from the 0.5 `--transport` removal. `quackd
+  --help` still introduced the tool as a way to "pilot a Microduck", five adapters later.
+  `_pick_default` justified its rule with the `duck_*` aliases. `tests/test_goldens.py`
+  dated its goldens to 0.3.0 after four of the six duck hashes were regenerated here, and
+  ADR-0025 filed learned verbs under ADR-0019, which is the `.duck` spec v1.
+- **The README said no live local server had been run.** One now has, by this release's
+  contributor, which is the first local-model evidence this project has had. The sentence
+  says whose machine it was and that no transcript from it is in the repository.
+- `test_cap_drops_old_episodes_before_notes` wrote 405 entries one at a time, each one
+  re-reading and rewriting the whole file. It took 14.6 s here, on a matrix that runs it
+  four times, to prove a property a cap of 12 proves in 0.16 s. It now also asserts *which*
+  entries survive, which is what the test was named for.
+- Guards for the class of mistake this release's own review kept finding. A living document
+  *or a Python string a user reads* may not claim a number of `robot_*` tools the server
+  disagrees with, nor still describe the `duck_*` aliases 0.5 deleted: 0.5's guard proved
+  nothing still *offers* a removed thing and could not see one still being *described*, and
+  the stale count turned out to be in a `--robots` help text and two docstrings as well as
+  two README sentences. The key the CLI computes for a robot's memory file must equal the
+  key the MCP server computes, for all five adapters and all fourteen backends, because
+  "a note saved from Claude Desktop is read by the next `quackd run`" is otherwise an
+  intention. And the built wheel's long description must contain no relative links.
+- The `quackd memory` command group, and the memory flags on `run`, now have tests. They
+  shipped with none, which is how two of the three subcommands were wrong.
+- One assertion in the new memory tests was `A or B` where `A` was never true (the sound in
+  the highlight is the robot's own tone, not the text), so it checked almost nothing. It is
+  one assertion now.
+
+### Known limitations
+
+- **The scripted pilot never calls `remember`**, so `--provider fake` accumulates run
+  outcomes and never writes a note. Notes have been exercised by one local model
+  (Qwen 2.5 Coder 14B through LM Studio, `find-and-kick`, seeds 5 and 6) on one machine,
+  and by no cloud model at all.
+- **`--no-memory` does not silence the ducks.** The seven starter tasks above ask for a
+  `remember` inside their strategy, and that text is in the prompt whether or not memory is
+  on. A pilot that follows it gets a clear refusal that costs an LLM call and no step.
+- Memory is a file, not a memory system: newest wins, there is no embedding and no search,
+  nothing is shared between bodies, and the executor never reads it. A note is text a model
+  wrote.
 
 ## [0.5.0] — 2026-09-03
 
@@ -419,7 +527,8 @@ First release: sim-first, honest about hardware.
 - The README hero is a scripted-pilot recording; a real-model recording needs an API key.
 - Non-Anthropic default model IDs are unverified; override with `QUACKD_MODEL`.
 
-[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/rokbenko/quackd/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/rokbenko/quackd/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rokbenko/quackd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rokbenko/quackd/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rokbenko/quackd/compare/v0.2.0...v0.3.0
