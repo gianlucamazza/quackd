@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -46,8 +47,19 @@ def run_one(scenario: str, seed: int, affective: bool) -> dict[str, object]:
         wall = time.perf_counter() - start
         summaries = sorted((root / "runs").glob("*/summary.json"))
         summary: dict[str, object] = {}
+        observation_chars = 0
+        feature_chars = 0
+        affective_events = 0
         if summaries:
             summary = json.loads(summaries[-1].read_text(encoding="utf-8"))
+            transcript = summaries[-1].parent / "transcript.jsonl"
+            for line in transcript.read_text(encoding="utf-8").splitlines():
+                event = json.loads(line)
+                if event.get("kind") == "observation":
+                    observation_chars += len(str(event.get("text", "")))
+                    feature_chars += len(json.dumps(event.get("features", {}), sort_keys=True))
+                if event.get("kind") == "affective":
+                    affective_events += 1
         return {
             "scenario": scenario,
             "seed": seed,
@@ -59,6 +71,9 @@ def run_one(scenario: str, seed: int, affective: bool) -> dict[str, object]:
             "steps": summary.get("steps"),
             "llm_calls": summary.get("llm_calls"),
             "affective_state": summary.get("affective_state"),
+            "observation_chars": observation_chars,
+            "feature_chars": feature_chars,
+            "affective_events": affective_events,
             "stdout_tail": completed.stdout[-500:],
             "stderr_tail": completed.stderr[-500:],
         }
@@ -83,6 +98,27 @@ def main() -> None:
         "seeds": list(SEEDS),
         "rows": rows,
     }
+    metrics: dict[str, dict[str, float]] = {}
+    for affective in (False, True):
+        selected = [row for row in rows if row["affective"] == affective]
+        walls = sorted(float(row["wall_s"]) for row in selected)
+        metrics[str(affective).lower()] = {
+            "wall_median_s": round(statistics.median(walls), 4),
+            "wall_p95_s": round(walls[max(0, int(len(walls) * 0.95) - 1)], 4),
+            "observation_chars_avg": round(
+                statistics.mean(float(row["observation_chars"]) for row in selected), 2
+            ),
+            "feature_chars_avg": round(
+                statistics.mean(float(row["feature_chars"]) for row in selected), 2
+            ),
+        }
+    baseline = metrics["false"]["wall_median_s"]
+    enabled = metrics["true"]["wall_median_s"]
+    metrics["true"]["wall_overhead_pct_vs_disabled"] = round(
+        ((enabled / baseline) - 1) * 100 if baseline else 0.0,
+        2,
+    )
+    payload["metrics"] = metrics
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     failures = [row for row in rows if not row["success"]]
