@@ -34,14 +34,6 @@ jobs:
           QUACKD_STRICT_SEEDS: "1"
       - name: Validate starter ducks
         run: uv run quackd validate ducks/*.duck
-      - name: Affective benchmark matrix
-        run: uv run python benchmarks/affective_runtime.py --output "${{ runner.temp }}/quackd-affective-benchmark.json"
-      - name: Upload affective benchmark
-        uses: actions/upload-artifact@v4
-        with:
-          name: affective-benchmark-py${{ matrix.python }}
-          path: ${{ runner.temp }}/quackd-affective-benchmark.json
-
   emotional:
     name: emotional · py${{ matrix.python }} · ubuntu
     runs-on: ubuntu-latest
