@@ -102,10 +102,15 @@ jobs:
           path: ${{ runner.temp }}/quackd-affective-benchmark.json
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
 =======
 >>>>>>> f546143 (feat(affective): add optional emotional runtime state)
+=======
+=======
+>>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
+>>>>>>> 4e119a4 (fix(ci): keep optional benchmark out of base job)
   emotional:
     name: emotional · py${{ matrix.python }} · ubuntu
     runs-on: ubuntu-latest
