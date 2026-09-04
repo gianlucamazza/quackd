@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`
   family. Chat Completions explicitly disables reasoning for tool calls; reasoning-enabled
   Responses API support remains a separate future adapter.
+- DeepSeek is available through its OpenAI-compatible API with `DEEPSEEK_API_KEY` and the
+  current `deepseek-v4-pro` model default; legacy `deepseek-chat` and `deepseek-reasoner` names
+  are intentionally not used.
 
 ## [0.6.0] — 2026-09-04
 

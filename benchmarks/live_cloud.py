@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import statistics
 import subprocess
@@ -24,6 +25,10 @@ SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter"
 TARGETED_SCENARIOS = ("fetch", "follow-me", "patrol-and-quack")
 ALL_SCENARIOS = SCENARIOS + TARGETED_SCENARIOS
 DEFAULT_MODELS = ("gpt-5.6-sol",)
+PROVIDER_DEFAULTS = {
+    "openai": ("gpt-5.6-sol", "OPENAI_API_KEY", None),
+    "deepseek": ("deepseek-v4-pro", "DEEPSEEK_API_KEY", "https://api.deepseek.com"),
+}
 
 
 def _failure_class(returncode: int, stderr: str, outcome: object) -> str | None:
@@ -54,6 +59,7 @@ def _usage(summary: dict[str, object]) -> tuple[int | None, int | None]:
 
 def run_one(
     model: str,
+    provider: str,
     scenario: str,
     seed: int,
     affective_context: bool,
@@ -70,7 +76,7 @@ def run_one(
             "run",
             scenario,
             "--provider",
-            "openai",
+            provider,
             "--model",
             model,
             "--seed",
@@ -122,6 +128,7 @@ def run_one(
         summary = json.loads(summaries[-1].read_text(encoding="utf-8")) if summaries else {}
         input_tokens, output_tokens = _usage(summary)
         return {
+            "provider": provider,
             "model": model,
             "scenario": scenario,
             "seed": seed,
@@ -150,6 +157,7 @@ def run_one(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", action="append", dest="models", default=None)
+    parser.add_argument("--provider", choices=tuple(PROVIDER_DEFAULTS), default="openai")
     parser.add_argument("--scenario", action="append", choices=ALL_SCENARIOS, default=None)
     parser.add_argument("--seed", action="append", type=int, dest="seeds", default=None)
     parser.add_argument("--repeats", type=int, default=3)
@@ -158,7 +166,8 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true", help="resume rows already in --output")
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
-    models = tuple(args.models or DEFAULT_MODELS)
+    default_model, key_env, base_url = PROVIDER_DEFAULTS[args.provider]
+    models = tuple(args.models or (default_model,))
     scenarios = tuple(args.scenario or SCENARIOS)
     seeds = tuple(args.seeds or range(10))
     if args.repeats < 1:
@@ -172,7 +181,13 @@ def main() -> None:
     try:
         from openai import OpenAI
 
-        catalog = {model.id for model in OpenAI(timeout=15, max_retries=0).models.list().data}
+        catalog_client = OpenAI(
+            api_key=os.environ.get(key_env),
+            base_url=base_url,
+            timeout=15,
+            max_retries=0,
+        )
+        catalog = {model.id for model in catalog_client.models.list().data}
     except Exception as exc:
         print(f"preflight blocked: {type(exc).__name__}: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
@@ -209,6 +224,7 @@ def main() -> None:
                         rows.append(
                             run_one(
                                 model,
+                                args.provider,
                                 scenario,
                                 seed,
                                 affective,
@@ -236,6 +252,7 @@ def main() -> None:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "models": models,
+        "provider": args.provider,
         "scenarios": scenarios,
         "seeds": seeds,
         "repeats": args.repeats,
