@@ -295,6 +295,7 @@ def main() -> None:
                         checkpoint = {
                             "kind": ARTIFACT_KIND,
                             "created_at": datetime.now(UTC).isoformat(),
+                            "provider": args.provider,
                             "models": models,
                             "scenarios": scenarios,
                             "seeds": seeds,
