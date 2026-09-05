@@ -1,6 +1,11 @@
 """Pure live-benchmark classification helpers."""
 
-from benchmarks.live_cloud import _compatible_artifact, _failure_class, _success_delta_ci
+from benchmarks.live_cloud import (
+    ARTIFACT_KIND,
+    _compatible_artifact,
+    _failure_class,
+    _success_delta_ci,
+)
 
 
 def test_quota_failure_is_terminal_and_classified() -> None:
@@ -35,4 +40,4 @@ def test_resume_rejects_legacy_or_mismatched_artifacts() -> None:
     }
     assert not _compatible_artifact({"kind": "quackd-live-openai", "rows": []}, config)
     assert not _compatible_artifact({"kind": "quackd-live-v2", "rows": [], "config": {}}, config)
-    assert _compatible_artifact({"kind": "quackd-live-v2", "rows": [], "config": config}, config)
+    assert _compatible_artifact({"kind": ARTIFACT_KIND, "rows": [], "config": config}, config)
