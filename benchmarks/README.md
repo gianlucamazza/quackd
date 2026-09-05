@@ -46,3 +46,24 @@ variable; its default model is `deepseek-v4-pro`.
 The promotion gate requires a positive paired success delta with a 95% paired-bootstrap confidence interval,
 no more than 5% median token/cost growth, no more than 5% median latency growth, and no new
 budget or safety failures, replicated in two independent live sessions.
+
+## Retained verification evidence
+
+New runs retain transcripts and frames in `<output-stem>.runs/`, with an isolated
+directory for every attempt, including retries. Keep this directory with the JSON
+artifact. `verified_success` is independent of `model_claim_success`; `null` means
+the checker lacks evidence or does not support the scenario. Per-scenario reports
+count false claims and unknown results. Resume also requires matching timeout and
+retry settings. Baseline/context order alternates by seed and repeat.
+
+The current claim-based bootstrap interval is exploratory: repeats of the same seed
+are correlated and a degenerate interval does not establish equivalence. It must not
+be used as the promotion gate's confirmatory confidence interval.
+
+Targeted checks require actual movement, not just successful tool returns. Fetch
+requires a held ball and at least 0.5 m reduction in distance to the initial pose.
+Patrol encounters are consecutive observation frames containing a person or pet,
+separated by a frame without either. Following requires three translating approaches.
+The bundled simulator currently has a stationary person, so a successful sequence
+of no-op approaches is not evidence of following. A dynamic scenario is required
+before interpreting a full targeted matrix as a memory-benefit experiment.
