@@ -34,8 +34,9 @@ outcome, latency, calls, token usage, failure class and affective-state presence
 `--resume` with the same output path after an interruption; quota exhaustion is recorded and is
 not retried. The default scenarios test basic navigation and reporting. For the targeted
 context experiment, select `fetch`, `follow-me` and `patrol-and-quack` explicitly; these tasks
-exercise recovery, persistence and repeated observations. Treat the output as an experiment,
-not as evidence of a default quality improvement.
+exercise recovery, persistence and repeated observations. Add `--full-task-budget` for these
+scenarios so their `.duck` budgets are respected instead of the standard 12-step cap. Treat the
+output as an experiment, not as evidence of a default quality improvement.
 
 DeepSeek uses the same runner with `--provider deepseek` and the `DEEPSEEK_API_KEY` environment
 variable; its default model is `deepseek-v4-pro`.
