@@ -17,10 +17,16 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+if __package__:
+    from .verification import verify
+else:
+    from verification import verify
 
 SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter")
 TARGETED_SCENARIOS = ("fetch", "follow-me", "patrol-and-quack")
@@ -77,6 +83,9 @@ def _config(
         "seeds": list(seeds),
         "repeats": args.repeats,
         "full_task_budget": args.full_task_budget,
+        "run_timeout": args.run_timeout,
+        "run_retries": args.run_retries,
+        "verifier_version": 1,
     }
 
 
@@ -92,12 +101,35 @@ def _success_delta_ci(pairs: list[dict[bool, dict[str, object]]]) -> tuple[float
 
 
 def _compatible_artifact(saved: object, expected_config: dict[str, object]) -> bool:
-    return (
+    compatible = (
         isinstance(saved, dict)
         and saved.get("kind") == ARTIFACT_KIND
         and isinstance(saved.get("rows"), list)
         and saved.get("config") == expected_config
     )
+    if not compatible:
+        return False
+    seen = set()
+    for row in saved["rows"]:
+        if not isinstance(row, dict):
+            return False
+        key = tuple(
+            row.get(k) for k in ("model", "scenario", "seed", "repeat", "affective_context")
+        )
+        if (
+            row.get("provider") != expected_config["provider"]
+            or row.get("model") not in expected_config["models"]
+            or row.get("scenario") not in expected_config["scenarios"]
+            or row.get("seed") not in expected_config["seeds"]
+            or type(row.get("repeat")) is not int
+            or not 0 <= row["repeat"] < expected_config["repeats"]
+            or type(row.get("affective_context")) is not bool
+        ):
+            return False
+        if key in seen:
+            return False
+        seen.add(key)
+    return True
 
 
 def run_one(
@@ -110,8 +142,16 @@ def run_one(
     run_retries: int,
     run_timeout: int,
     full_task_budget: bool,
+    evidence_dir: Path | None = None,
 ) -> dict[str, object]:
-    with tempfile.TemporaryDirectory(prefix="quackd-live-") as tmp:
+    if evidence_dir is not None:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+    directory = (
+        nullcontext(tempfile.mkdtemp(prefix="run-", dir=evidence_dir))
+        if evidence_dir is not None
+        else tempfile.TemporaryDirectory(prefix="quackd-live-")
+    )
+    with directory as tmp:
         root = Path(tmp)
         command = [
             sys.executable,
@@ -141,6 +181,10 @@ def run_one(
         attempts = 0
         for attempt in range(1, run_retries + 2):
             attempts = attempt
+            attempt_root = root / f"attempt-{attempt}"
+            command[command.index("--runs-dir") + 1] = str(attempt_root / "runs")
+            if affective_context:
+                command[command.index("--emotional-dir") + 1] = str(attempt_root / "affective")
             try:
                 completed = subprocess.run(
                     command,
@@ -168,8 +212,17 @@ def run_one(
             if completed.returncode == 0 or not transient:
                 break
         assert completed is not None
-        summaries = sorted((root / "runs").glob("*/summary.json"))
+        summaries = sorted((attempt_root / "runs").glob("*/summary.json"))
         summary = json.loads(summaries[-1].read_text(encoding="utf-8")) if summaries else {}
+        events = (
+            [
+                json.loads(line)
+                for line in (summaries[-1].parent / "transcript.jsonl").read_text().splitlines()
+            ]
+            if summaries
+            else []
+        )
+        verification = verify(scenario, summary, events)
         input_tokens, output_tokens = _usage(summary)
         final_state = summary.get("final_state")
         extras = final_state.get("extras", {}) if isinstance(final_state, dict) else {}
@@ -180,6 +233,9 @@ def run_one(
                 ground_truth_success = float(displacement) >= 0.3
         return {
             "provider": provider,
+            "evidence_dir": str(root) if evidence_dir is not None else None,
+            "verified_success": verification["success"],
+            "verification": verification,
             "model": model,
             "scenario": scenario,
             "seed": seed,
@@ -279,7 +335,7 @@ def main() -> None:
         for scenario in scenarios:
             for seed in seeds:
                 for repeat in range(args.repeats):
-                    for affective in (False, True):
+                    for affective in (False, True) if (seed + repeat) % 2 == 0 else (True, False):
                         key = (model, scenario, seed, repeat, affective)
                         if key in completed_keys:
                             continue
@@ -294,6 +350,7 @@ def main() -> None:
                                 args.run_retries,
                                 args.run_timeout,
                                 args.full_task_budget,
+                                args.output.with_suffix(".runs"),
                             )
                         )
                         completed_keys.add(key)
@@ -430,6 +487,33 @@ def main() -> None:
             )
         },
     }
+    payload["scenario_metrics"] = {
+        scenario: {
+            str(context).lower(): {
+                "runs": len(
+                    selected := [
+                        r
+                        for r in rows
+                        if r["scenario"] == scenario and r["affective_context"] == context
+                    ]
+                ),
+                "verified_successes": sum(r.get("verified_success") is True for r in selected),
+                "unknown": sum(r.get("verified_success") is None for r in selected),
+                "false_claims": sum(
+                    r["model_claim_success"] and r.get("verified_success") is False
+                    for r in selected
+                ),
+                "input_tokens": sum(r["input_tokens"] or 0 for r in selected),
+                "output_tokens": sum(r["output_tokens"] or 0 for r in selected),
+            }
+            for context in (False, True)
+        }
+        for scenario in scenarios
+    }
+    payload["paired_metrics"]["success_delta_ci95"]["limitation"] = (
+        "Claim-based exploratory interval; repeated seeds are correlated. "
+        "A degenerate interval does not establish equivalence."
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     _write_json_atomic(args.output, payload)
     failures = [row for row in rows if not row["success"]]
