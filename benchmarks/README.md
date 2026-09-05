@@ -30,7 +30,9 @@ It checks `/v1/models` first, runs only the simulator with `--yes` (never hardwa
 baseline runs against the explicit `--emotional-context` lane over 10 seeds and 3 repeats by
 default. Transient API connection, timeout and rate-limit failures are retried twice and
 reported separately. Each run has a 180-second timeout by default. It records model, repeat,
-outcome, latency, calls, token usage, failure class and affective-state presence. Use
+outcome, model-claim success, available simulator ground truth, latency, calls, token usage,
+failure class and affective-state presence. Artifacts use the `quackd-live-v2` schema and
+resume rejects a different provider/model/scenario matrix. Use
 `--resume` with the same output path after an interruption; quota exhaustion is recorded and is
 not retried. The default scenarios test basic navigation and reporting. For the targeted
 context experiment, select `fetch`, `follow-me` and `patrol-and-quack` explicitly; these tasks
@@ -41,6 +43,6 @@ output as an experiment, not as evidence of a default quality improvement.
 DeepSeek uses the same runner with `--provider deepseek` and the `DEEPSEEK_API_KEY` environment
 variable; its default model is `deepseek-v4-pro`.
 
-The promotion gate requires a positive paired success delta with a 95% confidence interval,
+The promotion gate requires a positive paired success delta with a 95% paired-bootstrap confidence interval,
 no more than 5% median token/cost growth, no more than 5% median latency growth, and no new
 budget or safety failures, replicated in two independent live sessions.

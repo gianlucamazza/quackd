@@ -91,6 +91,15 @@ def _success_delta_ci(pairs: list[dict[bool, dict[str, object]]]) -> tuple[float
     return round(samples[250], 3), round(samples[9749], 3)
 
 
+def _compatible_artifact(saved: object, expected_config: dict[str, object]) -> bool:
+    return (
+        isinstance(saved, dict)
+        and saved.get("kind") == ARTIFACT_KIND
+        and isinstance(saved.get("rows"), list)
+        and saved.get("config") == expected_config
+    )
+
+
 def run_one(
     model: str,
     provider: str,
@@ -252,11 +261,7 @@ def main() -> None:
     if args.resume and args.output.exists():
         saved = json.loads(args.output.read_text(encoding="utf-8"))
         expected_config = _config(args, models, scenarios, seeds)
-        if (
-            saved.get("kind") != ARTIFACT_KIND
-            or not isinstance(saved.get("rows"), list)
-            or saved.get("config") != expected_config
-        ):
+        if not _compatible_artifact(saved, expected_config):
             parser.error("--resume requires a compatible live benchmark artifact")
         rows = [row for row in saved["rows"] if isinstance(row, dict)]
     completed_keys = {
