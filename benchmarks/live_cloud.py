@@ -8,7 +8,9 @@ generation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import platform
 import random
@@ -24,14 +26,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 if __package__:
+    from .paired_statistics import verified_comparison
     from .verification import verify
 else:
+    from paired_statistics import verified_comparison
     from verification import verify
 
 SCENARIOS = ("hello-world", "find-and-kick", "open-duck-scout", "reachy-spotter")
 TARGETED_SCENARIOS = ("fetch", "follow-me", "patrol-and-quack")
 ALL_SCENARIOS = SCENARIOS + TARGETED_SCENARIOS
-ARTIFACT_KIND = "quackd-live-v2"
+ARTIFACT_KIND = "quackd-live-v3"
 PROVIDER_DEFAULTS = {
     "openai": ("gpt-5.6-sol", "OPENAI_API_KEY", None),
     "deepseek": ("deepseek-v4-pro", "DEEPSEEK_API_KEY", "https://api.deepseek.com"),
@@ -76,6 +80,21 @@ def _config(
     scenarios: tuple[str, ...],
     seeds: tuple[int, ...],
 ) -> dict[str, object]:
+    if not hasattr(args, "source_digest"):
+        root = Path(__file__).resolve().parents[1]
+        digest = hashlib.sha256()
+        paths = sorted(
+            [
+                *root.glob("quackd/**/*.py"),
+                *root.glob("ducks/*.duck"),
+                *root.glob("benchmarks/*.py"),
+                root / "uv.lock",
+            ]
+        )
+        for path in paths:
+            digest.update(str(path.relative_to(root)).encode())
+            digest.update(path.read_bytes())
+        args.source_digest = digest.hexdigest()
     return {
         "provider": args.provider,
         "models": list(models),
@@ -86,6 +105,8 @@ def _config(
         "run_timeout": args.run_timeout,
         "run_retries": args.run_retries,
         "verifier_version": 1,
+        "sim_profile": args.sim_profile,
+        "source_digest": args.source_digest,
     }
 
 
@@ -112,6 +133,44 @@ def _compatible_artifact(saved: object, expected_config: dict[str, object]) -> b
     seen = set()
     for row in saved["rows"]:
         if not isinstance(row, dict):
+            return False
+        if not all(isinstance(row.get(k), str) for k in ("provider", "model", "scenario")):
+            return False
+        if type(row.get("seed")) is not int:
+            return False
+        if any(
+            type(row.get(k)) is not bool
+            for k in ("success", "model_claim_success", "usage_complete", "affective_context")
+        ):
+            return False
+        if row.get("verified_success") is not None and type(row["verified_success"]) is not bool:
+            return False
+        if not isinstance(row.get("wall_s"), (float, int)) or not math.isfinite(row["wall_s"]):
+            return False
+        if row["wall_s"] < 0 or type(row.get("attempts")) is not int or row["attempts"] < 1:
+            return False
+        if (
+            not isinstance(row.get("attempt_records"), list)
+            or len(row["attempt_records"]) != row["attempts"]
+        ):
+            return False
+        if any(
+            row.get(k) is not None and (type(row[k]) is not int or row[k] < 0)
+            for k in ("steps", "llm_calls", "input_tokens", "output_tokens")
+        ):
+            return False
+        if not all(
+            k in row
+            for k in (
+                "verified_success",
+                "usage_complete",
+                "attempt_records",
+                "steps",
+                "llm_calls",
+                "failure_class",
+                "wall_s",
+            )
+        ):
             return False
         key = tuple(
             row.get(k) for k in ("model", "scenario", "seed", "repeat", "affective_context")
@@ -143,6 +202,7 @@ def run_one(
     run_timeout: int,
     full_task_budget: bool,
     evidence_dir: Path | None = None,
+    sim_profile: str = "default",
 ) -> dict[str, object]:
     if evidence_dir is not None:
         evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -170,6 +230,8 @@ def run_one(
             "--no-memory",
             "--runs-dir",
             str(root / "runs"),
+            "--sim-profile",
+            sim_profile,
         ]
         if not full_task_budget:
             command.extend(("--max-steps", "12"))
@@ -179,12 +241,14 @@ def run_one(
         started = time.perf_counter()
         completed = None
         attempts = 0
+        attempt_records = []
         for attempt in range(1, run_retries + 2):
             attempts = attempt
             attempt_root = root / f"attempt-{attempt}"
             command[command.index("--runs-dir") + 1] = str(attempt_root / "runs")
             if affective_context:
                 command[command.index("--emotional-dir") + 1] = str(attempt_root / "affective")
+            attempt_started = time.perf_counter()
             try:
                 completed = subprocess.run(
                     command,
@@ -197,7 +261,11 @@ def run_one(
                 completed = subprocess.CompletedProcess(
                     command,
                     124,
-                    stdout=exc.stdout or "",
+                    stdout=(
+                        exc.stdout.decode(errors="replace")
+                        if isinstance(exc.stdout, bytes)
+                        else exc.stdout or ""
+                    ),
                     stderr=f"TimeoutExpired after {run_timeout}s",
                 )
             transient = "insufficient_quota" not in completed.stderr and any(
@@ -208,6 +276,39 @@ def run_one(
                     "RateLimitError",
                     "TimeoutExpired",
                 )
+            )
+            attempt_summaries = list((attempt_root / "runs").glob("*/summary.json"))
+            attempt_summary = (
+                json.loads(attempt_summaries[0].read_text()) if attempt_summaries else {}
+            )
+            attempt_input, attempt_output = _usage(attempt_summary)
+            if not attempt_summary:
+                logs = list((attempt_root / "runs").glob("*/transcript.jsonl"))
+                observed = []
+                for log in logs:
+                    for line in log.read_text().splitlines():
+                        try:
+                            event = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if event.get("kind") == "llm":
+                            observed.append(_usage(event))
+                attempt_input = sum(i or 0 for i, _ in observed) if observed else None
+                attempt_output = sum(o or 0 for _, o in observed) if observed else None
+            attempt_records.append(
+                {
+                    "attempt": attempt,
+                    "returncode": completed.returncode,
+                    "wall_s": time.perf_counter() - attempt_started,
+                    "input_tokens": attempt_input,
+                    "output_tokens": attempt_output,
+                    "usage_complete": bool(attempt_summary)
+                    and completed.returncode != 124
+                    and attempt_summary.get("outcome") != "error"
+                    and attempt_input is not None
+                    and attempt_output is not None,
+                    "outcome": attempt_summary.get("outcome"),
+                }
             )
             if completed.returncode == 0 or not transient:
                 break
@@ -241,6 +342,10 @@ def run_one(
             "seed": seed,
             "repeat": repeat,
             "attempts": attempts,
+            "attempt_records": attempt_records,
+            "total_observed_input_tokens": sum(r["input_tokens"] or 0 for r in attempt_records),
+            "total_observed_output_tokens": sum(r["output_tokens"] or 0 for r in attempt_records),
+            "usage_complete": all(r["usage_complete"] for r in attempt_records),
             "affective": affective_context,
             "affective_context": affective_context,
             "returncode": completed.returncode,
@@ -277,12 +382,32 @@ def main() -> None:
     parser.add_argument("--run-timeout", type=int, default=180)
     parser.add_argument("--resume", action="store_true", help="resume rows already in --output")
     parser.add_argument(
+        "--report-only", action="store_true", help="analyse saved rows without API calls"
+    )
+    parser.add_argument("--sim-profile", choices=("default", "targeted-v1"), default="default")
+    parser.add_argument(
         "--full-task-budget",
         action="store_true",
         help="use each duck file's max_steps/max_minutes budget instead of the 12-step cap",
     )
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
+    if args.report_only:
+        saved = json.loads(args.output.read_text())
+        if saved.get("kind") != ARTIFACT_KIND:
+            parser.error("report requires a v3 artifact")
+        print(
+            json.dumps(
+                {
+                    scenario: verified_comparison(
+                        [row for row in saved["rows"] if row["scenario"] == scenario]
+                    )
+                    for scenario in saved["scenarios"]
+                },
+                indent=2,
+            )
+        )
+        return
     default_model, key_env, base_url = PROVIDER_DEFAULTS[args.provider]
     models = tuple(args.models or (default_model,))
     scenarios = tuple(args.scenario or SCENARIOS)
@@ -294,6 +419,15 @@ def main() -> None:
     if args.run_timeout < 1:
         parser.error("--run-timeout must be positive")
 
+    if args.resume:
+        if not args.output.exists():
+            parser.error("--resume artifact does not exist")
+        if not _compatible_artifact(
+            json.loads(args.output.read_text()), _config(args, models, scenarios, seeds)
+        ):
+            parser.error("--resume requires a compatible live benchmark artifact")
+    elif args.output.exists():
+        parser.error("output already exists; use --resume or a new path")
     load_dotenv()
     try:
         from openai import OpenAI
@@ -351,6 +485,7 @@ def main() -> None:
                                 args.run_timeout,
                                 args.full_task_budget,
                                 args.output.with_suffix(".runs"),
+                                args.sim_profile,
                             )
                         )
                         completed_keys.add(key)
@@ -370,6 +505,9 @@ def main() -> None:
                             "rows": rows,
                         }
                         _write_json_atomic(args.output, checkpoint)
+                        if rows[-1]["failure_class"] == "quota":
+                            print("quota exhausted; partial checkpoint retained", file=sys.stderr)
+                            raise SystemExit(2)
     payload = {
         "kind": ARTIFACT_KIND,
         "created_at": datetime.now(UTC).isoformat(),
@@ -508,6 +646,10 @@ def main() -> None:
             }
             for context in (False, True)
         }
+        for scenario in scenarios
+    }
+    payload["verified_comparisons"] = {
+        scenario: verified_comparison([r for r in rows if r["scenario"] == scenario])
         for scenario in scenarios
     }
     payload["paired_metrics"]["success_delta_ci95"]["limitation"] = (
