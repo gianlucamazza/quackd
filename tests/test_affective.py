@@ -22,7 +22,13 @@ def test_event_mapping_prioritises_safety() -> None:
 
 def test_paths_are_canonical_and_ephemeral() -> None:
     assert str(state_path_for("Reachy_Mini:SDK", "/tmp/a")) == "/tmp/a/reachy_mini-sdk.sqlite"
+    assert str(state_path_for("../../unsafe/robot", "/tmp/a")) == "/tmp/a/unsafe-robot.sqlite"
     assert AffectiveConfig(enabled=True).state_path("microduck:sim2d", ephemeral=True) == ":memory:"
+
+
+def test_direct_runtime_rejects_invalid_mood_alpha(tmp_path) -> None:
+    with pytest.raises(ValueError, match="mood_alpha"):
+        AffectiveRuntime(tmp_path / "robot.sqlite", mood_alpha=0)
 
 
 @pytest.mark.asyncio
@@ -57,6 +63,7 @@ async def test_appraisal_failure_falls_back_to_deterministic_mapping(tmp_path) -
     state = await runtime.observe("verb_failure", text="failed to reach the target", ok=False)
     assert state["valence"] < 0
     assert state["appraisal_status"] == "fallback"
+    assert state["appraisal_error"] == "RuntimeError"
     runtime.close()
 
 

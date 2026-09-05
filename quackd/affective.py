@@ -8,6 +8,7 @@ small, serialisable snapshot for prompts and transcripts.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,7 +44,7 @@ class AffectiveConfig:
         if ephemeral or not self.enabled:
             return ":memory:"
         root = Path(self.directory).expanduser()
-        slug = "-".join(part for part in robot_key.lower().split(":") if part)
+        slug = re.sub(r"[^a-z0-9_]+", "-", robot_key.lower()).strip("-")
         return root / f"{slug or 'robot'}.sqlite"
 
 
@@ -102,6 +103,8 @@ class AffectiveRuntime:
     ) -> None:
         if config is not None:
             mood_alpha = config.mood_alpha
+        if not 0 < mood_alpha <= 1:
+            raise ValueError("mood_alpha must be in (0, 1]")
         self._appraisal_timeout_s = config.appraisal_timeout_s if config else 5.0
         self._max_appraisals = config.max_appraisals if config else 8
         self._appraisal_count = 0
@@ -132,7 +135,7 @@ class AffectiveRuntime:
         )
 
     def snapshot(self) -> dict[str, Any]:
-        return self._state.snapshot()
+        return {"schema_version": 1, **self._state.snapshot()}
 
     def summary(self) -> dict[str, Any]:
         state = self._state
@@ -159,6 +162,7 @@ class AffectiveRuntime:
         valence, arousal, dominance = affect_for_event(kind, ok)
         appraisal_used = False
         appraisal_status = "disabled"
+        appraisal_error: str | None = None
         if self._appraisal is not None and text and kind != "observation":
             if self._appraisal_count >= self._max_appraisals:
                 appraisal_status = "cap_reached"
@@ -178,9 +182,9 @@ class AffectiveRuntime:
                     )
                     appraisal_used = True
                     appraisal_status = "used"
-                except Exception:
+                except Exception as exc:
                     # Appraisal must never turn a robot run into an error.
-                    pass
+                    appraisal_error = type(exc).__name__
         now = datetime.now(tz=UTC)
         affect = self._core_affect(
             valence=valence,
@@ -199,6 +203,7 @@ class AffectiveRuntime:
             "event": kind,
             "appraisal": appraisal_used,
             "appraisal_status": appraisal_status,
+            "appraisal_error": appraisal_error,
             **self.summary(),
         }
 
