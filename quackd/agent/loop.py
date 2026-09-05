@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -117,6 +118,10 @@ class AgentLoop:
             )
         self.run_dir = cfg.run_dir or new_run_dir(cfg.runs_dir, self.fm.name)
         self.transcript = Transcript(self.run_dir)
+        self._profile_world = getattr(cfg.transport, "world", None)
+        self._targeted = getattr(self._profile_world, "profile", None) == "targeted-v1"
+        if self._targeted:
+            cfg.transport.clock.add_tick_hook(self._record_profile_tick)  # type: ignore[attr-defined]
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
         self.registry = cfg.registry or default_registry()
         self.executor = Executor(
@@ -141,8 +146,27 @@ class AgentLoop:
 
     # ── frames ──────────────────────────────────────────────────────────────────────
 
+    def _record_profile_tick(self, world: Any) -> None:
+        duck = world.ducks[0]
+        distances = [math.hypot(p.x - duck.x, p.y - duck.y) for p in world.people]
+        self.transcript.write(
+            "sim_tick",
+            sim_time=world.t,
+            profile=world.profile,
+            x=duck.x,
+            y=duck.y,
+            holding=duck.holding,
+            person_distance_m=min(distances) if distances else None,
+        )
+
     def _on_frame(self, img: Image.Image, caption: str) -> None:
         self.transcript.save_frame(img, caption)
+        if self._targeted and self.cfg.detector is not None:
+            self.transcript.write(
+                "sim_detection",
+                sim_time=self.cfg.transport.now(),
+                detections=[d.model_dump() for d in self.cfg.detector.detect(img)],
+            )
         if self.cfg.on_frame is not None:
             self.cfg.on_frame(img, caption)
 
@@ -301,6 +325,9 @@ class AgentLoop:
                     raise Aborted(
                         str(self.heartbeat.failure) if self.heartbeat.failure else "kill switch"
                     )
+                if self._targeted:
+                    await cfg.transport.stop()
+                    await cfg.transport.sleep(2.0)
                 obs, _ = await self._observe(last_verb, last_result)
                 if self.history and self.history[-1].decision is not None:
                     obs = obs.model_copy(
@@ -434,6 +461,8 @@ class AgentLoop:
                 final_state = (await cfg.transport.get_state()).model_dump()
             with contextlib.suppress(Exception):
                 await cfg.transport.close()
+            if self._targeted:
+                cfg.transport.clock.remove_tick_hook(self._record_profile_tick)  # type: ignore[attr-defined]
             summary = {
                 "duck": self.fm.name,
                 "outcome": outcome,
@@ -448,6 +477,7 @@ class AgentLoop:
                 "robot": manifest.id if manifest is not None else None,
                 "dry_run": cfg.dry_run,
                 "affective_context": cfg.affective_context,
+                "sim_profile": "targeted-v1" if self._targeted else "default",
                 "final_state": final_state,
                 "affective_state": (cfg.affective.summary() if cfg.affective is not None else None),
             }

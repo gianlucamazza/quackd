@@ -262,6 +262,7 @@ def _run_impl(
     emotional: bool = False,
     emotional_dir: str | None = None,
     emotional_context: bool = False,
+    sim_profile: str = "default",
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -297,6 +298,18 @@ def _run_impl(
             f"{duck.name} cannot run on {', '.join(s.key for s in specs)}: "
             + "; ".join(p.message for p in problems)
         )
+        return
+    if sim_profile not in {"default", "targeted-v1"} or (
+        sim_profile != "default"
+        and (
+            spec.adapter != "microduck"
+            or spec.backend != "sim2d"
+            or len(specs) != 1
+            or flock is not None
+            or duck.frontmatter.flock is not None
+        )
+    ):
+        _fail("--sim-profile targeted-v1 requires a single microduck:sim2d robot")
         return
     if emotional_context and not emotional:
         _fail("--emotional-context requires --emotional-state")
@@ -347,6 +360,12 @@ def _run_impl(
             camera_url=camera_url,
             token=token,
         )
+        if sim_profile == "targeted-v1":
+            from quackd.adapters.microduck import MicroduckAdapter
+            from quackd.sim2d.profiles import configure_targeted
+
+            assert isinstance(duck_transport, MicroduckAdapter)
+            configure_targeted(duck_transport.world)
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
         return
@@ -725,6 +744,7 @@ def run(
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
     emotional_context: bool = _EMOTIONAL_CONTEXT,
+    sim_profile: str = typer.Option("default", "--sim-profile"),
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -755,6 +775,7 @@ def run(
         emotional=emotional,
         emotional_dir=emotional_dir,
         emotional_context=emotional_context,
+        sim_profile=sim_profile,
     )
 
 
