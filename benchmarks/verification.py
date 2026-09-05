@@ -12,6 +12,16 @@ def verify(scenario: str, summary: dict, events: list[dict]) -> dict:
     final = summary.get("final_state", {})
     if summary.get("transport") != "sim2d" or not states or not final:
         return {"success": None, "reason": "missing simulator evidence"}
+    if summary.get("sim_profile") == "targeted-v1":
+        ticks = [e for e in events if e.get("kind") == "sim_tick"]
+        if not ticks:
+            return {"success": None, "reason": "missing tick telemetry"}
+        if scenario == "follow-me":
+            distances = [e.get("person_distance_m") for e in ticks]
+            if any(not isinstance(d, (int, float)) for d in distances):
+                return {"success": None, "reason": "missing person distance"}
+            if min(distances) < 0.4:
+                return {"success": False, "reason": "person distance below 0.4 m"}
     if scenario == "find-and-kick":
         moved = final.get("extras", {}).get("ball_displacement_m")
         return {
@@ -46,6 +56,12 @@ def verify(scenario: str, summary: dict, events: list[dict]) -> dict:
         quacks_due = 0
         missed_announcements = False
         for event in events:
+            if scenario == "patrol-and-quack" and event.get("kind") == "sim_detection":
+                seen = any(d.get("label") in {"person", "pet"} for d in event.get("detections", []))
+                if seen and not encounter:
+                    missed_announcements |= quacks_due > 0
+                    quacks_due = 2
+                encounter = seen
             if event.get("kind") == "observation":
                 state = event.get("features", {}).get("state", {})
                 if pending and previous:
