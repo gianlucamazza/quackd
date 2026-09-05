@@ -56,7 +56,11 @@ def verify(scenario: str, summary: dict, events: list[dict]) -> dict:
                     ):
                         return {"success": None, "reason": "missing leg poses"}
                     distance = math.hypot(state["x"] - previous["x"], state["y"] - previous["y"])
-                    legs += distance > 0.01
+                    target_visible = any(
+                        d.get("label") == "person"
+                        for d in event.get("features", {}).get("detections", [])
+                    )
+                    legs += distance > 0.01 and (scenario == "patrol-and-quack" or target_visible)
                 pending = None
                 previous = state
                 seen = any(
