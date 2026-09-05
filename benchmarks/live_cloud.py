@@ -66,6 +66,7 @@ def run_one(
     repeat: int,
     run_retries: int,
     run_timeout: int,
+    full_task_budget: bool,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="quackd-live-") as tmp:
         root = Path(tmp)
@@ -81,14 +82,14 @@ def run_one(
             model,
             "--seed",
             str(seed),
-            "--max-steps",
-            "12",
             "--yes",
             "--no-gif",
             "--no-memory",
             "--runs-dir",
             str(root / "runs"),
         ]
+        if not full_task_budget:
+            command.extend(("--max-steps", "12"))
         if affective_context:
             command.extend(("--emotional-state", "--emotional-dir", str(root / "affective")))
             command.append("--emotional-context")
@@ -164,6 +165,11 @@ def main() -> None:
     parser.add_argument("--run-retries", type=int, default=2)
     parser.add_argument("--run-timeout", type=int, default=180)
     parser.add_argument("--resume", action="store_true", help="resume rows already in --output")
+    parser.add_argument(
+        "--full-task-budget",
+        action="store_true",
+        help="use each duck file's max_steps/max_minutes budget instead of the 12-step cap",
+    )
     parser.add_argument("--output", type=Path, default=Path("/tmp/quackd-live-openai.json"))
     args = parser.parse_args()
     default_model, key_env, base_url = PROVIDER_DEFAULTS[args.provider]
@@ -231,6 +237,7 @@ def main() -> None:
                                 repeat,
                                 args.run_retries,
                                 args.run_timeout,
+                                args.full_task_budget,
                             )
                         )
                         completed_keys.add(key)
@@ -243,6 +250,7 @@ def main() -> None:
                             "repeats": args.repeats,
                             "run_retries": args.run_retries,
                             "run_timeout": args.run_timeout,
+                            "full_task_budget": args.full_task_budget,
                             "rows": rows,
                         }
                         args.output.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
@@ -258,6 +266,7 @@ def main() -> None:
         "repeats": args.repeats,
         "run_retries": args.run_retries,
         "run_timeout": args.run_timeout,
+        "full_task_budget": args.full_task_budget,
         "rows": rows,
     }
     grouped: dict[tuple[object, ...], dict[bool, dict[str, object]]] = {}
