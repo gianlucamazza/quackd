@@ -12,7 +12,9 @@ budgets:
   max_llm_calls: 30
 success:
   - At least one patrol lap completed (three or more walk legs) and every person/pet
-    detection was answered with two quacks.
+    encounter was answered with two quacks. An encounter starts when a person/pet
+    becomes visible after an observation with none visible; consecutive visible frames
+    belong to the same encounter. Walk legs must translate the robot, not just turn it.
 abort_when:
   - Battery below 15%
   - Same verb fails 3 times in a row

@@ -8,6 +8,10 @@ uvx --from "quackd[emotional]" quackd run hello-world \
   --provider fake --emotional-state
 ```
 
+The experimental `--emotional-context` flag additionally exposes the snapshot to the
+model and requires `--emotional-state`. It is disabled by default and is intended only for
+controlled A/B evaluation.
+
 The state uses valence, arousal and dominance with mood decay. Successful and failed verb
 results and run outcomes update it. The current snapshot is written to
 `summary.json`/`transcript.jsonl` as an `affective` event.
@@ -21,9 +25,9 @@ CI runs the affective benchmark only in the job that installs `quackd[emotional]
 default dependency job remains independent of the optional extra.
 
 The affective layer is passive and advisory. It is not inserted into the model prompt and
-does not update on every camera observation in the standard agent loop. It records
-operational verb outcomes and the final run outcome. It cannot add verbs, widen an
-allowlist, change budgets, skip confirmation, or issue motor commands. MCP exposes the
+does not update on every camera observation in the standard agent loop. With the experimental
+context flag, a cached snapshot is exposed only after operational events; it cannot add verbs,
+widen an allowlist, change budgets, skip confirmation, or issue motor commands. MCP exposes the
 current snapshot in `robot_list` when started with `--emotional-state`.
 
 The affective benchmark reports paired latency medians/p95 and prompt/feature sizes. The

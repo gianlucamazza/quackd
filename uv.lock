@@ -4039,6 +4039,9 @@ all = [
 anthropic = [
     { name = "anthropic" },
 ]
+deepseek = [
+    { name = "openai" },
+]
 dev = [
     { name = "hatchling" },
     { name = "mypy" },
@@ -4094,6 +4097,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", marker = "extra == 'all'", specifier = ">=1.50" },
+    { name = "openai", marker = "extra == 'deepseek'", specifier = ">=1.50" },
     { name = "openai", marker = "extra == 'grok'", specifier = ">=1.50" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50" },
     { name = "opencv-python-headless", specifier = ">=4.9" },
@@ -4115,7 +4119,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'yolo'", specifier = ">=8.2" },
     { name = "zeroconf", marker = "extra == 'lan'", specifier = ">=0.132" },
 ]
-provides-extras = ["all", "anthropic", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "openai", "reachy", "rosbridge", "yolo"]
+provides-extras = ["all", "anthropic", "deepseek", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "openai", "reachy", "rosbridge", "yolo"]
 
 [[package]]
 name = "questionary"
