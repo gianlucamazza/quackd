@@ -342,6 +342,20 @@ that is wrong fails as a confident "not fallen".
   could load a wider duck and start counting from zero. The limits still become the new
   contract's; the steps, the llm calls, the clock and the failure counts now stay the
   session's, and the tool's reply says what carried over.
+### Added
+
+- Optional `quackd[emotional]` integration with per-robot affective runtime state, SQLite
+  persistence, prompt/transcript summaries, CLI/MCP flags, CI coverage, and a deterministic
+  on/off benchmark matrix. See [docs/emotional-state.md](docs/emotional-state.md) and
+  [ADR 0026](docs/adr/0026-affective-runtime.md).
+- Experimental `--emotional-context` keeps model-facing affective context separate from the
+  passive runtime, enabling controlled A/B quality experiments without changing defaults.
+- OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`
+  family. Chat Completions explicitly disables reasoning for tool calls; reasoning-enabled
+  Responses API support remains a separate future adapter.
+- DeepSeek is available through its OpenAI-compatible API with `DEEPSEEK_API_KEY` and the
+  current `deepseek-v4-pro` model default; legacy `deepseek-chat` and `deepseek-reasoner` names
+  are intentionally not used.
 
 ## [0.6.0] — 2026-09-04
 

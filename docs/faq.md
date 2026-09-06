@@ -10,7 +10,7 @@ is light on purpose (no vendor SDKs). Use `uvx --from "quackd[anthropic]" quackd
 `uv pip install "quackd[anthropic]"`. Without the extra, quackd prints exactly that command.
 `--provider fake` needs nothing.
 
-**Which models are the defaults?** `anthropic` → `claude-opus-5`; `openai` → `gpt-5`;
+**Which models are the defaults?** `anthropic` → `claude-opus-5`; `openai` → `gpt-5.6-terra`;
 `gemini` → `gemini-2.5-pro`; `grok` → `grok-4`. The non-Anthropic IDs were not verified
 against vendor docs at release (no keys in CI) — override with `--model` or `QUACKD_MODEL`
 if yours differs. Anthropic extras: `QUACKD_EFFORT` (default `medium`) and

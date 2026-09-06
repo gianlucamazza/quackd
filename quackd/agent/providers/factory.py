@@ -10,7 +10,7 @@ import os
 
 from quackd.agent.providers.base import LLMProvider, ProviderError
 
-CLOUD_NAMES = ("anthropic", "openai", "gemini", "grok")
+CLOUD_NAMES = ("anthropic", "openai", "gemini", "grok", "deepseek")
 LOCAL_NAMES = ("local", "ollama", "vllm", "llamacpp", "lmstudio")
 PROVIDER_NAMES = ("fake", *CLOUD_NAMES, *LOCAL_NAMES)
 
@@ -19,9 +19,10 @@ PROVIDER_NAMES = ("fake", *CLOUD_NAMES, *LOCAL_NAMES)
 # served model from /v1/models when none is given.
 DEFAULT_MODELS: dict[str, str | None] = {
     "anthropic": "claude-opus-5",
-    "openai": "gpt-5",
+    "openai": "gpt-5.6-terra",
     "gemini": "gemini-2.5-pro",
     "grok": "grok-4",
+    "deepseek": "deepseek-v4-pro",
     **{name: None for name in LOCAL_NAMES},
 }
 
@@ -30,6 +31,7 @@ KEY_ENV = {
     "openai": "OPENAI_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "grok": "XAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
     **{name: "LOCAL_API_KEY" for name in LOCAL_NAMES},
 }
 
@@ -38,6 +40,7 @@ EXTRA_FOR = {
     "openai": "openai",
     "gemini": "gemini",
     "grok": "grok",
+    "deepseek": "deepseek",
     **{name: "openai" for name in LOCAL_NAMES},
 }
 
@@ -70,7 +73,7 @@ def make_provider(
         from quackd.agent.providers.openai import OpenAIProvider
 
         return OpenAIProvider(
-            model=model or "gpt-5", api_key=api_key, base_url=base_url, vision=vision
+            model=model or "gpt-5.6-terra", api_key=api_key, base_url=base_url, vision=vision
         )
     if name == "gemini":
         from quackd.agent.providers.gemini import GeminiProvider
@@ -81,6 +84,12 @@ def make_provider(
 
         return GrokProvider(
             model=model or "grok-4", api_key=api_key, base_url=base_url, vision=vision
+        )
+    if name == "deepseek":
+        from quackd.agent.providers.deepseek import DeepSeekProvider
+
+        return DeepSeekProvider(
+            model=model or "deepseek-v4-pro", api_key=api_key, base_url=base_url, vision=vision
         )
     if name in LOCAL_NAMES:
         from quackd.agent.providers.local import LocalProvider

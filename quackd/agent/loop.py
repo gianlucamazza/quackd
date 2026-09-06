@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Callable
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -92,6 +93,10 @@ class RunConfig:
     """Asked once, before the first leg moves, when the robot cannot see a fall and cannot
     recover from one — so the only guard is the person in the room. None means nobody is
     there to ask (MCP, tests), and the warning is logged instead of blocking."""
+    affective: Any | None = None
+    """Optional emotional-memory runtime for passive operational telemetry."""
+    affective_context: bool = False
+    """Experimental opt-in: expose the affective snapshot to the provider."""
 
 
 @dataclass
@@ -121,6 +126,10 @@ class AgentLoop:
             )
         self.run_dir = cfg.run_dir or new_run_dir(cfg.runs_dir, self.fm.name)
         self.transcript = Transcript(self.run_dir)
+        self._profile_world = getattr(cfg.transport, "world", None)
+        self._targeted = getattr(self._profile_world, "profile", None) == "targeted-v1"
+        if self._targeted:
+            cfg.transport.clock.add_tick_hook(self._record_profile_tick)  # type: ignore[attr-defined]
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
         self.registry = cfg.registry or default_registry()
         self.executor = Executor(
@@ -140,12 +149,32 @@ class AgentLoop:
         self.history: list[Exchange] = []
         self.usage = Usage()
         self.highlights: list[str] = []
+        self._affective_snapshot: dict[str, Any] | None = None
         """Verb results worth carrying into the episode memory (the last few that went ok)."""
 
     # ── frames ──────────────────────────────────────────────────────────────────────
 
+    def _record_profile_tick(self, world: Any) -> None:
+        duck = world.ducks[0]
+        distances = [math.hypot(p.x - duck.x, p.y - duck.y) for p in world.people]
+        self.transcript.write(
+            "sim_tick",
+            sim_time=world.t,
+            profile=world.profile,
+            x=duck.x,
+            y=duck.y,
+            holding=duck.holding,
+            person_distance_m=min(distances) if distances else None,
+        )
+
     def _on_frame(self, img: Image.Image, caption: str) -> None:
         self.transcript.save_frame(img, caption)
+        if self._targeted and self.cfg.detector is not None:
+            self.transcript.write(
+                "sim_detection",
+                sim_time=self.cfg.transport.now(),
+                detections=[d.model_dump() for d in self.cfg.detector.detect(img)],
+            )
         if self.cfg.on_frame is not None:
             self.cfg.on_frame(img, caption)
 
@@ -159,6 +188,13 @@ class AgentLoop:
             if self.cfg.detector is not None:
                 detections = self.cfg.detector.detect(img)
             self._on_frame(img, f"step {self.budget.steps}: {last_verb or 'start'}")
+        affective_snapshot = self._affective_snapshot if self.cfg.affective_context else None
+        if (
+            self.cfg.affective_context
+            and self.cfg.affective is not None
+            and affective_snapshot is None
+        ):
+            affective_snapshot = self.cfg.affective.summary()
         text = build_observation_text(
             step=self.budget.steps,
             max_steps=self.fm.budgets.max_steps,
@@ -167,6 +203,7 @@ class AgentLoop:
             last_verb=last_verb,
             last_result=last_result,
             budget_status=self.budget.status(),
+            affective=affective_snapshot,
         )
         features = observation_features(
             state=state,
@@ -175,6 +212,8 @@ class AgentLoop:
             last_result=last_result,
             allowed=self.executor.allowed,
         )
+        if affective_snapshot is not None:
+            features["affective"] = affective_snapshot
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
 
@@ -329,6 +368,9 @@ class AgentLoop:
                     raise Aborted(
                         str(self.heartbeat.failure) if self.heartbeat.failure else "kill switch"
                     )
+                if self._targeted:
+                    await cfg.transport.stop()
+                    await cfg.transport.sleep(2.0)
                 obs, _ = await self._observe(last_verb, last_result)
                 if self.history and self.history[-1].decision is not None:
                     obs = obs.model_copy(
@@ -420,6 +462,15 @@ class AgentLoop:
                     last_result = VerbResult.fail(str(e))
                 except ConfirmDenied as e:
                     last_result = VerbResult.fail(f"{e}; choose something else or declare_failure")
+                if cfg.affective is not None:
+                    affective = await cfg.affective.observe(
+                        "verb_success" if last_result.ok else "verb_failure",
+                        text=last_result.summary,
+                        ok=last_result.ok,
+                        context={"verb": call.name},
+                    )
+                    self._affective_snapshot = affective
+                    self.transcript.write("affective", event=call.name, state=affective)
                 self.transcript.write(
                     "verb",
                     step=self.budget.steps,
@@ -440,6 +491,11 @@ class AgentLoop:
         except SafetyStop as e:
             outcome, reason = "aborted", str(e)
         finally:
+            if cfg.affective is not None:
+                with contextlib.suppress(Exception):
+                    affective = await cfg.affective.observe(outcome, text=reason)
+                    self._affective_snapshot = affective
+                    self.transcript.write("affective", event=outcome, state=affective)
             await self.heartbeat.stop()
             with contextlib.suppress(Exception):
                 await cfg.transport.stop()
@@ -448,6 +504,8 @@ class AgentLoop:
                 final_state = (await cfg.transport.get_state()).model_dump()
             with contextlib.suppress(Exception):
                 await cfg.transport.close()
+            if self._targeted:
+                cfg.transport.clock.remove_tick_hook(self._record_profile_tick)  # type: ignore[attr-defined]
             summary = {
                 "duck": self.fm.name,
                 "outcome": outcome,
@@ -461,7 +519,10 @@ class AgentLoop:
                 "transport": backend_name(cfg.transport),
                 "robot": manifest.id if manifest is not None else None,
                 "dry_run": cfg.dry_run,
+                "affective_context": cfg.affective_context,
+                "sim_profile": "targeted-v1" if self._targeted else "default",
                 "final_state": final_state,
+                "affective_state": (cfg.affective.summary() if cfg.affective is not None else None),
             }
             self.transcript.write("run_end", **summary)
             self.transcript.write_summary(summary)
@@ -476,6 +537,9 @@ class AgentLoop:
                         highlights=self.highlights,
                         run_dir=self.run_dir,
                     )
+            if cfg.affective is not None:
+                with contextlib.suppress(Exception):
+                    cfg.affective.close()
         return RunResult(
             outcome=outcome,
             reason=reason,

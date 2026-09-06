@@ -6,6 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from quackd.agent.transcript import Transcript
 from quackd.cli import app
 
 from .conftest import DUCKS
@@ -78,6 +79,51 @@ def test_run_hello_world_on_mock(tmp_path: Path) -> None:
     assert "SUCCESS" in result.output
     run_dirs = list(tmp_path.iterdir())
     assert len(run_dirs) == 1 and (run_dirs[0] / "transcript.jsonl").exists()
+
+
+def test_emotional_context_requires_state(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--emotional-context",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "requires --emotional-state" in result.output
+
+
+def test_emotional_context_is_explicitly_visible_in_run_artifacts(tmp_path: Path) -> None:
+    runs_dir = tmp_path / "runs"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--no-gif",
+            "--no-memory",
+            "--emotional-state",
+            "--emotional-context",
+            "--emotional-dir",
+            str(tmp_path / "affective"),
+            "--runs-dir",
+            str(runs_dir),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    run_dir = next(runs_dir.iterdir())
+    events = Transcript.read(run_dir / "transcript.jsonl")
+    observations = [event for event in events if event["kind"] == "observation"]
+    assert observations and "affective state:" in observations[0]["text"]
+    summary = (run_dir / "summary.json").read_text(encoding="utf-8")
+    assert '"affective_context": true' in summary
 
 
 def test_missing_extra_hint_survives_rich_markup(tmp_path: Path, monkeypatch) -> None:

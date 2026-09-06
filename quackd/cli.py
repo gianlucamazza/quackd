@@ -289,6 +289,10 @@ def _run_impl(
     robots: str | None = None,
     memory: bool = True,
     memory_dir: str | None = None,
+    emotional: bool = False,
+    emotional_dir: str | None = None,
+    emotional_context: bool = False,
+    sim_profile: str = "default",
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -325,10 +329,28 @@ def _run_impl(
             + "; ".join(p.message for p in problems)
         )
         return
+    if sim_profile not in {"default", "targeted-v1"} or (
+        sim_profile != "default"
+        and (
+            spec.adapter != "microduck"
+            or spec.backend != "sim2d"
+            or len(specs) != 1
+            or flock is not None
+            or duck.frontmatter.flock is not None
+        )
+    ):
+        _fail("--sim-profile targeted-v1 requires a single microduck:sim2d robot")
+        return
+    if emotional_context and not emotional:
+        _fail("--emotional-context requires --emotional-state")
+        return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
     if flock is not None or duck.frontmatter.flock is not None:
+        if emotional or emotional_context:
+            _fail("emotional state/context is currently available for single-robot runs only")
+            return
         _run_flock_impl(
             duck,
             provider=provider,
@@ -368,6 +390,12 @@ def _run_impl(
             camera_url=camera_url,
             token=token,
         )
+        if sim_profile == "targeted-v1":
+            from quackd.adapters.microduck import MicroduckAdapter
+            from quackd.sim2d.profiles import configure_targeted
+
+            assert isinstance(duck_transport, MicroduckAdapter)
+            configure_targeted(duck_transport.world)
     except (ProviderError, TransportError, ImportError) as e:
         _fail(str(e))
         return
@@ -398,6 +426,21 @@ def _run_impl(
 
         # keyed by adapter:backend, so a simulated duck never inherits a real one's notes
         robot_memory = RobotMemory(spec.key, memory_dir)
+    affective = None
+    if emotional:
+        from quackd.affective import AffectiveConfig, AffectiveRuntime
+
+        affective_config = AffectiveConfig(
+            enabled=True,
+            directory=emotional_dir or "~/.quackd/affective",
+        )
+        try:
+            affective = AffectiveRuntime.for_robot(
+                spec.key, affective_config, ephemeral=dry_run or not memory
+            )
+        except RuntimeError as e:
+            _fail(str(e))
+            return
     cfg = RunConfig(
         duck=duck,
         provider=llm,
@@ -412,6 +455,8 @@ def _run_impl(
         memory=robot_memory,
         fov_deg=fov_deg,
         acknowledge=None if yes else _acknowledge_prompt,
+        affective=affective,
+        affective_context=emotional_context,
     )
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
@@ -644,6 +689,21 @@ _MEMORY_DIR = typer.Option(
     "--memory-dir",
     help="Where memory files live (default: $QUACKD_MEMORY_DIR or ~/.quackd/memory).",
 )
+_EMOTIONAL = typer.Option(
+    False,
+    "--emotional-state/--no-emotional-state",
+    help="Track this robot's affective runtime state (needs quackd[emotional]).",
+)
+_EMOTIONAL_DIR = typer.Option(
+    None,
+    "--emotional-dir",
+    help="Where affective state SQLite files live (default: ~/.quackd/affective).",
+)
+_EMOTIONAL_CONTEXT = typer.Option(
+    False,
+    "--emotional-context",
+    help="EXPERIMENTAL: expose affective state to the model (requires --emotional-state).",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -732,6 +792,10 @@ def run(
     flock: int | None = _FLOCK,
     memory: bool = _MEMORY,
     memory_dir: str | None = _MEMORY_DIR,
+    emotional: bool = _EMOTIONAL,
+    emotional_dir: str | None = _EMOTIONAL_DIR,
+    emotional_context: bool = _EMOTIONAL_CONTEXT,
+    sim_profile: str = typer.Option("default", "--sim-profile"),
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -760,6 +824,10 @@ def run(
         robots=robots,
         memory=memory,
         memory_dir=memory_dir,
+        emotional=emotional,
+        emotional_dir=emotional_dir,
+        emotional_context=emotional_context,
+        sim_profile=sim_profile,
     )
 
 
@@ -857,6 +925,8 @@ def serve_mcp(
     ),
     memory: bool = _MEMORY,
     memory_dir: str | None = _MEMORY_DIR,
+    emotional: bool = _EMOTIONAL,
+    emotional_dir: str | None = _EMOTIONAL_DIR,
 ) -> None:
     """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
     from quackd.adapters.base import AdapterError
@@ -875,8 +945,10 @@ def serve_mcp(
             yes=yes,
             memory=memory,
             memory_dir=memory_dir,
+            emotional=emotional,
+            emotional_dir=emotional_dir,
         )
-    except AdapterError as e:
+    except (AdapterError, RuntimeError) as e:
         _fail(str(e))
 
 

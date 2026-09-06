@@ -77,6 +77,7 @@ Goals like *"find my keys"* or *"pick up the trash"* are where this is going, **
   * [The `.duck` file](#the-duck-file)
   * [Pilot it from Claude (MCP)](#pilot-it-from-claude-mcp)
   * [What it remembers](#what-it-remembers)
+  * [Affective runtime state](docs/emotional-state.md)
 - [Any small robot](#any-small-robot)
 - [Flock mode (simulator)](#flock-mode-simulator)
 - [Configuration](#configuration)
@@ -103,7 +104,7 @@ uvx --from "quackd[openai]" quackd run find-and-kick --provider ollama --model q
 open runs/*/run.gif                                                                 # a GIF on the simulator, a transcript every time
 ```
 
-Put keys in the environment or in a `.env` file (copy [`.env.example`](.env.example)). `quackd doctor` tells you what is missing. Needs Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/), nothing else.
+Put keys in the project-root `.env` or in the environment (copy [`.env.example`](.env.example)). The project `.env` is gitignored and must not be symlinked to another application's configuration. `quackd doctor` tells you what is missing. Needs Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/), nothing else.
 
 <br>
 
@@ -220,6 +221,7 @@ The eight `duck_*` tools from 0.3 were aliases of the default robot and were rem
 | Manifests and core verbs (`quackd list-adapters`, `quackd list-verbs --robot`) | ✅ eight adapters, eight core verbs that appear only where the manifest meets their requirements, speed limits from the manifest, `manifest.schema.json` generated and drift tested |
 | MCP server (`quackd serve-mcp`) | ✅ Claude Code and Claude Desktop, the Claude Code config checked against its docs (2026-08), no Claude Desktop session on record, fleets with `--robots` (eight `robot_*` tools, tested in process against the simulator and the mocks) |
 | Memory between runs (`quackd memory`, `remember`) | ✅ one JSONL file per `adapter:backend`, notes and run outcomes into the next prompt, tested end to end offline, 🧪 the `remember` tool itself exercised by one local model on one machine and by no cloud model ([docs/memory.md](docs/memory.md)) |
+| Affective runtime state (`--emotional-state`) | 🧪 opt-in passive PAD mood state per robot, experimental `--emotional-context` is separate ([docs/emotional-state.md](docs/emotional-state.md)) |
 | Providers: anthropic, openai, gemini, grok, fake | ✅ implemented, tested offline, real model hero recording pending an API key |
 | Local models (Ollama, vLLM, llama.cpp, LM Studio, any OpenAI compatible server) | ✅ implemented and tested against the OpenAI wire format, 🧪 one live run by a contributor (Qwen 2.5 Coder 14B on LM Studio, two seeds), never on this machine and no transcript in the repo, more welcome |
 | Flock mode (multiple cooperating robots, sim2d) | ✅ deterministic auction and bus, one planner LLM call at most, ground truth checked in tests, 🧪 experimental and simulator only |
@@ -381,6 +383,7 @@ Cloud or local, same command.
 | OpenAI | `quackd[openai]` | `OPENAI_API_KEY` | `uvx --from "quackd[openai]" quackd run find-and-kick --provider openai` |
 | Gemini | `quackd[gemini]` | `GEMINI_API_KEY` | `uvx --from "quackd[gemini]" quackd run find-and-kick --provider gemini` |
 | Grok | `quackd[grok]` | `XAI_API_KEY` | `uvx --from "quackd[grok]" quackd run find-and-kick --provider grok` |
+| DeepSeek | `quackd[deepseek]` | `DEEPSEEK_API_KEY` | `uvx --from "quackd[deepseek]" quackd run find-and-kick --provider deepseek` |
 | fake (scripted) | none | none | `uvx quackd run find-and-kick --provider fake` |
 | Ollama (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider ollama --model qwen3:8b` |
 | vLLM (local) | `quackd[openai]` | none | `uvx --from "quackd[openai]" quackd run find-and-kick --provider vllm --model Qwen/Qwen3-8B` |
@@ -542,7 +545,7 @@ uvx quackd run reachy-spots-duck-kicks --provider fake --seed 3
 | What | How |
 |---|---|
 | API keys | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` in the environment or a `.env` file (see [`.env.example`](.env.example)) |
-| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5`, `gemini-2.5-pro`, `grok-4`. The OpenAI, Gemini and Grok IDs are unverified, override them if yours differ |
+| Model | `--model` or `QUACKD_MODEL`. Defaults: `claude-opus-5`, `gpt-5.6-terra`, `gemini-2.5-pro`, `grok-4`. The OpenAI, Gemini and Grok IDs are unverified, override them if yours differ |
 | Claude reasoning effort | `QUACKD_EFFORT` (`low` to `max`, default `medium`). `QUACKD_ANTHROPIC_FALLBACKS=0` disables server side refusal fallbacks |
 | Local models | `--provider ollama`, `vllm`, `llamacpp`, `lmstudio` or `local --base-url http://host:port/v1`. No key. `--model` or the first served model. `--vision` sends frames. `QUACKD_TOOL_CHOICE=auto`, `required` or `none` for picky servers. See [docs/local-llms.md](docs/local-llms.md) |
 | Robot | `--robot <adapter>:<backend>`, or a `robots:` line in the `.duck`, the flag wins. Default `microduck:sim2d`. `quackd list-adapters` lists the eight that ship, `quackd list-verbs --robot X` what each can do |

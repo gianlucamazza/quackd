@@ -37,7 +37,11 @@ You are piloting a small biped duck robot. Fetch the ball.
 4. **Verify.** `get_frame`. If the ball is still visible in front of you, the grab missed:
    `walk_to` again (maybe from a slightly different angle) and retry `grab`. Do not retry
    more than three times.
-5. Once the ball is gone from view, `walk` backward (`vx` -0.1) for about 3 seconds,
+5. Once the ball is gone from view, return toward your starting position while holding
+   it, reducing the distance to that position by at least 0.5 m. Use short `walk` legs
+   and verify your position after each leg; at `vx` -0.1 this needs at least 5 seconds
+   of unobstructed motion in the correct direction. If that progress is impossible,
+   declare failure rather than claiming a completed fetch. Then
    `remember` where the ball was and what made the grab work, quack, and declare success.
 
 ## Memory

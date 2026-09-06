@@ -44,9 +44,11 @@ anthropic = ["anthropic>=1.0,<2"]
 openai = ["openai>=1.50"]
 gemini = ["google-genai>=1.0"]
 grok = ["openai>=1.50"]
+deepseek = ["openai>=1.50"]
 all = ["anthropic>=1.0,<2", "openai>=1.50", "google-genai>=1.0"]
 yolo = ["ultralytics>=8.2"]
 live = ["pygame>=2.5"]
+emotional = ["emotional-memory>=0.18,<0.19"]
 # Robot SDKs are extras too: the default install never imports one. reachy-mini pulls
 # onnxruntime, FastAPI and a GStreamer bundle (read from the 1.10.0 wheel, 2026-09-02).
 reachy = ["reachy-mini>=1.10,<2"]
@@ -115,7 +117,7 @@ packages = ["quackd"]
 # the one file it needs rather than installing quackd's whole dependency tree.
 [tool.hatch.build.targets.sdist]
 include = [
-  "quackd", "ducks", "bridge", "docs", "tests",
+  "quackd", "ducks", "bridge", "docs", "tests", "benchmarks",
   "README.md", "LICENSE", "NOTICE", "CHANGELOG.md", "hatch_build.py",
 ]
 
@@ -132,6 +134,7 @@ ignore = ["RUF012", "B008"]
 "quackd/cli.py" = ["T20"]
 "quackd/mcp_server.py" = ["T20"]
 "tests/**" = ["T20"]
+"benchmarks/**" = ["T20"]
 # Prose-heavy files: upstream citations and LLM-facing prompt text read better unwrapped.
 "quackd/transport/upstream_api.py" = ["E501"]
 "quackd/agent/prompts.py" = ["E501"]

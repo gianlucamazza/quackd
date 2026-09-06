@@ -11,6 +11,7 @@ import pytest
 from quackd.agent.providers.anthropic import AnthropicProvider
 from quackd.agent.providers.anthropic import render_messages as a_messages
 from quackd.agent.providers.base import Decision, Exchange, Observation, ProviderError, ToolCall
+from quackd.agent.providers.deepseek import DeepSeekProvider
 from quackd.agent.providers.factory import make_provider
 from quackd.agent.providers.gemini import GeminiProvider, clean_schema, render_contents
 from quackd.agent.providers.grok import GrokProvider
@@ -188,6 +189,30 @@ class FakeOpenAI:
         self.chat = NS(completions=NS(create=create))
 
 
+class FakeResponses:
+    def __init__(self, *, arguments: str = '{"vx": 0.3}') -> None:
+        self.kwargs: dict[str, Any] = {}
+        self._arguments = arguments
+
+        async def create(**kwargs: Any) -> Any:
+            self.kwargs = kwargs
+            return NS(
+                output=[
+                    NS(
+                        type="function_call",
+                        call_id="call_9",
+                        name="walk",
+                        arguments=self._arguments,
+                    )
+                ],
+                output_text=None,
+                usage=NS(input_tokens=50, output_tokens=9),
+                status="completed",
+            )
+
+        self.create = create
+
+
 def openai_response(name: str, args: str, content: str | None = None) -> Any:
     tc = NS(id="call_9", function=NS(name=name, arguments=args))
     return NS(
@@ -212,8 +237,25 @@ async def test_openai_request_and_response_mapping() -> None:
     assert turn.usage.input_tokens == 50 and turn.stop_reason == "tool_calls"
 
 
+async def test_deepseek_uses_chat_tools_without_required_tool_choice() -> None:
+    client = FakeOpenAI(openai_response("walk", json.dumps({"vx": 0.3})))
+    turn = await DeepSeekProvider(client=client).step("SYS", history(), TOOLS)
+    assert client.kwargs["tool_choice"] == "auto"
+    assert client.kwargs["parallel_tool_calls"] is False
+    assert turn.tool_calls == [ToolCall(id="call_9", name="walk", arguments={"vx": 0.3})]
+
+
+async def test_modern_openai_tool_calls_use_responses_api() -> None:
+    responses = FakeResponses()
+    client = NS(responses=responses)
+    turn = await OpenAIProvider(model="gpt-5.6-terra", client=client).step("SYS", history(), TOOLS)
+    assert responses.kwargs["reasoning"] == {"effort": "none"}
+    assert responses.kwargs["tools"][0]["type"] == "function"
+    assert turn.tool_calls == [ToolCall(id="call_9", name="walk", arguments={"vx": 0.3})]
+
+
 async def test_openai_bad_json_arguments_do_not_crash() -> None:
-    p = OpenAIProvider(client=FakeOpenAI(openai_response("walk", "{not json")))
+    p = OpenAIProvider(model="gpt-5", client=FakeOpenAI(openai_response("walk", "{not json")))
     turn = await p.step("S", history()[:1], TOOLS)
     assert "_unparsed" in turn.tool_calls[0].arguments
 
@@ -232,17 +274,32 @@ def test_grok_is_openai_with_xai_endpoint() -> None:
     assert p.name == "grok" and p.base_url == "https://api.x.ai/v1" and p.model == "grok-4"
 
 
+def test_deepseek_is_openai_compatible_with_current_endpoint() -> None:
+    p = DeepSeekProvider(client=FakeOpenAI(None))
+    assert (
+        p.name == "deepseek"
+        and p.base_url == "https://api.deepseek.com"
+        and p.key_env == "DEEPSEEK_API_KEY"
+        and p.model == "deepseek-v4-pro"
+        and not p.supports_vision
+        and p.tool_choice == "auto"
+    )
+
+
 def test_missing_keys_are_clear(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     with pytest.raises(ProviderError, match="OPENAI_API_KEY"):
         OpenAIProvider()
     with pytest.raises(ProviderError, match="XAI_API_KEY"):
         GrokProvider()
     with pytest.raises(ProviderError, match="GEMINI_API_KEY"):
         GeminiProvider()
+    with pytest.raises(ProviderError, match="DEEPSEEK_API_KEY"):
+        DeepSeekProvider()
 
 
 # ── gemini ──────────────────────────────────────────────────────────────────────────────

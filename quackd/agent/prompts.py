@@ -155,12 +155,20 @@ def build_observation_text(
     last_verb: str | None,
     last_result: VerbResult | None,
     budget_status: str,
+    affective: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"[step {step}/{max_steps} · {budget_status}]",
         f"state: {state.summary()}",
         f"camera: {summarize_detections(detections)}",
     ]
+    if affective is not None:
+        lines.append(
+            "affective state: "
+            f"valence={affective['valence']:+.2f}, "
+            f"arousal={affective['arousal']:.2f}, "
+            f"dominance={affective['dominance']:.2f}"
+        )
     if last_verb is not None and last_result is not None:
         lines.append(
             f"last verb `{last_verb}`: {'ok' if last_result.ok else 'FAILED'} — {last_result.summary}"

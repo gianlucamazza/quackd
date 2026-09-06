@@ -31,6 +31,7 @@ from quackd.transport.factory import TRANSPORT_STATUS
 EXTRAS = {
     "anthropic": ("anthropic", "quackd[anthropic]"),
     "openai": ("openai", "quackd[openai] / quackd[grok]"),
+    "deepseek": ("openai", "quackd[deepseek]"),
     "gemini": ("google.genai", "quackd[gemini]"),
     "yolo": ("ultralytics", "quackd[yolo]"),
     "live": ("pygame", "quackd[live]"),
