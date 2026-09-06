@@ -90,7 +90,7 @@ def _affect(valence: float, arousal: float, dominance: float) -> dict[str, Any]:
 def _memory_fixture(scenario: str) -> tuple[dict[str, object], ...]:
     entries: list[dict[str, object]] = []
     for text in SCENARIO_GUIDANCE[scenario]:
-        entries.append({"text": text, "tags": ["target"], "affective": _affect(0.7, 0.4, 0.8)})
+        entries.append({"text": text, "tags": ["target"], "affective": _affect(0.0, 0.1, 0.5)})
     entries.append(
         {
             "text": f"Previous {scenario} recovery succeeded after observing before retrying.",
@@ -100,14 +100,14 @@ def _memory_fixture(scenario: str) -> tuple[dict[str, object], ...]:
     )
     for text in HARD_NEGATIVES[scenario]:
         entries.append(
-            {"text": text, "tags": ["hard-negative"], "affective": _affect(-0.8, 0.9, 0.1)}
+            {"text": text, "tags": ["hard-negative"], "affective": _affect(0.9, 0.9, 0.9)}
         )
     for index in range(21):
         entries.append(
             {
                 "text": f"Unrelated maintenance note {index}: inspect battery and joints.",
                 "tags": ["distractor"],
-                "affective": _affect(0.0, 0.1, 0.5),
+                "affective": _affect(0.9, 0.9, 0.9),
             }
         )
     return tuple(entries)
