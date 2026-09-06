@@ -135,6 +135,8 @@ class RobotSession:
     """Optional emotional-memory state; never part of executor policy."""
     emotional_memory: Any | None = None
     """Optional derived emotional-memory index for query-based recall."""
+    emotional_memory_status: str | None = None
+    emotional_memory_error: str | None = None
 
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
@@ -259,7 +261,11 @@ class RobotSession:
             "default": default,
             "affective": self.affective.summary() if self.affective is not None else None,
             "emotional_memory": (
-                self.emotional_memory.config.identity()
+                {
+                    "config": self.emotional_memory.config.identity(),
+                    "status": self.emotional_memory_status,
+                    "error": self.emotional_memory_error,
+                }
                 if self.emotional_memory is not None
                 else None
             ),
@@ -322,6 +328,8 @@ class RobotSession:
                     affective=(self.affective.snapshot() if self.affective else None),
                 )
             except Exception as exc:
+                self.emotional_memory_status = "degraded"
+                self.emotional_memory_error = type(exc).__name__
                 return {
                     "ok": False,
                     "robot": self.name,
@@ -512,6 +520,7 @@ def build_fleet_server(
     emotional_embedding_model: str | None = None,
     emotional_embedding_base_url: str | None = None,
     emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_allow_remote: bool = False,
     emotional_ranking: str = "affective",
 ) -> tuple[MCPServer, Fleet]:
     """One MCP server over several robots, each behind its own executor.
@@ -593,6 +602,7 @@ def build_fleet_server(
                 model=emotional_embedding_model,
                 base_url=emotional_embedding_base_url,
                 api_key_env=emotional_embedding_api_key_env,
+                allow_remote=emotional_allow_remote,
                 ranking=emotional_ranking,  # type: ignore[arg-type]
             )
             session.emotional_memory = EmotionalMemoryIndex(
@@ -601,6 +611,7 @@ def build_fleet_server(
                 ephemeral=dry_run,
             )
             session.emotional_memory.sync()
+            session.emotional_memory_status = "ready"
         executor.on_frame = _stash_frames(session)
         sessions[name] = session
     fleet = Fleet(sessions, default or _pick_default(robots))
@@ -743,6 +754,7 @@ def build_server(
     emotional_embedding_model: str | None = None,
     emotional_embedding_base_url: str | None = None,
     emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_allow_remote: bool = False,
     emotional_ranking: str = "affective",
 ) -> tuple[MCPServer, RobotSession]:
     """One robot, the 0.3 entry point: a fleet of one named after its adapter."""
@@ -765,6 +777,7 @@ def build_server(
         emotional_embedding_model=emotional_embedding_model,
         emotional_embedding_base_url=emotional_embedding_base_url,
         emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_allow_remote=emotional_allow_remote,
         emotional_ranking=emotional_ranking,
     )
     return mcp, fleet.sessions[name]
@@ -792,6 +805,7 @@ def serve(
     emotional_embedding_model: str | None = None,
     emotional_embedding_base_url: str | None = None,
     emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_allow_remote: bool = False,
     emotional_ranking: str = "affective",
 ) -> None:
     from quackd.adapters.factory import (
@@ -858,6 +872,7 @@ def serve(
         emotional_embedding_model=emotional_embedding_model,
         emotional_embedding_base_url=emotional_embedding_base_url,
         emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_allow_remote=emotional_allow_remote,
         emotional_ranking=emotional_ranking,
     )
     try:

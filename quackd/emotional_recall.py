@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+from filelock import FileLock, Timeout
+
 from quackd.memory import MemoryEntry, RobotMemory, robot_slug
 
 EmbeddingBackend = Literal["local", "openai-compatible"]
@@ -33,6 +35,9 @@ class EmotionalRecallConfig:
     api_key_env: str = "OPENAI_API_KEY"
     ranking: RankingMode = "affective"
     top_k: int = 5
+    embedding_batch_size: int = 64
+    lock_timeout_s: float = 30.0
+    allow_remote: bool = False
 
     def __post_init__(self) -> None:
         if self.backend not in {"local", "openai-compatible"}:
@@ -41,8 +46,14 @@ class EmotionalRecallConfig:
             raise ValueError("ranking must be semantic or affective")
         if self.top_k < 1:
             raise ValueError("top_k must be positive")
+        if self.embedding_batch_size < 1:
+            raise ValueError("embedding batch size must be positive")
+        if self.lock_timeout_s <= 0:
+            raise ValueError("index lock timeout must be positive")
         if self.backend == "openai-compatible" and not self.model:
             raise ValueError("remote emotional embeddings require an explicit model")
+        if self.backend == "openai-compatible" and not self.allow_remote:
+            raise ValueError("remote emotional embeddings require explicit data consent")
 
     @property
     def resolved_model(self) -> str:
@@ -77,6 +88,35 @@ class OpenAICompatibleEmbedder:
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(model=self._model, input=texts)
         return [list(row.embedding) for row in sorted(response.data, key=lambda row: row.index)]
+
+
+class _CachedBatchEmbedder:
+    """Prefetch new vectors in bounded batches while preserving sequential PAD encoding."""
+
+    def __init__(
+        self, delegate: Embedder, *, cache: dict[str, list[float]], batch_size: int
+    ) -> None:
+        self.delegate = delegate
+        self.cache = cache
+        self.batch_size = batch_size
+
+    def prime(self, texts: list[str]) -> None:
+        missing = list(dict.fromkeys(text for text in texts if text not in self.cache))
+        for offset in range(0, len(missing), self.batch_size):
+            batch = missing[offset : offset + self.batch_size]
+            vectors = self.delegate.embed_batch(batch)
+            if len(vectors) != len(batch):
+                raise RuntimeError("embedding backend returned the wrong batch size")
+            self.cache.update(zip(batch, vectors, strict=True))
+
+    def embed(self, text: str) -> list[float]:
+        if text not in self.cache:
+            self.cache[text] = self.delegate.embed(text)
+        return list(self.cache[text])
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        self.prime(texts)
+        return [list(self.cache[text]) for text in texts]
 
 
 @dataclass(frozen=True)
@@ -123,6 +163,7 @@ class EmotionalMemoryIndex:
         root = Path(config.directory).expanduser()
         self.path = root / f"{robot_slug(memory.robot_key)}-{suffix}.sqlite"
         self.manifest_path = self.path.with_suffix(".manifest.json")
+        self.lock_path = self.path.with_suffix(".sqlite.lock")
 
     def _make_embedder(self) -> Embedder:
         if self._embedder_factory is not None:
@@ -223,38 +264,77 @@ class EmotionalMemoryIndex:
             return False
         return current == self._manifest(source_digest)
 
+    def _cached_embeddings(self) -> dict[str, list[float]]:
+        if not self.path.exists() or not self.manifest_path.exists():
+            return {}
+        try:
+            manifest = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        identity = self.config.identity()
+        if any(manifest.get(key) != value for key, value in identity.items()):
+            return {}
+        store = self._make_store(self.path)
+        try:
+            return {
+                memory.content: list(memory.embedding)
+                for memory in store.list_all()
+                if memory.embedding is not None
+            }
+        finally:
+            store.close()
+
     def sync(self) -> None:
         entries = self.memory.entries()
         source_digest = self._digest(entries)
         if self._engine is not None and source_digest == self._source_digest:
             return
         self.close()
-        embedder = self._make_embedder()
+        raw_embedder = self._make_embedder()
         if self.ephemeral:
+            embedder = _CachedBatchEmbedder(
+                raw_embedder, cache={}, batch_size=self.config.embedding_batch_size
+            )
+            embedder.prime([entry.text for entry in entries])
             store = self._make_store(":memory:")
             self._engine = self._make_engine(store, embedder)
             self._populate(self._engine, store, entries)
-        elif self._manifest_matches(source_digest):
-            self._engine = self._make_engine(self._make_store(self.path), embedder)
         else:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            safe_model = re.sub(r"[^a-zA-Z0-9_.-]+", "-", self.config.resolved_model)
-            tmp = self.path.with_name(f".{self.path.name}.{safe_model}.tmp")
-            tmp.unlink(missing_ok=True)
-            store = self._make_store(tmp)
-            engine = self._make_engine(store, embedder)
             try:
-                self._populate(engine, store, entries)
-            finally:
-                engine.close()
-            tmp.replace(self.path)
-            manifest_tmp = self.manifest_path.with_suffix(".json.tmp")
-            manifest_tmp.write_text(
-                json.dumps(self._manifest(source_digest), indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            manifest_tmp.replace(self.manifest_path)
-            self._engine = self._make_engine(self._make_store(self.path), embedder)
+                with FileLock(self.lock_path, timeout=self.config.lock_timeout_s):
+                    entries = self.memory.entries()
+                    source_digest = self._digest(entries)
+                    cache = self._cached_embeddings()
+                    embedder = _CachedBatchEmbedder(
+                        raw_embedder,
+                        cache=cache,
+                        batch_size=self.config.embedding_batch_size,
+                    )
+                    if self._manifest_matches(source_digest):
+                        self._engine = self._make_engine(self._make_store(self.path), embedder)
+                    else:
+                        embedder.prime([entry.text for entry in entries])
+                        safe_model = re.sub(r"[^a-zA-Z0-9_.-]+", "-", self.config.resolved_model)
+                        tmp = self.path.with_name(f".{self.path.name}.{safe_model}.tmp")
+                        tmp.unlink(missing_ok=True)
+                        store = self._make_store(tmp)
+                        engine = self._make_engine(store, embedder)
+                        try:
+                            self._populate(engine, store, entries)
+                        finally:
+                            engine.close()
+                        tmp.replace(self.path)
+                        manifest_tmp = self.manifest_path.with_suffix(".json.tmp")
+                        manifest_tmp.write_text(
+                            json.dumps(self._manifest(source_digest), indent=2, sort_keys=True)
+                            + "\n",
+                            encoding="utf-8",
+                        )
+                        manifest_tmp.replace(self.manifest_path)
+                        self._engine = self._make_engine(self._make_store(self.path), embedder)
+            except Timeout as exc:
+                raise RuntimeError(f"emotional-memory index is busy: {self.path}") from exc
         self._source_digest = source_digest
 
     def recall(self, query: str, *, affective: dict[str, Any] | None = None) -> EmotionalRecall:

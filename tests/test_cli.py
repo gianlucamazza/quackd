@@ -115,6 +115,28 @@ def test_emotional_memory_requires_native_memory_and_state(tmp_path: Path) -> No
     assert "requires --memory and --emotional-state" in result.output
 
 
+def test_remote_emotional_memory_requires_explicit_consent(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--emotional-state",
+            "--emotional-memory",
+            "--emotional-embedding",
+            "openai-compatible",
+            "--emotional-embedding-model",
+            "embedding-model",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "explicit data consent" in result.output
+
+
 def test_emotional_context_is_explicitly_visible_in_run_artifacts(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"
     result = runner.invoke(

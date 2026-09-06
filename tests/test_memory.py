@@ -39,6 +39,11 @@ class RecordingEmotionalIndex:
         pass
 
 
+class FailingEmotionalIndex(RecordingEmotionalIndex):
+    def recall(self, query: str, *, affective: dict[str, Any] | None = None) -> EmotionalRecall:
+        raise ConnectionError("embedding endpoint unavailable")
+
+
 # ── the file ────────────────────────────────────────────────────────────────────────────
 
 
@@ -326,6 +331,32 @@ async def test_emotional_recall_is_bounded_to_start_and_first_failure(
         if event["kind"] == "observation" and "search left first" in event["text"]
     ]
     assert len(recovery_observations) == 1
+
+
+async def test_transient_recall_failure_falls_back_and_is_reported(
+    hello_duck: DuckFile, tmp_path: Path
+) -> None:
+    memory = RobotMemory("microduck:mock", tmp_path / "mem")
+    memory.remember("chronological fallback", now=1.0)
+    result = await run_duck(
+        RunConfig(
+            duck=hello_duck,
+            provider=FakeProvider.for_duck("hello-world"),
+            transport=MockTransport(),
+            runs_dir=tmp_path / "runs",
+            memory=memory,
+            emotional_memory=FailingEmotionalIndex(),
+        )
+    )
+    events = Transcript.read(result.run_dir / "transcript.jsonl")
+    start = next(event for event in events if event["kind"] == "run_start")
+    assert "chronological fallback" in start["system_prompt"]
+    assert next(event for event in events if event["kind"] == "emotional_recall")["error"] == (
+        "ConnectionError"
+    )
+    summary = next(event for event in events if event["kind"] == "run_end")
+    assert summary["emotional_memory"]["status"] == "degraded"
+    assert summary["emotional_memory"]["error"] == "ConnectionError"
 
 
 async def test_memory_off_means_no_tool_no_episode(hello_duck: DuckFile, tmp_path: Path) -> None:

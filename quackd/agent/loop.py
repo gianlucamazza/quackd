@@ -86,6 +86,8 @@ class RunConfig:
     memory: RobotMemory | None = None
     """What this robot remembers between runs. None = off: no `remember` tool, no
     episode written at the end, the prompt says nothing about earlier runs."""
+    memory_max_notes: int = 20
+    memory_max_episodes: int = 5
     fov_deg: float | None = None
     """The horizontal field of view of the camera actually in front of you. None falls back
     to the robot's manifest, then to the simulator's, which is flagged as uncalibrated."""
@@ -154,6 +156,8 @@ class AgentLoop:
         self._affective_snapshot: dict[str, Any] | None = None
         self._recovery_memory_text = ""
         self._recovery_recall_used = False
+        self._emotional_memory_status = "ready" if cfg.emotional_memory is not None else None
+        self._emotional_memory_error: str | None = None
         """Verb results worth carrying into the episode memory (the last few that went ok)."""
 
     # ── frames ──────────────────────────────────────────────────────────────────────
@@ -280,6 +284,8 @@ class AgentLoop:
                 affective=(self.cfg.affective.snapshot() if self.cfg.affective else None),
             )
         except Exception as exc:
+            self._emotional_memory_status = "degraded"
+            self._emotional_memory_error = type(exc).__name__
             self.cfg.log(f"emotional recall unavailable: {type(exc).__name__}: {exc}")
             self.transcript.write(
                 "emotional_recall", phase=phase, query=query, error=type(exc).__name__
@@ -382,7 +388,9 @@ class AgentLoop:
         memory_text: str | None = None
         if cfg.memory is not None:
             tools = [*tools, REMEMBER]
-            memory_text = cfg.memory.recall()
+            memory_text = cfg.memory.recall(
+                max_notes=cfg.memory_max_notes, max_episodes=cfg.memory_max_episodes
+            )
             if cfg.emotional_memory is not None:
                 query = f"{self.fm.name}: {self.fm.description}\n{self.duck.body}"
                 selected = await self._recall_emotional(query, "run_start")
@@ -587,7 +595,11 @@ class AgentLoop:
                 "dry_run": cfg.dry_run,
                 "affective_context": cfg.affective_context,
                 "emotional_memory": (
-                    cfg.emotional_memory.config.identity()
+                    {
+                        "config": cfg.emotional_memory.config.identity(),
+                        "status": self._emotional_memory_status,
+                        "error": self._emotional_memory_error,
+                    }
                     if cfg.emotional_memory is not None
                     else None
                 ),

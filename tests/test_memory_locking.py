@@ -23,6 +23,5 @@ def test_concurrent_writers_do_not_lose_notes(tmp_path: Path) -> None:
 def test_write_lock_timeout_is_actionable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     memory = RobotMemory("microduck:sim2d", tmp_path)
     monkeypatch.setattr("quackd.memory.MEMORY_LOCK_TIMEOUT_S", 0.01)
-    with FileLock(memory.lock_path):
-        with pytest.raises(OSError, match="memory file is busy"):
-            memory.remember("blocked")
+    with FileLock(memory.lock_path), pytest.raises(OSError, match="memory file is busy"):
+        memory.remember("blocked")

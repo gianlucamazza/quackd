@@ -289,6 +289,8 @@ def _run_impl(
     robots: str | None = None,
     memory: bool = True,
     memory_dir: str | None = None,
+    memory_max_notes: int = 20,
+    memory_max_episodes: int = 5,
     emotional: bool = False,
     emotional_dir: str | None = None,
     emotional_context: bool = False,
@@ -298,7 +300,9 @@ def _run_impl(
     emotional_embedding_model: str | None = None,
     emotional_embedding_base_url: str | None = None,
     emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_allow_remote: bool = False,
     emotional_ranking: str = "affective",
+    emotional_top_k: int = 5,
     sim_profile: str = "default",
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
@@ -353,6 +357,9 @@ def _run_impl(
         return
     if emotional_memory and (not memory or not emotional):
         _fail("--emotional-memory requires --memory and --emotional-state")
+        return
+    if memory_max_notes < 0 or memory_max_episodes < 0 or emotional_top_k < 1:
+        _fail("memory limits must be non-negative and emotional top-k must be positive")
         return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
@@ -465,7 +472,9 @@ def _run_impl(
                 model=emotional_embedding_model,
                 base_url=emotional_embedding_base_url,
                 api_key_env=emotional_embedding_api_key_env,
+                allow_remote=emotional_allow_remote,
                 ranking=emotional_ranking,  # type: ignore[arg-type]
+                top_k=emotional_top_k,
             )
             assert robot_memory is not None
             emotional_index = EmotionalMemoryIndex(
@@ -491,6 +500,8 @@ def _run_impl(
         log=log,
         on_frame=recorder.capture if recorder is not None else None,
         memory=robot_memory,
+        memory_max_notes=memory_max_notes,
+        memory_max_episodes=memory_max_episodes,
         fov_deg=fov_deg,
         acknowledge=None if yes else _acknowledge_prompt,
         affective=affective,
@@ -731,6 +742,10 @@ _MEMORY_DIR = typer.Option(
     "--memory-dir",
     help="Where memory files live (default: $QUACKD_MEMORY_DIR or ~/.quackd/memory).",
 )
+_MEMORY_MAX_NOTES = typer.Option(20, "--memory-max-notes", help="Maximum notes in the prompt.")
+_MEMORY_MAX_EPISODES = typer.Option(
+    5, "--memory-max-episodes", help="Maximum earlier runs in the prompt."
+)
 _EMOTIONAL = typer.Option(
     False,
     "--emotional-state/--no-emotional-state",
@@ -776,10 +791,18 @@ _EMOTIONAL_EMBEDDING_API_KEY_ENV = typer.Option(
     "--emotional-embedding-api-key-env",
     help="Environment variable holding the remote embeddings key.",
 )
+_EMOTIONAL_ALLOW_REMOTE = typer.Option(
+    False,
+    "--allow-remote-memory",
+    help="Consent to sending memory text to the configured remote embedding endpoint.",
+)
 _EMOTIONAL_RANKING = typer.Option(
     "affective",
     "--emotional-ranking",
     help="Retrieval ranking: semantic or affective.",
+)
+_EMOTIONAL_TOP_K = typer.Option(
+    5, "--emotional-top-k", help="Maximum ranked memories inserted per recall."
 )
 _PROVIDER = typer.Option(
     "fake",
@@ -869,6 +892,8 @@ def run(
     flock: int | None = _FLOCK,
     memory: bool = _MEMORY,
     memory_dir: str | None = _MEMORY_DIR,
+    memory_max_notes: int = _MEMORY_MAX_NOTES,
+    memory_max_episodes: int = _MEMORY_MAX_EPISODES,
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
     emotional_context: bool = _EMOTIONAL_CONTEXT,
@@ -878,7 +903,9 @@ def run(
     emotional_embedding_model: str | None = _EMOTIONAL_EMBEDDING_MODEL,
     emotional_embedding_base_url: str | None = _EMOTIONAL_EMBEDDING_BASE_URL,
     emotional_embedding_api_key_env: str = _EMOTIONAL_EMBEDDING_API_KEY_ENV,
+    emotional_allow_remote: bool = _EMOTIONAL_ALLOW_REMOTE,
     emotional_ranking: str = _EMOTIONAL_RANKING,
+    emotional_top_k: int = _EMOTIONAL_TOP_K,
     sim_profile: str = typer.Option("default", "--sim-profile"),
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
@@ -908,6 +935,8 @@ def run(
         robots=robots,
         memory=memory,
         memory_dir=memory_dir,
+        memory_max_notes=memory_max_notes,
+        memory_max_episodes=memory_max_episodes,
         emotional=emotional,
         emotional_dir=emotional_dir,
         emotional_context=emotional_context,
@@ -917,7 +946,9 @@ def run(
         emotional_embedding_model=emotional_embedding_model,
         emotional_embedding_base_url=emotional_embedding_base_url,
         emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_allow_remote=emotional_allow_remote,
         emotional_ranking=emotional_ranking,
+        emotional_top_k=emotional_top_k,
         sim_profile=sim_profile,
     )
 
@@ -1024,6 +1055,7 @@ def serve_mcp(
     emotional_embedding_model: str | None = _EMOTIONAL_EMBEDDING_MODEL,
     emotional_embedding_base_url: str | None = _EMOTIONAL_EMBEDDING_BASE_URL,
     emotional_embedding_api_key_env: str = _EMOTIONAL_EMBEDDING_API_KEY_ENV,
+    emotional_allow_remote: bool = _EMOTIONAL_ALLOW_REMOTE,
     emotional_ranking: str = _EMOTIONAL_RANKING,
 ) -> None:
     """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
@@ -1051,6 +1083,7 @@ def serve_mcp(
             emotional_embedding_model=emotional_embedding_model,
             emotional_embedding_base_url=emotional_embedding_base_url,
             emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+            emotional_allow_remote=emotional_allow_remote,
             emotional_ranking=emotional_ranking,
         )
     except (AdapterError, RuntimeError, ValueError) as e:
