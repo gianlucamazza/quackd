@@ -221,6 +221,7 @@ class AgentLoop:
         if self._recovery_memory_text:
             text += f"\n\n{self._recovery_memory_text}"
             features["emotional_recall"] = True
+            self._recovery_memory_text = ""
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
 

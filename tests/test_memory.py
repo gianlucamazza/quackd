@@ -320,9 +320,12 @@ async def test_emotional_recall_is_bounded_to_start_and_first_failure(
     events = Transcript.read(result.run_dir / "transcript.jsonl")
     recalls = [event for event in events if event["kind"] == "emotional_recall"]
     assert [event["phase"] for event in recalls] == ["run_start", "recovery"]
-    assert any(
-        "search left first" in event["text"] for event in events if event["kind"] == "observation"
-    )
+    recovery_observations = [
+        event
+        for event in events
+        if event["kind"] == "observation" and "search left first" in event["text"]
+    ]
+    assert len(recovery_observations) == 1
 
 
 async def test_memory_off_means_no_tool_no_episode(hello_duck: DuckFile, tmp_path: Path) -> None:
