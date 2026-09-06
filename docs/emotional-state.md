@@ -53,7 +53,7 @@ quackd run find-and-kick --emotional-state --emotional-memory \
 ```
 
 `--allow-remote-memory` is explicit consent to send note and episode text to that endpoint.
-quackd prints or records the endpoint/model identity but never the key or its value.
+Run evidence records the endpoint digest and model, never the key or its value.
 
 Use `--emotional-ranking semantic` as the ablation lane. Indexes live under
 `~/.quackd/emotional-memory/` by default and are derived caches: editing, adding or deleting
