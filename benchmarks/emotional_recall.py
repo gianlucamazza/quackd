@@ -78,6 +78,7 @@ def run_benchmark(
     model: str | None = None,
     base_url: str | None = None,
     api_key_env: str = "OPENAI_API_KEY",
+    allow_remote: bool = False,
 ) -> dict[str, Any]:
     if backend not in {"deterministic", "local", "openai-compatible"}:
         raise ValueError("backend must be deterministic, local or openai-compatible")
@@ -104,6 +105,7 @@ def run_benchmark(
                     model=model,
                     base_url=base_url,
                     api_key_env=api_key_env,
+                    allow_remote=allow_remote,
                     ranking=ranking,  # type: ignore[arg-type]
                     top_k=3,
                 )
@@ -180,16 +182,20 @@ def main() -> None:
     parser.add_argument("--model")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env", default="OPENAI_API_KEY")
+    parser.add_argument("--allow-remote-memory", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.backend == "openai-compatible" and not args.model:
         parser.error("--model is required for openai-compatible embeddings")
+    if args.backend == "openai-compatible" and not args.allow_remote_memory:
+        parser.error("remote embeddings require --allow-remote-memory")
     payload = run_benchmark(
         args.output,
         backend=args.backend,
         model=args.model,
         base_url=args.base_url,
         api_key_env=args.api_key_env,
+        allow_remote=args.allow_remote_memory,
     )
     print(json.dumps(payload["summary"], indent=2, sort_keys=True))
 

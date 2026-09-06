@@ -205,10 +205,12 @@ def run_one(
     sim_profile: str = "default",
     memory_mode: str = "off",
     memory_notes: tuple[str, ...] = (),
+    memory_entries: tuple[dict[str, object], ...] = (),
     emotional_embedding: str = "local",
     emotional_embedding_model: str | None = None,
     emotional_embedding_base_url: str | None = None,
     emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    allow_remote_memory: bool = False,
 ) -> dict[str, object]:
     if memory_mode not in {"off", "chronological", "semantic", "affective", "affective-context"}:
         raise ValueError(f"unknown memory mode: {memory_mode}")
@@ -246,7 +248,16 @@ def run_one(
         if memory_mode == "off":
             command.append("--no-memory")
         else:
-            command.extend(("--memory-dir", str(root / "memory")))
+            command.extend(
+                (
+                    "--memory-dir",
+                    str(root / "memory"),
+                    "--memory-max-notes",
+                    "5",
+                    "--memory-max-episodes",
+                    "0",
+                )
+            )
         if not full_task_budget:
             command.extend(("--max-steps", "12"))
         if use_affective:
@@ -263,6 +274,8 @@ def run_one(
                     emotional_embedding,
                     "--emotional-ranking",
                     "semantic" if memory_mode == "semantic" else "affective",
+                    "--emotional-top-k",
+                    "5",
                     "--emotional-embedding-api-key-env",
                     emotional_embedding_api_key_env,
                 )
@@ -271,10 +284,13 @@ def run_one(
                 command.extend(("--emotional-embedding-model", emotional_embedding_model))
             if emotional_embedding_base_url:
                 command.extend(("--emotional-embedding-base-url", emotional_embedding_base_url))
+            if allow_remote_memory:
+                command.append("--allow-remote-memory")
         started = time.perf_counter()
         completed = None
         attempts = 0
         attempt_records = []
+        seeded_memories: list[dict[str, object]] = []
         for attempt in range(1, run_retries + 2):
             attempts = attempt
             attempt_root = root / f"attempt-{attempt}"
@@ -285,8 +301,24 @@ def run_one(
                 from quackd.memory import RobotMemory
 
                 memory = RobotMemory("microduck:sim2d", memory_dir)
-                for note_index, note in enumerate(memory_notes):
-                    memory.remember(note, tags=["benchmark-seed"], now=float(note_index + 1))
+                seeded_memories = []
+                seeds_to_write = memory_entries or tuple(
+                    {"text": note, "tags": ["benchmark-seed"]} for note in memory_notes
+                )
+                for note_index, seeded in enumerate(seeds_to_write):
+                    entry = memory.remember(
+                        str(seeded["text"]),
+                        tags=[str(tag) for tag in seeded.get("tags", ["benchmark-seed"])],
+                        now=float(note_index + 1),
+                        affective=(
+                            seeded.get("affective")
+                            if isinstance(seeded.get("affective"), dict)
+                            else None
+                        ),
+                    )
+                    seeded_memories.append(
+                        {"source_id": entry.id, "tags": entry.tags, "text": entry.text}
+                    )
             if use_affective:
                 command[command.index("--emotional-dir") + 1] = str(attempt_root / "affective")
             if full_memory:
@@ -369,6 +401,7 @@ def run_one(
             else []
         )
         verification = verify(scenario, summary, events)
+        recall_evidence = [event for event in events if event.get("kind") == "emotional_recall"]
         input_tokens, output_tokens = _usage(summary)
         final_state = summary.get("final_state")
         extras = final_state.get("extras", {}) if isinstance(final_state, dict) else {}
@@ -394,6 +427,9 @@ def run_one(
             "affective": use_affective,
             "affective_context": use_context,
             "memory_mode": memory_mode,
+            "seeded_memories": seeded_memories,
+            "recall_evidence": recall_evidence,
+            "emotional_memory_status": summary.get("emotional_memory"),
             "returncode": completed.returncode,
             "success": completed.returncode == 0 and summary.get("outcome") == "success",
             "model_claim_success": (

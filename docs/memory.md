@@ -101,8 +101,9 @@ is read by the next `quackd run` on the same `adapter:backend`, and the other wa
   trained from LLM-written rewards) are a separate, unshipped v2 feature
   ([learned-verbs.md](learned-verbs.md)).
 - **Not retrieval by default.** Without `--emotional-memory` there is no embedding or
-  search: the newest entries win. The optional index is derived and may be deleted without
-  deleting a note or episode.
+search: the newest entries win. The optional index is derived and may be deleted without
+  deleting a note or episode. Remote embedding additionally requires
+  `--allow-remote-memory`, because it sends this text to the configured endpoint.
 - **Not shared between bodies.** By design, where a body means an `adapter:backend`. Use
   `quackd memory add` on the other robot if a fact really transfers.
 - **Not written by the scripted pilot.** `--provider fake` has no `remember` in its script,

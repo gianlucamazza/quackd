@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Experimental emotional-memory hardening
+
+- Concurrent JSONL writers are serialized, recovery recall is inserted once, and derived
+  indexes reuse unchanged vectors while batching new embeddings.
+- Remote embedding requires explicit data consent. Run artifacts expose ready/degraded
+  retrieval state, and the behavioral fixture now proves its four lanes select distinct
+  controlled memory sets before continuing.
+
 A sixth, a seventh and an eighth robot, and two hardware paths audited against upstream rather
 than against themselves. Two of the new robots quackd drives without importing anything from
 them, because neither is an installable package, and the third has no network API at all, so

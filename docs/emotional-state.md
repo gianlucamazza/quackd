@@ -48,13 +48,20 @@ flag:
 quackd run find-and-kick --emotional-state --emotional-memory \
   --emotional-embedding openai-compatible \
   --emotional-embedding-model example-embedding-model \
+  --allow-remote-memory \
   --emotional-embedding-api-key-env EMBEDDING_API_KEY
 ```
+
+`--allow-remote-memory` is explicit consent to send note and episode text to that endpoint.
+quackd prints or records the endpoint/model identity but never the key or its value.
 
 Use `--emotional-ranking semantic` as the ablation lane. Indexes live under
 `~/.quackd/emotional-memory/` by default and are derived caches: editing, adding or deleting
 JSONL rows changes the source digest and rebuilds the index. At most five memories enter the
 prompt at run start; one additional retrieval may appear after the first failed verb.
+Existing vectors are reused and only new text is embedded in batches. Configuration errors
+fail before connecting to the robot; a transient recall error falls back to chronological
+memory and records the run as `degraded`.
 
 Over MCP, `robot_recall()` retains the ordinary chronological view and
 `robot_recall(query="...")` returns ranked memories with source IDs and score breakdowns.

@@ -17,6 +17,9 @@ verification is not hardware acceptance, and model-declared success is not groun
 - Full-memory plumbing: deterministic semantic and affective lanes exercise stable JSONL
   IDs, source digests, index rebuilds and score evidence. Deterministic retrieval quality
   is not evidence for either real embedding backend.
+- The behavioral fixture now uses 30 affect-annotated entries per scenario and refuses to
+  continue after a non-discriminating first quartet. This validates experiment shape, not
+  model benefit.
 
 ## Partial and non-resumable
 

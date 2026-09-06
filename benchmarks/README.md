@@ -98,7 +98,7 @@ uv run --extra emotional python -m benchmarks.emotional_recall \
 ```
 
 Use `--backend local` with `quackd[emotional-local]`, or
-`--backend openai-compatible --model <embedding-model>` with
+`--backend openai-compatible --model <embedding-model> --allow-remote-memory` with
 `quackd[emotional-remote]`. The remote key is read from `--api-key-env`. These lanes make
 real embedding calls but never contact a chat model or robot. Compare semantic and
 affective rows with the same corpus digest; a 2/2 deterministic result only proves the
@@ -115,7 +115,10 @@ uv run --extra deepseek --extra emotional-local \
   --seed 0 --repeats 1 --output /tmp/quackd-live-emotional-memory.json
 ```
 
-This is a 3 scenarios × 4 modes matrix even for one seed and repeat. Do not run it without
-an explicit provider budget. The chronological arm uses the same seeded JSONL corpus; the
-other arms change retrieval only. Full promotion still requires ten seeds, three repeats,
+This is a 3 scenarios × 4 modes matrix even for one seed and repeat. Each scenario uses 30
+affect-annotated entries: three old targets, six semantic hard negatives, and 21 recent
+distractors. Every arm receives at most five memories. After its first quartet the runner
+stops as `non_discriminating_fixture` unless semantic and affective retrieval select
+different orders while affective and affective-context select the same memories. Do not run
+it without an explicit provider budget. Full promotion still requires ten seeds, three repeats,
 verified outcomes and a second funded session.
