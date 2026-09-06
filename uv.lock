@@ -4275,6 +4275,7 @@ wheels = [
 name = "quackd"
 source = { editable = "." }
 dependencies = [
+    { name = "filelock" },
     { name = "mcp" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -4370,6 +4371,7 @@ requires-dist = [
     { name = "emotional-memory", marker = "extra == 'emotional'", specifier = ">=0.18,<0.19" },
     { name = "emotional-memory", extras = ["sentence-transformers", "sqlite"], marker = "extra == 'emotional-local'", specifier = ">=0.18,<0.19" },
     { name = "emotional-memory", extras = ["sqlite"], marker = "extra == 'emotional-remote'", specifier = ">=0.18,<0.19" },
+    { name = "filelock", specifier = ">=3.13,<4" },
     { name = "google-genai", marker = "extra == 'all'", specifier = ">=1.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0" },
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.25" },

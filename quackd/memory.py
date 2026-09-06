@@ -20,15 +20,19 @@ import json
 import os
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+
+from filelock import FileLock, Timeout
 
 DEFAULT_DIR = "~/.quackd/memory"
 ENV_DIR = "QUACKD_MEMORY_DIR"
 MAX_ENTRIES = 400
 """Hard cap on lines per file; the oldest are dropped past it (episodes first, notes last)."""
 NOTE_MAX_CHARS = 200
+MEMORY_LOCK_TIMEOUT_S = 5.0
 
 Kind = Literal["note", "episode"]
 
@@ -121,6 +125,16 @@ class RobotMemory:
     def __init__(self, robot_key: str, base_dir: str | Path | None = None) -> None:
         self.robot_key = robot_key
         self.path = memory_dir(base_dir) / f"{robot_slug(robot_key)}.jsonl"
+        self.lock_path = self.path.with_suffix(".jsonl.lock")
+
+    @contextmanager
+    def _write_lock(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with FileLock(self.lock_path, timeout=MEMORY_LOCK_TIMEOUT_S):
+                yield
+        except Timeout as exc:
+            raise OSError(f"memory file is busy: {self.path}") from exc
 
     # ── storage ─────────────────────────────────────────────────────────────────────
 
@@ -154,17 +168,18 @@ class RobotMemory:
         tmp.replace(self.path)
 
     def _append(self, entry: MemoryEntry) -> None:
-        entries = self.entries()
-        entries.append(entry)
-        if len(entries) > MAX_ENTRIES:
-            # drop the oldest episodes first; notes were chosen on purpose
-            episodes = [e for e in entries if e.kind == "episode"]
-            excess = len(entries) - MAX_ENTRIES
-            drop = {id(e) for e in episodes[:excess]}
-            entries = [e for e in entries if id(e) not in drop]
+        with self._write_lock():
+            entries = self.entries()
+            entries.append(entry)
             if len(entries) > MAX_ENTRIES:
-                entries = entries[-MAX_ENTRIES:]
-        self._write_all(entries)
+                # drop the oldest episodes first; notes were chosen on purpose
+                episodes = [e for e in entries if e.kind == "episode"]
+                excess = len(entries) - MAX_ENTRIES
+                drop = {id(e) for e in episodes[:excess]}
+                entries = [e for e in entries if id(e) not in drop]
+                if len(entries) > MAX_ENTRIES:
+                    entries = entries[-MAX_ENTRIES:]
+            self._write_all(entries)
 
     def notes(self) -> list[MemoryEntry]:
         return [e for e in self.entries() if e.kind == "note"]
@@ -173,10 +188,11 @@ class RobotMemory:
         return [e for e in self.entries() if e.kind == "episode"]
 
     def clear(self) -> int:
-        n = len(self.entries())
-        if self.path.exists():
-            self.path.unlink()
-        return n
+        with self._write_lock():
+            n = len(self.entries())
+            if self.path.exists():
+                self.path.unlink()
+            return n
 
     # ── writing ─────────────────────────────────────────────────────────────────────
 
@@ -196,32 +212,40 @@ class RobotMemory:
         if not clean:
             raise ValueError("nothing to remember")
         ts = time.time() if now is None else now
-        entries = self.entries()
-        for i, e in enumerate(entries):
-            if e.kind == "note" and e.text.lower() == clean.lower():
-                e.ts = ts
-                e.tags = sorted(set(e.tags) | set(tags or []))
-                if duck:
-                    e.duck = duck
-                if affective is not None:
-                    e.affective = affective
-                # a refreshed note is the newest note, so it has to move to the end: file
-                # order *is* the order, for `recall`'s newest-first window and for the cap
-                entries.append(entries.pop(i))
-                self._write_all(entries)
-                return e
-        entry = MemoryEntry(
-            kind="note",
-            text=clean,
-            ts=ts,
-            duck=duck,
-            tags=sorted(set(tags or [])),
-            run_dir=str(run_dir) if run_dir else None,
-            id=stable_entry_id("note", clean, ts, duck),
-            affective=affective,
-        )
-        self._append(entry)
-        return entry
+        with self._write_lock():
+            entries = self.entries()
+            for i, e in enumerate(entries):
+                if e.kind == "note" and e.text.lower() == clean.lower():
+                    e.ts = ts
+                    e.tags = sorted(set(e.tags) | set(tags or []))
+                    if duck:
+                        e.duck = duck
+                    if affective is not None:
+                        e.affective = affective
+                    # a refreshed note is the newest note, so it has to move to the end.
+                    entries.append(entries.pop(i))
+                    self._write_all(entries)
+                    return e
+            entry = MemoryEntry(
+                kind="note",
+                text=clean,
+                ts=ts,
+                duck=duck,
+                tags=sorted(set(tags or [])),
+                run_dir=str(run_dir) if run_dir else None,
+                id=stable_entry_id("note", clean, ts, duck),
+                affective=affective,
+            )
+            entries.append(entry)
+            if len(entries) > MAX_ENTRIES:
+                episodes = [e for e in entries if e.kind == "episode"]
+                excess = len(entries) - MAX_ENTRIES
+                drop = {id(e) for e in episodes[:excess]}
+                entries = [e for e in entries if id(e) not in drop]
+                if len(entries) > MAX_ENTRIES:
+                    entries = entries[-MAX_ENTRIES:]
+            self._write_all(entries)
+            return entry
 
     def record_episode(
         self,
