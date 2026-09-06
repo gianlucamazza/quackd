@@ -1,5 +1,7 @@
 # Benchmarks
 
+Current and historical evidence is catalogued in [EXPERIMENTS.md](EXPERIMENTS.md).
+
 `affective_runtime.py` runs the same deterministic simulator scenarios with affective
 state disabled and enabled, across seeds `0..9`. It uses the fake provider, never reads
 API keys, and writes only the requested JSON artifact.
@@ -83,3 +85,37 @@ billed without reported usage. Incomplete totals cannot support a cost gate.
 Run `python -m benchmarks.live_cloud --report-only --output <artifact.json>` to
 recompute verified comparisons without provider calls. Quota exhaustion stops the
 campaign with a partial checkpoint. Model failures do not stop the remaining matrix.
+
+## Emotional recall benchmark
+
+`emotional_recall.py` exercises the full JSONL-to-index pipeline and compares semantic
+and affective ranking on cross-run location and recovery memories. Its deterministic
+feature-hash backend is a plumbing test, not evidence of retrieval quality:
+
+```bash
+uv run --extra emotional python -m benchmarks.emotional_recall \
+  --output /tmp/quackd-emotional-recall.json
+```
+
+Use `--backend local` with `quackd[emotional-local]`, or
+`--backend openai-compatible --model <embedding-model>` with
+`quackd[emotional-remote]`. The remote key is read from `--api-key-env`. These lanes make
+real embedding calls but never contact a chat model or robot. Compare semantic and
+affective rows with the same corpus digest; a 2/2 deterministic result only proves the
+adapter, stable IDs, evidence fields and ranking paths execute.
+
+The paid behavioral runner compares chronological, semantic, affective, and
+affective-plus-PAD recall on `targeted-v1`, preserves attempt evidence, checkpoints every
+row and supports strict resume:
+
+```bash
+uv run --extra deepseek --extra emotional-local \
+  python -m benchmarks.live_emotional_memory \
+  --provider deepseek --embedding-backend local \
+  --seed 0 --repeats 1 --output /tmp/quackd-live-emotional-memory.json
+```
+
+This is a 3 scenarios × 4 modes matrix even for one seed and repeat. Do not run it without
+an explicit provider budget. The chronological arm uses the same seeded JSONL corpus; the
+other arms change retrieval only. Full promotion still requires ten seeds, three repeats,
+verified outcomes and a second funded session.

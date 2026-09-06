@@ -347,7 +347,10 @@ that is wrong fails as a confident "not fallen".
 - Optional `quackd[emotional]` integration with per-robot affective runtime state, SQLite
   persistence, prompt/transcript summaries, CLI/MCP flags, CI coverage, and a deterministic
   on/off benchmark matrix. See [docs/emotional-state.md](docs/emotional-state.md) and
-  [ADR 0026](docs/adr/0026-affective-runtime.md).
+  [ADR 0029](docs/adr/0029-emotional-memory.md).
+- Experimental task-aware emotional recall keeps the JSONL memory canonical and builds a
+  backend/model-specific derived index. Local and OpenAI-compatible embeddings, semantic
+  ablation, bounded recovery recall and query-based MCP recall remain disabled by default.
 - Experimental `--emotional-context` keeps model-facing affective context separate from the
   passive runtime, enabling controlled A/B quality experiments without changing defaults.
 - OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`

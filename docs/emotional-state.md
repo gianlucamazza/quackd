@@ -30,6 +30,35 @@ context flag, a cached snapshot is exposed only after operational events; it can
 widen an allowlist, change budgets, skip confirmation, or issue motor commands. MCP exposes the
 current snapshot in `robot_list` when started with `--emotional-state`.
 
+## Full emotional recall
+
+The heavier experiment uses `emotional-memory` for encode/retrieve, affect-aware ranking,
+resonance and reconsolidation while keeping quackd's JSONL file authoritative:
+
+```bash
+uvx --from "quackd[emotional-local]" quackd run find-and-kick \
+  --provider openai --emotional-state --emotional-memory
+```
+
+The default local model is `all-MiniLM-L6-v2`. A remote OpenAI-compatible embeddings
+endpoint is explicit and reads its key from an environment variable, never a persisted
+flag:
+
+```bash
+quackd run find-and-kick --emotional-state --emotional-memory \
+  --emotional-embedding openai-compatible \
+  --emotional-embedding-model example-embedding-model \
+  --emotional-embedding-api-key-env EMBEDDING_API_KEY
+```
+
+Use `--emotional-ranking semantic` as the ablation lane. Indexes live under
+`~/.quackd/emotional-memory/` by default and are derived caches: editing, adding or deleting
+JSONL rows changes the source digest and rebuilds the index. At most five memories enter the
+prompt at run start; one additional retrieval may appear after the first failed verb.
+
+Over MCP, `robot_recall()` retains the ordinary chronological view and
+`robot_recall(query="...")` returns ranked memories with source IDs and score breakdowns.
+
 The affective benchmark reports paired latency medians/p95 and prompt/feature sizes. The
 feature is retained only as an opt-in observability layer until an A/B evaluation shows a
 quality benefit.

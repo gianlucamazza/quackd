@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,9 +13,31 @@ from quackd.agent.providers.base import ToolCall
 from quackd.agent.providers.fake import FakeProvider
 from quackd.agent.transcript import Transcript
 from quackd.duckfile.schema import DuckFile
-from quackd.memory import MAX_ENTRIES, RobotMemory, memory_dir, robot_slug
+from quackd.emotional_recall import EmotionalRecall, EmotionalRecallConfig, RecalledMemory
+from quackd.memory import MAX_ENTRIES, RobotMemory, memory_dir, robot_slug, stable_entry_id
 from quackd.transport.mock import MockTransport
 from quackd.verbs.registry import default_registry
+
+
+class RecordingEmotionalIndex:
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+        self.config = EmotionalRecallConfig(model="test")
+
+    def recall(self, query: str, *, affective: dict[str, Any] | None = None) -> EmotionalRecall:
+        self.queries.append(query)
+        return EmotionalRecall(
+            text="Relevant memories selected for this task:\n- [note] search left first",
+            items=[RecalledMemory("memory-1", "search left first", "note", 0.9, {})],
+            source_digest="digest",
+            backend="local",
+            model="test",
+            ranking="affective",
+        )
+
+    def close(self) -> None:
+        pass
+
 
 # ── the file ────────────────────────────────────────────────────────────────────────────
 
@@ -41,6 +64,25 @@ def test_remember_round_trip_and_dedup(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         mem.remember("   ")
     assert "the ball is usually near the left wall" in mem.recall()
+
+
+def test_legacy_rows_gain_stable_ids_without_being_rewritten(tmp_path: Path) -> None:
+    mem = RobotMemory("microduck:sim2d", tmp_path)
+    mem.path.parent.mkdir(parents=True, exist_ok=True)
+    raw = '{"kind":"note","text":"ball by sofa","ts":1.0}\n'
+    mem.path.write_text(raw, encoding="utf-8")
+    first = mem.entries()[0]
+    second = mem.entries()[0]
+    assert first.id == second.id == stable_entry_id("note", "ball by sofa", 1.0, None)
+    assert mem.path.read_text(encoding="utf-8") == raw
+
+
+def test_affective_snapshot_round_trips_as_optional_metadata(tmp_path: Path) -> None:
+    mem = RobotMemory("microduck:sim2d", tmp_path)
+    snapshot = {"schema_version": 1, "valence": 0.5}
+    entry = mem.remember("ball by sofa", now=1.0, affective=snapshot)
+    assert entry.id
+    assert mem.entries()[0].affective == snapshot
 
 
 def test_episode_and_recall_order(tmp_path: Path) -> None:
@@ -249,6 +291,38 @@ async def test_second_run_starts_with_what_the_first_learned(
     assert "hello-world: failure — just testing" in prompt
     assert start["memory"]["notes"] == 1 and start["memory"]["episodes"] == 1
     assert len(mem.episodes()) == 2
+
+
+async def test_emotional_recall_is_bounded_to_start_and_first_failure(
+    hello_duck: DuckFile, tmp_path: Path
+) -> None:
+    mem = RobotMemory("microduck:mock", tmp_path / "mem")
+    mem.remember("search left first", now=1.0)
+    index = RecordingEmotionalIndex()
+    result = await run_duck(
+        RunConfig(
+            duck=hello_duck,
+            provider=FakeProvider(
+                script=[
+                    ToolCall(name="kick", arguments={"leg": "right"}),
+                    ToolCall(name="kick", arguments={"leg": "right"}),
+                    ToolCall(name="declare_failure", arguments={"reason": "test complete"}),
+                ]
+            ),
+            transport=MockTransport(),
+            runs_dir=tmp_path / "runs",
+            memory=mem,
+            emotional_memory=index,
+        )
+    )
+    assert result.outcome == "failure"
+    assert len(index.queries) == 2
+    events = Transcript.read(result.run_dir / "transcript.jsonl")
+    recalls = [event for event in events if event["kind"] == "emotional_recall"]
+    assert [event["phase"] for event in recalls] == ["run_start", "recovery"]
+    assert any(
+        "search left first" in event["text"] for event in events if event["kind"] == "observation"
+    )
 
 
 async def test_memory_off_means_no_tool_no_episode(hello_duck: DuckFile, tmp_path: Path) -> None:

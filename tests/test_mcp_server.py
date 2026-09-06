@@ -15,6 +15,7 @@ import pytest
 from mcp.client.session import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 
+from quackd.emotional_recall import EmotionalRecall, RecalledMemory
 from quackd.mcp_server import DuckSession, build_server
 from quackd.transport.sim2d import Sim2DTransport
 
@@ -57,6 +58,43 @@ def _data(result: Any) -> dict[str, Any]:
     assert not result.is_error, result
     assert result.structured_content is not None
     return result.structured_content
+
+
+class FakeEmotionalIndex:
+    def recall(self, query: str, *, affective: dict[str, Any] | None = None) -> EmotionalRecall:
+        return EmotionalRecall(
+            text="Relevant memories selected for this task:\n- [note] ball behind sofa",
+            items=[
+                RecalledMemory(
+                    source_id="memory-1",
+                    text="ball behind sofa",
+                    kind="note",
+                    score=0.9,
+                    breakdown={},
+                )
+            ],
+            source_digest="digest",
+            backend="local",
+            model="test",
+            ranking="affective",
+        )
+
+    def close(self) -> None:
+        pass
+
+
+async def test_recall_accepts_an_emotional_query(tmp_path: Any) -> None:
+    async with connected(memory_dir=tmp_path) as (client, session, _transport):
+        session.emotional_memory = FakeEmotionalIndex()
+        recalled = _data(await client.call_tool("robot_recall", {"query": "find the ball"}))
+        assert recalled["ok"]
+        assert recalled["memories"][0]["source_id"] == "memory-1"
+        assert recalled["ranking"] == "affective"
+
+
+def test_emotional_mcp_recall_requires_state_and_native_memory() -> None:
+    with pytest.raises(ValueError, match="requires memory and emotional state"):
+        build_server(Sim2DTransport(seed=1), emotional_memory=True)
 
 
 async def test_tools_and_basic_calls() -> None:

@@ -14,8 +14,9 @@ and appends to at the end. Two kinds of entry live in it:
 
 At the next run the newest notes (up to 20) and episodes (up to 5) are rendered into the
 system prompt under *What you remember from earlier runs on this robot*, and the model is
-told how to add to them. Nothing else changes: the allowlist, budgets and confirmation
-gates are exactly what they were.
+told how to add to them. With the experimental `--emotional-memory` flag, a derived index
+selects up to five task-relevant entries instead. Nothing else changes: the allowlist,
+budgets and confirmation gates are exactly what they were.
 
 ## Where it lives
 
@@ -88,6 +89,8 @@ always know what the pilot was told.
 tools:
 `robot_recall(robot?)` returns the notes and recent episodes (the server's instructions
 tell the model to call it early), `robot_remember(text, tags?, robot?)` saves one note.
+When emotional recall is enabled, `robot_recall(robot?, query?)` ranks entries for the
+query and returns their stable source IDs and score breakdowns.
 `--no-memory` and `--memory-dir` apply to the server too. A note saved from Claude Desktop
 is read by the next `quackd run` on the same `adapter:backend`, and the other way round.
 
@@ -97,8 +100,9 @@ is read by the next `quackd run` on the same `adapter:backend`, and the other wa
   changes what the *pilot* knows, not what the body can do. Learned verbs (policies
   trained from LLM-written rewards) are a separate, unshipped v2 feature
   ([learned-verbs.md](learned-verbs.md)).
-- **Not retrieval.** There is no embedding, no search: the newest entries win, and the cap
-  keeps the prompt small. If you need a map of your house, write it as a few notes.
+- **Not retrieval by default.** Without `--emotional-memory` there is no embedding or
+  search: the newest entries win. The optional index is derived and may be deleted without
+  deleting a note or episode.
 - **Not shared between bodies.** By design, where a body means an `adapter:backend`. Use
   `quackd memory add` on the other robot if a fact really transfers.
 - **Not written by the scripted pilot.** `--provider fake` has no `remember` in its script,

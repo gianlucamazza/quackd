@@ -203,7 +203,15 @@ def run_one(
     full_task_budget: bool,
     evidence_dir: Path | None = None,
     sim_profile: str = "default",
+    memory_mode: str = "off",
+    memory_notes: tuple[str, ...] = (),
+    emotional_embedding: str = "local",
+    emotional_embedding_model: str | None = None,
+    emotional_embedding_base_url: str | None = None,
+    emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
 ) -> dict[str, object]:
+    if memory_mode not in {"off", "chronological", "semantic", "affective", "affective-context"}:
+        raise ValueError(f"unknown memory mode: {memory_mode}")
     if evidence_dir is not None:
         evidence_dir.mkdir(parents=True, exist_ok=True)
     directory = (
@@ -227,17 +235,42 @@ def run_one(
             str(seed),
             "--yes",
             "--no-gif",
-            "--no-memory",
             "--runs-dir",
             str(root / "runs"),
             "--sim-profile",
             sim_profile,
         ]
+        full_memory = memory_mode in {"semantic", "affective", "affective-context"}
+        use_context = affective_context or memory_mode == "affective-context"
+        use_affective = use_context or full_memory
+        if memory_mode == "off":
+            command.append("--no-memory")
+        else:
+            command.extend(("--memory-dir", str(root / "memory")))
         if not full_task_budget:
             command.extend(("--max-steps", "12"))
-        if affective_context:
+        if use_affective:
             command.extend(("--emotional-state", "--emotional-dir", str(root / "affective")))
+        if use_context:
             command.append("--emotional-context")
+        if full_memory:
+            command.extend(
+                (
+                    "--emotional-memory",
+                    "--emotional-memory-dir",
+                    str(root / "emotional-memory"),
+                    "--emotional-embedding",
+                    emotional_embedding,
+                    "--emotional-ranking",
+                    "semantic" if memory_mode == "semantic" else "affective",
+                    "--emotional-embedding-api-key-env",
+                    emotional_embedding_api_key_env,
+                )
+            )
+            if emotional_embedding_model:
+                command.extend(("--emotional-embedding-model", emotional_embedding_model))
+            if emotional_embedding_base_url:
+                command.extend(("--emotional-embedding-base-url", emotional_embedding_base_url))
         started = time.perf_counter()
         completed = None
         attempts = 0
@@ -246,8 +279,20 @@ def run_one(
             attempts = attempt
             attempt_root = root / f"attempt-{attempt}"
             command[command.index("--runs-dir") + 1] = str(attempt_root / "runs")
-            if affective_context:
+            if memory_mode != "off":
+                memory_dir = attempt_root / "memory"
+                command[command.index("--memory-dir") + 1] = str(memory_dir)
+                from quackd.memory import RobotMemory
+
+                memory = RobotMemory("microduck:sim2d", memory_dir)
+                for note_index, note in enumerate(memory_notes):
+                    memory.remember(note, tags=["benchmark-seed"], now=float(note_index + 1))
+            if use_affective:
                 command[command.index("--emotional-dir") + 1] = str(attempt_root / "affective")
+            if full_memory:
+                command[command.index("--emotional-memory-dir") + 1] = str(
+                    attempt_root / "emotional-memory"
+                )
             attempt_started = time.perf_counter()
             try:
                 completed = subprocess.run(
@@ -346,8 +391,9 @@ def run_one(
             "total_observed_input_tokens": sum(r["input_tokens"] or 0 for r in attempt_records),
             "total_observed_output_tokens": sum(r["output_tokens"] or 0 for r in attempt_records),
             "usage_complete": all(r["usage_complete"] for r in attempt_records),
-            "affective": affective_context,
-            "affective_context": affective_context,
+            "affective": use_affective,
+            "affective_context": use_context,
+            "memory_mode": memory_mode,
             "returncode": completed.returncode,
             "success": completed.returncode == 0 and summary.get("outcome") == "success",
             "model_claim_success": (

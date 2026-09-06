@@ -946,7 +946,7 @@ class FakeSim:
         # Not exactly zeros. All-zeros is the sentinel a dropped packet returns on this bus,
         # so the detector refuses it, and a fake that starts there is a fake the daemon can
         # never seed itself from. A real robot is never at exactly zero either.
-        self.pos = np.full(robot.nu, 0.01, dtype=np.float32)
+        self.pos: Any = np.full(robot.nu, 0.01, dtype=np.float32)
         self.writes = 0
         self.closed = False
         self.drop_next = False

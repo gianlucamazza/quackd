@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Callable
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -97,6 +97,8 @@ class RunConfig:
     """Optional emotional-memory runtime for passive operational telemetry."""
     affective_context: bool = False
     """Experimental opt-in: expose the affective snapshot to the provider."""
+    emotional_memory: Any | None = None
+    """Optional derived emotional-memory index used for bounded task recall."""
 
 
 @dataclass
@@ -150,6 +152,8 @@ class AgentLoop:
         self.usage = Usage()
         self.highlights: list[str] = []
         self._affective_snapshot: dict[str, Any] | None = None
+        self._recovery_memory_text = ""
+        self._recovery_recall_used = False
         """Verb results worth carrying into the episode memory (the last few that went ok)."""
 
     # ── frames ──────────────────────────────────────────────────────────────────────
@@ -214,6 +218,9 @@ class AgentLoop:
         )
         if affective_snapshot is not None:
             features["affective"] = affective_snapshot
+        if self._recovery_memory_text:
+            text += f"\n\n{self._recovery_memory_text}"
+            features["emotional_recall"] = True
         image = png_bytes(img) if (img is not None and self.cfg.provider.supports_vision) else None
         return Observation(text=text, image_png=image, features=features), img
 
@@ -231,7 +238,15 @@ class AgentLoop:
         tags_raw = arguments.get("tags") or []
         tags = [str(t) for t in tags_raw] if isinstance(tags_raw, list) else []
         try:
-            entry = memory.remember(text, tags=tags, duck=self.fm.name, run_dir=self.run_dir)
+            entry = memory.remember(
+                text,
+                tags=tags,
+                duck=self.fm.name,
+                run_dir=self.run_dir,
+                affective=(
+                    self.cfg.affective.snapshot() if self.cfg.affective is not None else None
+                ),
+            )
         except (ValueError, OSError) as e:
             return VerbResult.fail(f"could not remember: {e}")
         self.cfg.log(f"remembered: {entry.text}")
@@ -252,6 +267,43 @@ class AgentLoop:
         return out
 
     # ── the loop ────────────────────────────────────────────────────────────────────
+
+    async def _recall_emotional(self, query: str, phase: str) -> str:
+        index = self.cfg.emotional_memory
+        if index is None:
+            return ""
+        try:
+            recalled = await asyncio.to_thread(
+                index.recall,
+                query,
+                affective=(self.cfg.affective.snapshot() if self.cfg.affective else None),
+            )
+        except Exception as exc:
+            self.cfg.log(f"emotional recall unavailable: {type(exc).__name__}: {exc}")
+            self.transcript.write(
+                "emotional_recall", phase=phase, query=query, error=type(exc).__name__
+            )
+            return ""
+        self.transcript.write(
+            "emotional_recall",
+            phase=phase,
+            query=query,
+            source_digest=recalled.source_digest,
+            backend=recalled.backend,
+            model=recalled.model,
+            ranking=recalled.ranking,
+            items=[
+                {
+                    "source_id": item.source_id,
+                    "kind": item.kind,
+                    "text": item.text,
+                    "score": item.score,
+                    "breakdown": item.breakdown,
+                }
+                for item in recalled.items
+            ],
+        )
+        return recalled.text
 
     #: Verbs that can put the robot on the floor. A fall-blind robot only needs a human
     #: watching if the task can actually make it walk.
@@ -330,6 +382,11 @@ class AgentLoop:
         if cfg.memory is not None:
             tools = [*tools, REMEMBER]
             memory_text = cfg.memory.recall()
+            if cfg.emotional_memory is not None:
+                query = f"{self.fm.name}: {self.fm.description}\n{self.duck.body}"
+                selected = await self._recall_emotional(query, "run_start")
+                if selected:
+                    memory_text = selected
         system = build_system_prompt(
             self.duck,
             [registry.view(n) for n in allow],
@@ -484,6 +541,14 @@ class AgentLoop:
                 if last_result.ok and last_result.summary:
                     self.highlights.append(f"{call.name}: {last_result.summary}")
                     self.highlights = self.highlights[-4:]
+                if (
+                    not last_result.ok
+                    and cfg.emotional_memory is not None
+                    and not self._recovery_recall_used
+                ):
+                    self._recovery_recall_used = True
+                    query = f"Recover from {call.name} failure: {last_result.summary}"
+                    self._recovery_memory_text = await self._recall_emotional(query, "recovery")
         except BudgetExceeded as e:
             outcome, reason = "budget", str(e)
         except Aborted as e:
@@ -520,6 +585,11 @@ class AgentLoop:
                 "robot": manifest.id if manifest is not None else None,
                 "dry_run": cfg.dry_run,
                 "affective_context": cfg.affective_context,
+                "emotional_memory": (
+                    cfg.emotional_memory.config.identity()
+                    if cfg.emotional_memory is not None
+                    else None
+                ),
                 "sim_profile": "targeted-v1" if self._targeted else "default",
                 "final_state": final_state,
                 "affective_state": (cfg.affective.summary() if cfg.affective is not None else None),
@@ -536,7 +606,11 @@ class AgentLoop:
                         steps=self.budget.steps,
                         highlights=self.highlights,
                         run_dir=self.run_dir,
+                        affective=(cfg.affective.snapshot() if cfg.affective is not None else None),
                     )
+            if cfg.emotional_memory is not None:
+                with contextlib.suppress(Exception):
+                    cfg.emotional_memory.close()
             if cfg.affective is not None:
                 with contextlib.suppress(Exception):
                     cfg.affective.close()

@@ -15,6 +15,7 @@ file you can read, edit and delete with `quackd memory`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -30,6 +31,12 @@ MAX_ENTRIES = 400
 NOTE_MAX_CHARS = 200
 
 Kind = Literal["note", "episode"]
+
+
+def stable_entry_id(kind: str, text: str, ts: float, duck: str | None) -> str:
+    """Stable identity for old JSONL rows that predate explicit IDs."""
+    raw = json.dumps([kind, text, round(ts, 3), duck], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
 def memory_dir(override: str | Path | None = None) -> Path:
@@ -54,9 +61,16 @@ class MemoryEntry:
     outcome: str | None = None
     highlights: list[str] = field(default_factory=list)
     run_dir: str | None = None
+    id: str = ""
+    affective: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
-        out: dict[str, Any] = {"kind": self.kind, "text": self.text, "ts": round(self.ts, 3)}
+        out: dict[str, Any] = {
+            "id": self.id or stable_entry_id(self.kind, self.text, self.ts, self.duck),
+            "kind": self.kind,
+            "text": self.text,
+            "ts": round(self.ts, 3),
+        }
         if self.duck:
             out["duck"] = self.duck
         if self.tags:
@@ -67,19 +81,27 @@ class MemoryEntry:
             out["highlights"] = self.highlights
         if self.run_dir:
             out["run_dir"] = self.run_dir
+        if self.affective is not None:
+            out["affective"] = self.affective
         return out
 
     @classmethod
     def from_json(cls, d: dict[str, Any]) -> MemoryEntry:
+        kind = d.get("kind", "note")
+        text = str(d.get("text", ""))
+        ts = float(d.get("ts", 0.0))
+        duck = d.get("duck")
         return cls(
-            kind=d.get("kind", "note"),
-            text=str(d.get("text", "")),
-            ts=float(d.get("ts", 0.0)),
+            kind=kind,
+            text=text,
+            ts=ts,
             duck=d.get("duck"),
             tags=list(d.get("tags", [])),
             outcome=d.get("outcome"),
             highlights=list(d.get("highlights", [])),
             run_dir=d.get("run_dir"),
+            id=str(d.get("id") or stable_entry_id(kind, text, ts, duck)),
+            affective=d.get("affective") if isinstance(d.get("affective"), dict) else None,
         )
 
     @property
@@ -166,6 +188,7 @@ class RobotMemory:
         duck: str | None = None,
         run_dir: str | Path | None = None,
         now: float | None = None,
+        affective: dict[str, Any] | None = None,
     ) -> MemoryEntry:
         """Save one short fact. The same sentence twice refreshes the old entry instead of
         duplicating it, so a model that repeats itself does not fill the file."""
@@ -180,6 +203,8 @@ class RobotMemory:
                 e.tags = sorted(set(e.tags) | set(tags or []))
                 if duck:
                     e.duck = duck
+                if affective is not None:
+                    e.affective = affective
                 # a refreshed note is the newest note, so it has to move to the end: file
                 # order *is* the order, for `recall`'s newest-first window and for the cap
                 entries.append(entries.pop(i))
@@ -192,6 +217,8 @@ class RobotMemory:
             duck=duck,
             tags=sorted(set(tags or [])),
             run_dir=str(run_dir) if run_dir else None,
+            id=stable_entry_id("note", clean, ts, duck),
+            affective=affective,
         )
         self._append(entry)
         return entry
@@ -206,18 +233,22 @@ class RobotMemory:
         highlights: list[str] | None = None,
         run_dir: str | Path | None = None,
         now: float | None = None,
+        affective: dict[str, Any] | None = None,
     ) -> MemoryEntry:
+        ts = time.time() if now is None else now
         text = (
             f"{duck}: {outcome} — {' '.join(str(reason).split())[:NOTE_MAX_CHARS]} ({steps} steps)"
         )
         entry = MemoryEntry(
             kind="episode",
             text=text,
-            ts=time.time() if now is None else now,
+            ts=ts,
             duck=duck,
             outcome=outcome,
             highlights=[" ".join(h.split())[:NOTE_MAX_CHARS] for h in (highlights or [])][:4],
             run_dir=str(run_dir) if run_dir else None,
+            id=stable_entry_id("episode", text, ts, duck),
+            affective=affective,
         )
         self._append(entry)
         return entry

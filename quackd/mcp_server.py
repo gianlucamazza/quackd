@@ -10,6 +10,7 @@ contract. stdout is the wire, and every log line goes to stderr.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import sys
@@ -132,6 +133,8 @@ class RobotSession:
     """What this robot keeps between sessions (`quackd memory`). None = off."""
     affective: Any | None = None
     """Optional emotional-memory state; never part of executor policy."""
+    emotional_memory: Any | None = None
+    """Optional derived emotional-memory index for query-based recall."""
 
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
@@ -188,6 +191,9 @@ class RobotSession:
         if self.affective is not None:
             with contextlib.suppress(Exception):
                 self.affective.close()
+        if self.emotional_memory is not None:
+            with contextlib.suppress(Exception):
+                self.emotional_memory.close()
 
     async def run(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
         self.calls += 1
@@ -252,6 +258,11 @@ class RobotSession:
             "aborted": self.executor.abort.is_set(),
             "default": default,
             "affective": self.affective.summary() if self.affective is not None else None,
+            "emotional_memory": (
+                self.emotional_memory.config.identity()
+                if self.emotional_memory is not None
+                else None
+            ),
         }
 
     def verbs_payload(self) -> dict[str, Any]:
@@ -300,9 +311,42 @@ class RobotSession:
             }
         return await self.run("say", {"text": text})
 
-    def recall(self) -> dict[str, Any]:
+    async def recall(self, query: str | None = None) -> dict[str, Any]:
         if self.memory is None:
             return {"ok": False, "robot": self.name, "summary": "memory is off for this server"}
+        if query and self.emotional_memory is not None:
+            try:
+                recalled = await asyncio.to_thread(
+                    self.emotional_memory.recall,
+                    query,
+                    affective=(self.affective.snapshot() if self.affective else None),
+                )
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "robot": self.name,
+                    "summary": f"emotional recall unavailable: {type(exc).__name__}",
+                }
+            return {
+                "ok": True,
+                "robot": self.name,
+                "summary": recalled.text or "no relevant memory found",
+                "query": query,
+                "backend": recalled.backend,
+                "model": recalled.model,
+                "ranking": recalled.ranking,
+                "source_digest": recalled.source_digest,
+                "memories": [
+                    {
+                        "source_id": item.source_id,
+                        "kind": item.kind,
+                        "text": item.text,
+                        "score": item.score,
+                        "breakdown": item.breakdown,
+                    }
+                    for item in recalled.items
+                ],
+            }
         text = self.memory.recall()
         return {
             "ok": True,
@@ -318,7 +362,10 @@ class RobotSession:
             return {"ok": False, "robot": self.name, "summary": "memory is off for this server"}
         try:
             entry = self.memory.remember(
-                text, tags=tags, duck=self.duck.name if self.duck else None
+                text,
+                tags=tags,
+                duck=self.duck.name if self.duck else None,
+                affective=(self.affective.snapshot() if self.affective is not None else None),
             )
         except (ValueError, OSError) as e:
             return {"ok": False, "robot": self.name, "summary": f"could not remember: {e}"}
@@ -459,6 +506,13 @@ def build_fleet_server(
     memory_dir: str | Path | None = None,
     emotional: bool = False,
     emotional_dir: str | Path | None = None,
+    emotional_memory: bool = False,
+    emotional_memory_dir: str | Path | None = None,
+    emotional_embedding: str = "local",
+    emotional_embedding_model: str | None = None,
+    emotional_embedding_base_url: str | None = None,
+    emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_ranking: str = "affective",
 ) -> tuple[MCPServer, Fleet]:
     """One MCP server over several robots, each behind its own executor.
 
@@ -528,6 +582,25 @@ def build_fleet_server(
                 affective_config,
                 ephemeral=dry_run or not memory,
             )
+        if emotional_memory:
+            if session.memory is None or session.affective is None:
+                raise ValueError("emotional memory requires memory and emotional state")
+            from quackd.emotional_recall import EmotionalMemoryIndex, EmotionalRecallConfig
+
+            recall_config = EmotionalRecallConfig(
+                directory=emotional_memory_dir or "~/.quackd/emotional-memory",
+                backend=emotional_embedding,  # type: ignore[arg-type]
+                model=emotional_embedding_model,
+                base_url=emotional_embedding_base_url,
+                api_key_env=emotional_embedding_api_key_env,
+                ranking=emotional_ranking,  # type: ignore[arg-type]
+            )
+            session.emotional_memory = EmotionalMemoryIndex(
+                session.memory,
+                recall_config,
+                ephemeral=dry_run,
+            )
+            session.emotional_memory.sync()
         executor.on_frame = _stash_frames(session)
         sessions[name] = session
     fleet = Fleet(sessions, default or _pick_default(robots))
@@ -629,12 +702,13 @@ def build_fleet_server(
 
     @mcp.tool(
         description="What one robot remembers from earlier sessions and runs: the notes a "
-        "pilot saved with robot_remember, and how its recent runs ended. Call it before "
-        "planning; it costs no step."
+        "pilot saved with robot_remember, and how its recent runs ended. An optional query "
+        "uses emotional ranking when the server enabled it. Call before planning; it costs "
+        "no step."
     )
-    async def robot_recall(robot: str | None = None) -> dict[str, Any]:
+    async def robot_recall(robot: str | None = None, query: str | None = None) -> dict[str, Any]:
         session = fleet.get(robot)
-        return session.recall() if session else fleet.unknown(robot)
+        return await session.recall(query) if session else fleet.unknown(robot)
 
     @mcp.tool(
         description="Keep one short fact for future sessions on one robot (where things "
@@ -663,6 +737,13 @@ def build_server(
     memory_dir: str | Path | None = None,
     emotional: bool = False,
     emotional_dir: str | Path | None = None,
+    emotional_memory: bool = False,
+    emotional_memory_dir: str | Path | None = None,
+    emotional_embedding: str = "local",
+    emotional_embedding_model: str | None = None,
+    emotional_embedding_base_url: str | None = None,
+    emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_ranking: str = "affective",
 ) -> tuple[MCPServer, RobotSession]:
     """One robot, the 0.3 entry point: a fleet of one named after its adapter."""
     name = adapter_name(transport) or "duck"
@@ -678,6 +759,13 @@ def build_server(
         memory_dir=memory_dir,
         emotional=emotional,
         emotional_dir=emotional_dir,
+        emotional_memory=emotional_memory,
+        emotional_memory_dir=emotional_memory_dir,
+        emotional_embedding=emotional_embedding,
+        emotional_embedding_model=emotional_embedding_model,
+        emotional_embedding_base_url=emotional_embedding_base_url,
+        emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_ranking=emotional_ranking,
     )
     return mcp, fleet.sessions[name]
 
@@ -698,6 +786,13 @@ def serve(
     memory_dir: str | None = None,
     emotional: bool = False,
     emotional_dir: str | None = None,
+    emotional_memory: bool = False,
+    emotional_memory_dir: str | None = None,
+    emotional_embedding: str = "local",
+    emotional_embedding_model: str | None = None,
+    emotional_embedding_base_url: str | None = None,
+    emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_ranking: str = "affective",
 ) -> None:
     from quackd.adapters.factory import (
         RobotSpec,
@@ -757,6 +852,13 @@ def serve(
         memory_dir=memory_dir,
         emotional=emotional,
         emotional_dir=emotional_dir,
+        emotional_memory=emotional_memory,
+        emotional_memory_dir=emotional_memory_dir,
+        emotional_embedding=emotional_embedding,
+        emotional_embedding_model=emotional_embedding_model,
+        emotional_embedding_base_url=emotional_embedding_base_url,
+        emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_ranking=emotional_ranking,
     )
     try:
         mcp.run(transport="stdio")

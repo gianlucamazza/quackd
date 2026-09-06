@@ -98,6 +98,23 @@ def test_emotional_context_requires_state(tmp_path: Path) -> None:
     assert "requires --emotional-state" in result.output
 
 
+def test_emotional_memory_requires_native_memory_and_state(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--emotional-memory",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "requires --memory and --emotional-state" in result.output
+
+
 def test_emotional_context_is_explicitly_visible_in_run_artifacts(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"
     result = runner.invoke(

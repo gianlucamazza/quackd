@@ -292,6 +292,13 @@ def _run_impl(
     emotional: bool = False,
     emotional_dir: str | None = None,
     emotional_context: bool = False,
+    emotional_memory: bool = False,
+    emotional_memory_dir: str | None = None,
+    emotional_embedding: str = "local",
+    emotional_embedding_model: str | None = None,
+    emotional_embedding_base_url: str | None = None,
+    emotional_embedding_api_key_env: str = "OPENAI_API_KEY",
+    emotional_ranking: str = "affective",
     sim_profile: str = "default",
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
@@ -344,12 +351,18 @@ def _run_impl(
     if emotional_context and not emotional:
         _fail("--emotional-context requires --emotional-state")
         return
+    if emotional_memory and (not memory or not emotional):
+        _fail("--emotional-memory requires --memory and --emotional-state")
+        return
     if flock is not None and not 2 <= flock <= 4:
         _fail("a flock needs 2 to 4 ducks (drop --flock for a single run)")
         return
     if flock is not None or duck.frontmatter.flock is not None:
-        if emotional or emotional_context:
-            _fail("emotional state/context is currently available for single-robot runs only")
+        if emotional or emotional_context or emotional_memory:
+            _fail(
+                "emotional state, context, and recall are currently available "
+                "for single-robot runs only"
+            )
             return
         _run_flock_impl(
             duck,
@@ -441,6 +454,31 @@ def _run_impl(
         except RuntimeError as e:
             _fail(str(e))
             return
+    emotional_index = None
+    if emotional_memory:
+        from quackd.emotional_recall import EmotionalMemoryIndex, EmotionalRecallConfig
+
+        try:
+            recall_config = EmotionalRecallConfig(
+                directory=emotional_memory_dir or "~/.quackd/emotional-memory",
+                backend=emotional_embedding,  # type: ignore[arg-type]
+                model=emotional_embedding_model,
+                base_url=emotional_embedding_base_url,
+                api_key_env=emotional_embedding_api_key_env,
+                ranking=emotional_ranking,  # type: ignore[arg-type]
+            )
+            assert robot_memory is not None
+            emotional_index = EmotionalMemoryIndex(
+                robot_memory,
+                recall_config,
+                ephemeral=dry_run,
+            )
+            emotional_index.sync()
+        except (ImportError, RuntimeError, ValueError) as e:
+            if affective is not None:
+                affective.close()
+            _fail(str(e))
+            return
     cfg = RunConfig(
         duck=duck,
         provider=llm,
@@ -457,6 +495,7 @@ def _run_impl(
         acknowledge=None if yes else _acknowledge_prompt,
         affective=affective,
         affective_context=emotional_context,
+        emotional_memory=emotional_index,
     )
     console.print(
         f"🦆 [bold]{duck.name}[/bold] · provider=[cyan]{llm.name}[/cyan] "
@@ -471,6 +510,9 @@ def _run_impl(
             f"[dim]memory: {m['notes']} notes, {m['episodes']} earlier runs "
             f"({m['path']}) · --no-memory to run fresh[/dim]"
         )
+    if emotional_index is not None:
+        c = emotional_index.config
+        console.print(f"[dim]emotional recall: {c.ranking}, {c.backend}/{c.resolved_model}[/dim]")
     console.print("[dim]Ctrl-C or q stops the duck. Press it twice to quit at once.[/dim]")
 
     def killed(msg: str) -> None:
@@ -704,6 +746,41 @@ _EMOTIONAL_CONTEXT = typer.Option(
     "--emotional-context",
     help="EXPERIMENTAL: expose affective state to the model (requires --emotional-state).",
 )
+_EMOTIONAL_MEMORY = typer.Option(
+    False,
+    "--emotional-memory/--no-emotional-memory",
+    help="EXPERIMENTAL: retrieve task-relevant memories with emotional-memory.",
+)
+_EMOTIONAL_MEMORY_DIR = typer.Option(
+    None,
+    "--emotional-memory-dir",
+    help="Directory for rebuildable emotional-memory indexes.",
+)
+_EMOTIONAL_EMBEDDING = typer.Option(
+    "local",
+    "--emotional-embedding",
+    help="Embedding backend: local or openai-compatible.",
+)
+_EMOTIONAL_EMBEDDING_MODEL = typer.Option(
+    None,
+    "--emotional-embedding-model",
+    help="Embedding model; remote backends require an explicit value.",
+)
+_EMOTIONAL_EMBEDDING_BASE_URL = typer.Option(
+    None,
+    "--emotional-embedding-base-url",
+    help="Optional OpenAI-compatible embeddings base URL.",
+)
+_EMOTIONAL_EMBEDDING_API_KEY_ENV = typer.Option(
+    "OPENAI_API_KEY",
+    "--emotional-embedding-api-key-env",
+    help="Environment variable holding the remote embeddings key.",
+)
+_EMOTIONAL_RANKING = typer.Option(
+    "affective",
+    "--emotional-ranking",
+    help="Retrieval ranking: semantic or affective.",
+)
 _PROVIDER = typer.Option(
     "fake",
     "--provider",
@@ -795,6 +872,13 @@ def run(
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
     emotional_context: bool = _EMOTIONAL_CONTEXT,
+    emotional_memory: bool = _EMOTIONAL_MEMORY,
+    emotional_memory_dir: str | None = _EMOTIONAL_MEMORY_DIR,
+    emotional_embedding: str = _EMOTIONAL_EMBEDDING,
+    emotional_embedding_model: str | None = _EMOTIONAL_EMBEDDING_MODEL,
+    emotional_embedding_base_url: str | None = _EMOTIONAL_EMBEDDING_BASE_URL,
+    emotional_embedding_api_key_env: str = _EMOTIONAL_EMBEDDING_API_KEY_ENV,
+    emotional_ranking: str = _EMOTIONAL_RANKING,
     sim_profile: str = typer.Option("default", "--sim-profile"),
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
@@ -827,6 +911,13 @@ def run(
         emotional=emotional,
         emotional_dir=emotional_dir,
         emotional_context=emotional_context,
+        emotional_memory=emotional_memory,
+        emotional_memory_dir=emotional_memory_dir,
+        emotional_embedding=emotional_embedding,
+        emotional_embedding_model=emotional_embedding_model,
+        emotional_embedding_base_url=emotional_embedding_base_url,
+        emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+        emotional_ranking=emotional_ranking,
         sim_profile=sim_profile,
     )
 
@@ -927,6 +1018,13 @@ def serve_mcp(
     memory_dir: str | None = _MEMORY_DIR,
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
+    emotional_memory: bool = _EMOTIONAL_MEMORY,
+    emotional_memory_dir: str | None = _EMOTIONAL_MEMORY_DIR,
+    emotional_embedding: str = _EMOTIONAL_EMBEDDING,
+    emotional_embedding_model: str | None = _EMOTIONAL_EMBEDDING_MODEL,
+    emotional_embedding_base_url: str | None = _EMOTIONAL_EMBEDDING_BASE_URL,
+    emotional_embedding_api_key_env: str = _EMOTIONAL_EMBEDDING_API_KEY_ENV,
+    emotional_ranking: str = _EMOTIONAL_RANKING,
 ) -> None:
     """Expose the robot as MCP tools over stdio (Claude Code / Claude Desktop)."""
     from quackd.adapters.base import AdapterError
@@ -947,8 +1045,15 @@ def serve_mcp(
             memory_dir=memory_dir,
             emotional=emotional,
             emotional_dir=emotional_dir,
+            emotional_memory=emotional_memory,
+            emotional_memory_dir=emotional_memory_dir,
+            emotional_embedding=emotional_embedding,
+            emotional_embedding_model=emotional_embedding_model,
+            emotional_embedding_base_url=emotional_embedding_base_url,
+            emotional_embedding_api_key_env=emotional_embedding_api_key_env,
+            emotional_ranking=emotional_ranking,
         )
-    except (AdapterError, RuntimeError) as e:
+    except (AdapterError, RuntimeError, ValueError) as e:
         _fail(str(e))
 
 
