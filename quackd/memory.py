@@ -117,10 +117,8 @@ class RobotMemory:
     """One robot's memory file. Every method re-reads the file, so a `quackd run` and an
     MCP server pointing at the same robot always see each other's latest writes, and a
     replaced file is never half-read: each write goes to a temporary file and is renamed
-    over the old one. It is *not* serialised. Two processes writing at the same instant is
-    a read-modify-write race and the later rename wins, so one of the two notes is lost.
-    That is the accepted cost of a file you can also edit in a text editor, and it is why
-    nothing here is a database."""
+    over the old one. Writers use a per-robot lock so concurrent CLI and MCP processes do
+    not lose each other's updates; readers remain lock-free."""
 
     def __init__(self, robot_key: str, base_dir: str | Path | None = None) -> None:
         self.robot_key = robot_key
