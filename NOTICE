@@ -92,3 +92,15 @@ videos, or other brand assets from any of these projects are distributed
 with quackd. Where an upstream's design files are non-commercially
 licensed, as ToddlerBot's and microduck_rl's are, quackd includes none of
 them at all.
+
+This fork (gianlucamazza/quackd) includes experimental modifications by
+Gianluca Mazza under the same Apache License, Version 2.0, including the
+opt-in affective runtime and emotional-memory retrieval experiment on
+branch experiment/emotional-memory-full. Those changes are not part of
+upstream rokbenko/quackd unless and until merged there.
+
+Additional dependency used by the optional emotional-memory extras:
+
+  * emotional-memory (gianlucamazza/emotional-memory) — MIT.
+    https://github.com/gianlucamazza/emotional-memory
+

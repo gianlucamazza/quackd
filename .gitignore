@@ -29,3 +29,6 @@ Thumbs.db
 *.onnx
 *.pt
 *.stackdump
+
+# Local pytest-benchmark / harness cache
+.benchmarks/
