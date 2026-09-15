@@ -55,7 +55,7 @@ from quackd.trace import (
     Tracer,
     capture_sink,
     capturing,
-    render_lines,
+    render_call,
     trace_enabled_default,
     unless_capturing,
 )
