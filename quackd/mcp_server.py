@@ -230,7 +230,10 @@ class RobotSession:
                 elapsed_s=round(time.perf_counter() - started, 3),
                 budget=budget.status() if budget is not None else None,
             )
-        payload["trace"] = render_lines(events)
+        for event in events:
+            if self.tracer is not None:
+                self.tracer.emit(event.kind, **event.data)
+        payload["trace"] = [f"{e.kind}: {e.data}" for e in events] if events else []
         return payload
 
     async def connect(self) -> None:
