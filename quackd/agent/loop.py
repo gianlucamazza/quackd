@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import math
 import time
 from collections.abc import Callable
@@ -55,7 +54,7 @@ from quackd.safety import (
     VerbNotAllowed,
     deny_all,
 )
-from quackd.trace import Sink, Tracer
+from quackd.trace import Sink
 from quackd.transport.base import DuckState, DuckTransport
 from quackd.verbs.registry import (
     VerbRegistry,
