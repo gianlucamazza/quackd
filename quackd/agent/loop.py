@@ -104,11 +104,7 @@ class RunConfig:
     """Where to show the run as it happens (the CLI passes a `ConsoleTrace`). The transcript
     gets every event whether this is set or not; this is a second reader of the same stream."""
     affective_context: bool = False
-    """Enable experimental emotional-context enrichment for model-facing prompts."""
-=======
-    affective_context: bool = False
     """Experimental opt-in: expose the affective snapshot to the provider."""
->>>>>>> 336d15a (feat(affective): add opt-in experimental context)
 
 
 @dataclass
