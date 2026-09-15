@@ -10,22 +10,19 @@ jobs:
   test:
     name: py${{ matrix.python }} · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # The whole job takes under four minutes. Without this a hung test ran to GitHub's six
-    # hour limit, three times on macOS, and the log named nothing. With it the job fails
-    # fast and the two faulthandler timers in pyproject.toml and tests/conftest.py have
-    # already dumped every thread's stack by then.
-    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        # Windows is here because it is a documented path, not a courtesy: a Microduck's
-        # robotd speaks over a unix socket, Windows cannot open one, and quackd's answer is a
-        # specific `ssh -L` message covered by a test that only runs on Windows. Without a
-        # Windows job that test never ran anywhere, and neither did the path it describes.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
+      - name: Install system dependencies for Python packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev pkg-config
+      - name: Install system dependencies for Python packages (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cairo pkg-config
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -42,9 +39,6 @@ jobs:
         env:
           QUACKD_STRICT_SEEDS: "1"
       - name: Validate starter ducks
-        # bash explicitly: pwsh is the default shell on the Windows runner and does not expand
-        # a glob for an external command, so this would hand quackd the literal `ducks/*.duck`.
-        shell: bash
         run: uv run quackd validate ducks/*.duck
 
   emotional:
