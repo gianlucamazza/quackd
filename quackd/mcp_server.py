@@ -53,10 +53,9 @@ from quackd.trace import (
     Sink,
     TraceEvent,
     Tracer,
-    call_lines,
-    cap_lines,
     capture_sink,
     capturing,
+    render_call,
     render_lines,
     trace_enabled_default,
     unless_capturing,
@@ -205,6 +204,35 @@ class RobotSession:
         self.executor.budget.steps = spent.steps
         self.executor.budget.llm_calls = spent.llm_calls
         self.executor.budget.started_at = spent.started_at
+
+    def _gate(self, name: str, gate: str, reason: str) -> None:
+        """A refusal the session makes before the executor sees the call, told the same way."""
+        if self.tracer is not None:
+            self.tracer.emit("gate", name=name, gate=gate, outcome="refused", reason=reason)
+
+    async def _call(
+        self, tool: str, args: dict[str, Any], fn: Callable[[], Awaitable[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        """One tool call, narrated. The SDK runs every call as its own task, and `capturing`
+        is a context variable, so two calls on one robot never see each other's events. The
+        rendered lines land in the result's `trace`; stderr gets them as they happen."""
+        if self.tracer is None:
+            return await fn()
+        with capturing() as events:
+            started = time.perf_counter()
+            self.tracer.emit("tool_call", tool=tool, robot=self.name, **args)
+            payload = await fn()
+            budget = self.executor.budget
+            self.tracer.emit(
+                "tool_result",
+                tool=tool,
+                ok=bool(payload.get("ok")),
+                summary=payload.get("summary"),
+                elapsed_s=round(time.perf_counter() - started, 3),
+                budget=budget.status() if budget is not None else None,
+            )
+        payload["trace"] = render_call(events)
+        return payload
 
     async def connect(self) -> None:
         connected = await self.transport.connect()
