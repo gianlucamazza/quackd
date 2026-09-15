@@ -137,6 +137,8 @@ class World:
     steps: int = 0
     n_heads: int = 0
     heads: list[StationaryHead] = field(default_factory=list)
+    profile: str = "default"
+    profile_angle: float = 0.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.n_heads <= MAX_HEADS:
@@ -415,6 +417,10 @@ class World:
                 d.y = float(np.clip(h.y + dy / dist * min_dist, -lim, lim))
 
     def step(self, dt: float = DT) -> None:
+        if self.profile == "targeted-v1":
+            from quackd.sim2d.profiles import advance_targeted
+
+            advance_targeted(self, self.t + dt)
         for d in self.ducks:  # index order: deterministic
             self._integrate_duck(d, dt)
         if len(self.ducks) > 1:
