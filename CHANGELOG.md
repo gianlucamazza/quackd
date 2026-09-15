@@ -857,6 +857,13 @@ that were not true no longer are.
   starts with `webrtc://`, and a missing extra is one error naming the `pip install` and the
   HTTP snapshot alternative that needs none. Nobody who is not pointing quackd at a real
   Microduck needs it, and the H.264 and the ICE inside it have never met a duck.
+- Optional `quackd[emotional]` integration with per-robot affective runtime state, SQLite
+  persistence, prompt/transcript summaries, CLI/MCP flags, CI coverage, and a deterministic
+  on/off benchmark matrix. See [docs/emotional-state.md](docs/emotional-state.md) and
+  [ADR 0026](docs/adr/0026-affective-runtime.md).
+- OpenAI defaults and live benchmark lanes now use the current account-verified `gpt-5.6`
+  family. Chat Completions explicitly disables reasoning for tool calls; reasoning-enabled
+  Responses API support remains a separate future adapter.
 
 ## [0.6.0] — 2026-09-04
 
