@@ -328,12 +328,6 @@ class OpenAIProvider:
         # escape the provider as a raw traceback — the CLI only catches TransportError and
         # ProviderError. The fallback stays outside: it is quackd's code, not the SDK's.
         try:
-<<<<<<< HEAD
-            response = await self.client.chat.completions.create(
-                **self._params(system, history, tools)
-            )
-            turn = self._normalise(parse_response(response))
-=======
             if self.name == "openai" and self.model.startswith("gpt-5.6"):
                 response = await self.client.responses.create(
                     **self._responses_params(system, history, tools)
@@ -344,7 +338,6 @@ class OpenAIProvider:
                     **self._params(system, history, tools)
                 )
                 turn = parse_response(response)
->>>>>>> a6c843f (feat(openai): support Responses API for modern GPT-5.6 models)
         except ProviderError:
             raise
         except Exception as e:

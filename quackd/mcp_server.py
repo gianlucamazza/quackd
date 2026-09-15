@@ -19,8 +19,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import sys
-import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -53,10 +52,7 @@ from quackd.trace import (
     Sink,
     TraceEvent,
     Tracer,
-    call_lines,
-    cap_lines,
     capture_sink,
-    capturing,
     render_lines,
     trace_enabled_default,
     unless_capturing,
