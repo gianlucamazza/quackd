@@ -189,6 +189,7 @@ class FakeOpenAI:
             return response
 
         self.chat = NS(completions=NS(create=create))
+        self.responses = FakeResponses()
 
 
 class FakeResponses:

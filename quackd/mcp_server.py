@@ -232,6 +232,8 @@ class RobotSession:
                 budget=budget.status() if budget is not None else None,
             )
         payload["trace"] = render_call(events)
+        for text, _style in payload["trace"]:
+            log.info("%s: %s", self.name, text)
         return payload
 
     async def connect(self) -> None:
