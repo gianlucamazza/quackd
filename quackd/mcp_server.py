@@ -55,7 +55,7 @@ from quackd.trace import (
     Tracer,
     capture_sink,
     capturing,
-    render_lines,
+    render_call,
     trace_enabled_default,
     unless_capturing,
 )
@@ -230,7 +230,7 @@ class RobotSession:
                 elapsed_s=round(time.perf_counter() - started, 3),
                 budget=budget.status() if budget is not None else None,
             )
-        payload["trace"] = render_lines(events.events)
+        payload["trace"] = render_call(events)
         return payload
 
     async def connect(self) -> None:
