@@ -118,6 +118,29 @@ def test_the_daemon_clamps_and_rate_limits_every_tick() -> None:
     assert float(np.max(d.target)) <= 2.0, "the joint limit holds however long it is pushed"
 
 
+def test_stand_finishes_when_the_body_lags_the_command() -> None:
+    """A MuJoCo body never holds the commanded pose to 1e-3. Stand used to wait on the
+    observation, so `moving` stayed true forever — which is what the contract job failed."""
+    d = _daemon()
+    _ticks(d, 3)
+    d.sim.pos[:] = 0.4
+    d.target = d.sim.pos.copy()
+    d.safe.pose = d.sim.pos.copy()
+    real_obs = d.sim.get_observation
+
+    def lagged() -> object:
+        obs = real_obs()
+        obs.motor_pos = np.asarray(obs.motor_pos, dtype=np.float32) + 0.05
+        return obs
+
+    d.sim.get_observation = lagged  # type: ignore[method-assign]
+    d.command.stand()
+    _ticks(d, 400)
+    assert d.command.mode == d.command.HOLD
+    assert d.command.busy is False
+    assert float(np.max(np.abs(d.target - d.command.default_pose))) < 1e-2
+
+
 # ── 2. the all-zeros detector, because a dropped read looks like a valid one ────────────
 
 

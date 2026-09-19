@@ -451,8 +451,12 @@ class Daemon:
         current = self.safe.pose
         if cmd.mode in (Command.STAND, Command.DEADMAN):
             goal = waist_first(cmd.goal, current, self.waist)
-            nxt = slew(current, goal, dt)
-            if float(np.max(np.abs(goal - nxt))) < 1e-3 and cmd.mode == Command.STAND:
+            # Slew the command, not the last observation. A MuJoCo body never holds the
+            # commanded pose to 1e-3: measuring arrival against `safe.pose` left STAND
+            # latched forever, and rate-limiting the observed step against `target`
+            # pulled the command back toward the lag every tick.
+            nxt = slew(self.target, goal, dt)
+            if cmd.mode == Command.STAND and float(np.max(np.abs(goal - nxt))) < 1e-3:
                 cmd.hold(goal)
             return nxt
         if cmd.mode == Command.MOTION:

@@ -30,7 +30,9 @@ jobs:
         with:
           enable-cache: true
       - name: Sync (default deps + dev extra — no provider SDKs, no keys)
-        run: uv sync --python ${{ matrix.python }} --extra dev
+        # --locked: a stale lock used to re-resolve every extra, including reachy-mini's
+        # pygobject, and fail compiling pycairo on a runner with no cairo headers.
+        run: uv sync --locked --python ${{ matrix.python }} --extra dev
       - name: Lint
         run: uv run ruff check .
       - name: Format
@@ -46,7 +48,6 @@ jobs:
         # a glob for an external command, so this would hand quackd the literal `ducks/*.duck`.
         shell: bash
         run: uv run quackd validate ducks/*.duck
-<<<<<<< HEAD
 
   physics:
     name: physics · mujoco + osmesa
@@ -82,7 +83,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync (dev + the physics extra — mujoco and onnxruntime, about 42 MB cold)
-        run: uv sync --python 3.12 --extra dev --extra mujoco
+        run: uv sync --locked --python 3.12 --extra dev --extra mujoco
       - name: Prove the context exists before blaming the physics
         # The cheapest failure first, as toddlerbot-contract.yml proves its imports: a missing
         # system library says so here instead of arriving as a dozen skips further down.
@@ -93,16 +94,7 @@ jobs:
         # this job fetches nothing. The nightly `microduck-assets` job runs them, as a user
         # would, into a runner that is then destroyed.
         run: uv run pytest tests/test_sim3d.py tests/test_acceptance_mujoco.py -m "not real_duck"
-      - name: Affective benchmark matrix
-        run: uv run python benchmarks/affective_runtime.py --output "${{ runner.temp }}/quackd-affective-benchmark.json"
-      - name: Upload affective benchmark
-        uses: actions/upload-artifact@v4
-        with:
-          name: affective-benchmark-py${{ matrix.python }}
-          path: ${{ runner.temp }}/quackd-affective-benchmark.json
 
-=======
->>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
   emotional:
     name: emotional · py${{ matrix.python }} · ubuntu
     runs-on: ubuntu-latest
@@ -116,7 +108,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync with emotional-memory
-        run: uv sync --python ${{ matrix.python }} --extra dev --extra emotional
+        run: uv sync --locked --python ${{ matrix.python }} --extra dev --extra emotional
       - name: Quality checks
         run: |
           uv run ruff check .
@@ -128,4 +120,3 @@ jobs:
           QUACKD_STRICT_SEEDS: "1"
       - name: Validate starter ducks
         run: uv run quackd validate ducks/*.duck
-
