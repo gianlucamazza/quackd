@@ -331,6 +331,9 @@ def _run_impl(
     emotional: bool = False,
     emotional_dir: str | None = None,
     emotional_context: bool = False,
+    sim_profile: str = "default",
+    trace: bool | None = None,
+    trace_prompt: bool | None = None,
 ) -> None:
     from quackd.adapters.factory import describe, make_adapter, registry_for
     from quackd.agent.loop import RunConfig, run_duck
@@ -893,6 +896,12 @@ _TRACE_PROMPT = typer.Option(
     help="Print the system prompt once at the start of the trace. On by default; "
     "QUACKD_TRACE_PROMPT=0 turns it off too. It is in the transcript either way.",
 )
+_SIM_PROFILE = typer.Option(
+    "default",
+    "--sim-profile",
+    help="Simulator profile. `targeted-v1` is a deterministic microduck:sim2d layout for "
+    "benchmarks; it is rejected on any other robot.",
+)
 
 
 @app.command()
@@ -927,6 +936,9 @@ def run(
     emotional: bool = _EMOTIONAL,
     emotional_dir: str | None = _EMOTIONAL_DIR,
     emotional_context: bool = _EMOTIONAL_CONTEXT,
+    sim_profile: str = _SIM_PROFILE,
+    trace: bool | None = _TRACE,
+    trace_prompt: bool | None = _TRACE_PROMPT,
 ) -> None:
     """Run a .duck file (or a --goal): the LLM picks verbs, quackd enforces the contract."""
     _run_impl(
@@ -958,6 +970,9 @@ def run(
         emotional=emotional,
         emotional_dir=emotional_dir,
         emotional_context=emotional_context,
+        sim_profile=sim_profile,
+        trace=trace,
+        trace_prompt=trace_prompt,
     )
 
 

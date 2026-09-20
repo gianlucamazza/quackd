@@ -54,7 +54,7 @@ from quackd.safety import (
     VerbNotAllowed,
     deny_all,
 )
-from quackd.trace import Sink
+from quackd.trace import Sink, Tracer
 from quackd.transport.base import DuckState, DuckTransport
 from quackd.verbs.registry import (
     VerbRegistry,
@@ -135,6 +135,17 @@ class AgentLoop:
             )
         self.run_dir = cfg.run_dir or new_run_dir(cfg.runs_dir, self.fm.name)
         self.transcript = Transcript(self.run_dir)
+        # the transcript is the record, so its failure is the run's; a console is an observer
+        self.tracer = Tracer(
+            record=self.transcript.sink,
+            observers=[cfg.trace] if cfg.trace is not None else [],
+        )
+        world = getattr(cfg.transport, "world", None)
+        self._targeted = getattr(world, "profile", None) == "targeted-v1"
+        if self._targeted:
+            clock = getattr(cfg.transport, "clock", None)
+            if clock is not None:
+                clock.add_tick_hook(self._record_profile_tick)
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
         self.registry = cfg.registry or default_registry()
         self.executor = Executor(
@@ -397,6 +408,7 @@ class AgentLoop:
                     raise Aborted(
                         str(self.heartbeat.failure) if self.heartbeat.failure else "kill switch"
                     )
+                observe_started = time.perf_counter()
                 obs, _ = await self._observe(last_verb, last_result)
                 if self.history and self.history[-1].decision is not None:
                     obs = obs.model_copy(
