@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -52,7 +53,7 @@ from quackd.safety import (
     VerbNotAllowed,
     deny_all,
 )
-from quackd.trace import Tracer
+from quackd.trace import Sink, Tracer
 from quackd.transport.base import DuckState, DuckTransport
 from quackd.verbs.registry import (
     VerbRegistry,
@@ -90,6 +91,16 @@ class RunConfig:
     episode written at the end, the prompt says nothing about earlier runs."""
     affective: Any | None = None
     """Optional emotional-memory runtime for passive operational telemetry."""
+    fov_deg: float | None = None
+    """The horizontal field of view of the camera actually in front of you. None falls back
+    to the robot's manifest, then to the simulator's, which is flagged as uncalibrated."""
+    acknowledge: Callable[[str], bool] | None = None
+    """Asked once, before the first leg moves, when the robot cannot see a fall and cannot
+    recover from one — so the only guard is the person in the room. None means nobody is
+    there to ask (MCP, tests), and the warning is logged instead of blocking."""
+    trace: Sink | None = None
+    """Where to show the run as it happens (the CLI passes a `ConsoleTrace`). The transcript
+    gets every event whether this is set or not; this is a second reader of the same stream."""
 
 
 @dataclass

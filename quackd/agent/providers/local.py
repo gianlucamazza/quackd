@@ -180,7 +180,22 @@ class LocalProvider(OpenAIProvider):
         self, system: str, history: list[Any], tools: list[dict[str, Any]]
     ) -> ProviderTurn:
         await self.ensure_model()
-        return await super().step(system, history, tools)
+        self.calls += 1
+        try:
+            response = await self.client.chat.completions.create(
+                **self._params(system, history, tools)
+            )
+            from quackd.agent.providers.openai import parse_response
+
+            turn = parse_response(response)
+        except ProviderError:
+            raise
+        except Exception as e:
+            raise ProviderError(f"{self.name}: {type(e).__name__}: {e}") from e
+        turn = self._normalise(turn)
+        if not turn.tool_calls:
+            turn = self._fallback(turn, tools)
+        return turn
 
     def _normalise(self, turn: ProviderTurn) -> ProviderTurn:
         """Split inline `<think>` off before anything else reads the text.
