@@ -4357,6 +4357,9 @@ alohamini = [
 anthropic = [
     { name = "anthropic" },
 ]
+deepseek = [
+    { name = "openai" },
+]
 dev = [
     { name = "hatchling" },
     { name = "mypy" },
@@ -4429,6 +4432,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "onnxruntime", marker = "extra == 'mujoco'", specifier = ">=1.20" },
     { name = "openai", marker = "extra == 'all'", specifier = ">=1.50" },
+    { name = "openai", marker = "extra == 'deepseek'", specifier = ">=1.50" },
     { name = "openai", marker = "extra == 'grok'", specifier = ">=1.50" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50" },
     { name = "opencv-python-headless", specifier = ">=4.9" },
@@ -4454,7 +4458,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'microduck-camera'", specifier = ">=13" },
     { name = "zeroconf", marker = "extra == 'lan'", specifier = ">=0.132" },
 ]
-provides-extras = ["all", "alohamini", "anthropic", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "microduck-camera", "mujoco", "openai", "reachy", "rosbridge", "xlerobot", "yolo"]
+provides-extras = ["all", "alohamini", "anthropic", "deepseek", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "microduck-camera", "mujoco", "openai", "reachy", "rosbridge", "xlerobot", "yolo"]
 
 [[package]]
 name = "questionary"
