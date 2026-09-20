@@ -186,6 +186,7 @@ class LocalProvider(OpenAIProvider):
                 **self._params(system, history, tools)
             )
             from quackd.agent.providers.openai import parse_response
+
             turn = parse_response(response)
         except ProviderError:
             raise
