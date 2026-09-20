@@ -131,7 +131,8 @@ One JSON object per line: `{"t": seconds, "kind": ..., ...}`.
 | `intent` | every command sent to the robot: kind, params, whether it was accepted, and the robot's own clock when it has one |
 | `verb_end` | outcome (`ok` · `fail` · `refused` · `denied` · `budget` · `aborted` · `preempted` · `error`), summary, wall seconds, the robot's own seconds on a simulator, and how many intents of each kind it sent |
 | `verb` | the loop's own record of the call it made (name, params, ok, summary, data) |
- `affective` | `declare`, `memory`, `note`, `frame`, `run_end` | the model's verdict, a saved note, a free-text line, a captured frame, the summary (with `trace_dropped`: events a view raised on and never showed) |
+| `affective` | PAD snapshot after an operational event (advisory; not sent to the model by default) |
+| `declare`, `memory`, `note`, `frame`, `run_end` | the model's verdict, a saved note, a free-text line, a captured frame, the summary (with `trace_dropped`: events a view raised on and never showed) |
 
 Example: [`assets/transcript-example.jsonl`](assets/transcript-example.jsonl), recorded
 before the trace kinds existed.

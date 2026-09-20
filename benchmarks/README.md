@@ -6,12 +6,14 @@ API keys, and writes only the requested JSON artifact.
 
 ```bash
 uv run --extra emotional python benchmarks/affective_runtime.py \
+  --repeats 3 \
   --output /tmp/quackd-affective-benchmark.json
 ```
 
 The artifact contains one row per scenario/seed/toggle with process success, wall time,
-run outcome, step/LLM counts, and the final PAD/mood snapshot. Compare medians by toggle;
-affect is a runtime context signal, not a safety or success criterion. Do not compare
+run outcome, step/LLM counts, payload sizes, and the final PAD/mood snapshot. It also
+reports latency medians/p95, paired mismatches and overhead versus disabled. Compare medians by toggle;
+affect is an observability signal, not a safety or success criterion. Do not compare
 results across machines without recording the Python/platform metadata in the artifact.
 
 ## Live cloud benchmark
