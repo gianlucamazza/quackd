@@ -132,6 +132,8 @@ One JSON object per line: `{"t": seconds, "kind": ..., ...}`.
 | `verb_end` | outcome (`ok` · `fail` · `refused` · `denied` · `budget` · `aborted` · `preempted` · `error`), summary, wall seconds, the robot's own seconds on a simulator, and how many intents of each kind it sent |
 | `verb` | the loop's own record of the call it made (name, params, ok, summary, data) |
 | `affective` | PAD snapshot after an operational event (advisory; not sent to the model by default) |
+| `sim_tick` | targeted-v1 simulator pose snapshot: duck position, hold state, nearest person distance |
+| `sim_detection` | targeted-v1 camera detections recorded on each captured frame |
 | `declare`, `memory`, `note`, `frame`, `run_end` | the model's verdict, a saved note, a free-text line, a captured frame, the summary (with `trace_dropped`: events a view raised on and never showed) |
 
 Example: [`assets/transcript-example.jsonl`](assets/transcript-example.jsonl), recorded
