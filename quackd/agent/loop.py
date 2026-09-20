@@ -142,10 +142,6 @@ class AgentLoop:
         )
         world = getattr(cfg.transport, "world", None)
         self._targeted = getattr(world, "profile", None) == "targeted-v1"
-        if self._targeted:
-            clock = getattr(cfg.transport, "clock", None)
-            if clock is not None:
-                clock.add_tick_hook(self._record_profile_tick)
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
         self.registry = cfg.registry or default_registry()
         self.executor = Executor(
@@ -318,6 +314,10 @@ class AgentLoop:
         connect_started = time.perf_counter()
         connected = await cfg.transport.connect()
         connect_s = round(time.perf_counter() - connect_started, 3)
+        if self._targeted:
+            clock = getattr(cfg.transport, "clock", None)
+            if clock is not None:
+                clock.add_tick_hook(self._record_profile_tick)
         manifest = connected if isinstance(connected, RobotManifest) else None
         if manifest is not None:
             if cfg.registry is None:
