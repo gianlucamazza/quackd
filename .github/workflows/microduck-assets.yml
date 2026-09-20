@@ -50,7 +50,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync (dev + the physics extra)
-        run: uv sync --python 3.12 --extra dev --extra mujoco
+        run: uv sync --locked --python 3.12 --extra dev --extra mujoco
       - name: Fetch upstream's model and policies, and check every file against its pin
         # The watchdog. A moved archive or a republished policy fails here, with the name of
         # the file that did not match, rather than silently on a stranger's first run.

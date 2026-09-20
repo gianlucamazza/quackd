@@ -649,8 +649,14 @@ def test_a_duck_that_fell_on_its_face_stands_up_facing_the_way_it_was_going() ->
         0.0,
     )
     mujoco.mj_forward(b._model, b._data)
-    assert abs(b.pose()[2]) == pytest.approx(math.pi, abs=0.01), "the quaternion says backwards"
-    assert b.heading() == pytest.approx(0.0, abs=0.01), "and the trunk's own axis says forwards"
+    # pose() yaw is atan2 of a vanishing denominator at this degeneracy: some MuJoCo
+    # builds used to read π, others 0. heading() is what stand_up uses.
+    assert b.heading() == pytest.approx(0.0, abs=0.01), "the trunk's own axis says forwards"
+    x, y, _yaw = b.pose()
+    b.reset(x, y, b.heading())
+    mujoco.mj_forward(b._model, b._data)
+    assert b.heading() == pytest.approx(0.0, abs=0.05)
+    assert b.pose()[2] == pytest.approx(0.0, abs=0.05), "back on its feet, same heading"
     w.close()
 
 

@@ -1123,6 +1123,20 @@ wheels = [
 ]
 
 [[package]]
+name = "emotional-memory"
+version = "0.18.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/a3/bdce0adc801b0ec42d3c6db31d512a11e67978ded61e1caee6dd739819de/emotional_memory-0.18.1.tar.gz", hash = "sha256:e9efdb4ca307ed10c4cfb7cc752791f1060b3cf4f97a64cfd2e98cafb909d5b4", size = 117712, upload-time = "2026-09-12T10:44:01.739545Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/d7/522354820d9eea69d470959cf6818487fd90ddb68d61a98ba98eef347165/emotional_memory-0.18.1-py3-none-any.whl", hash = "sha256:2dbdbeca7f901becca7a763055c9eef264ace2290100df0891dfdcc7c3f25c81", size = 125990, upload-time = "2026-09-12T10:44:00.296669Z" },
+]
+
+[[package]]
 name = "etils"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4353,6 +4367,9 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+emotional = [
+    { name = "emotional-memory" },
+]
 gemini = [
     { name = "google-genai" },
 ]
@@ -4401,6 +4418,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'all'", specifier = ">=1.0,<2" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.0,<2" },
     { name = "av", marker = "extra == 'microduck-camera'", specifier = ">=12" },
+    { name = "emotional-memory", marker = "extra == 'emotional'", specifier = ">=0.18,<0.19" },
     { name = "google-genai", marker = "extra == 'all'", specifier = ">=1.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0" },
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.25" },
@@ -4436,7 +4454,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'microduck-camera'", specifier = ">=13" },
     { name = "zeroconf", marker = "extra == 'lan'", specifier = ">=0.132" },
 ]
-provides-extras = ["all", "alohamini", "anthropic", "dev", "gemini", "grok", "lan", "lerobot", "live", "microduck-camera", "mujoco", "openai", "reachy", "rosbridge", "xlerobot", "yolo"]
+provides-extras = ["all", "alohamini", "anthropic", "dev", "emotional", "gemini", "grok", "lan", "lerobot", "live", "microduck-camera", "mujoco", "openai", "reachy", "rosbridge", "xlerobot", "yolo"]
 
 [[package]]
 name = "questionary"

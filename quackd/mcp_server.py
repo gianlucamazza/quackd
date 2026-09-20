@@ -171,6 +171,50 @@ class RobotSession:
     tracer: Tracer | None = None
     """Narrates this robot's calls to stderr and into each result's `trace`. None = off."""
 
+    def _gate(self, name: str, gate: str, reason: str) -> None:
+        """A refusal the session makes before the executor sees the call, told the same way."""
+        if self.tracer is not None:
+            self.tracer.emit("gate", name=name, gate=gate, outcome="refused", reason=reason)
+
+    async def _call(
+        self, tool: str, args: dict[str, Any], fn: Callable[[], Awaitable[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        """One tool call, narrated. The SDK runs every call as its own task, and `capturing`
+        is a context variable, so two calls on one robot never see each other's events.
+
+        stderr gets the call as one block when it ends, rather than line by line as they
+        happen: two concurrent calls sharing one coalescing view merged their bursts, and a
+        `verb_end` from one split the other's at an arbitrary point. The result's `trace` is
+        the same lines, capped."""
+        if self.tracer is None:
+            return await fn()
+        with capturing() as events:
+            started = time.perf_counter()
+            robot_started = self.executor._robot_now()
+            self.tracer.emit("tool_call", tool=tool, robot=self.name, **args)
+            payload = await fn()
+            budget = self.executor.budget
+            clocks: dict[str, Any] = {}
+            robot_now = self.executor._robot_now()
+            if robot_started is not None and robot_now is not None:
+                clocks["transport_s"] = round(robot_now - robot_started, 3)
+                if (label := self.executor._clock()) is not None:
+                    clocks["clock"] = label
+            self.tracer.emit(
+                "tool_result",
+                tool=tool,
+                ok=bool(payload.get("ok")),
+                summary=payload.get("summary"),
+                elapsed_s=round(time.perf_counter() - started, 3),
+                budget=budget.status() if budget is not None else None,
+                **clocks,
+            )
+        lines = call_lines(events)
+        for line in lines:
+            log.info("%s: %s", self.name, line)
+        payload["trace"] = cap_lines(lines)
+        return payload
+
     def shown_name(self, verb: Verb) -> str:
         """The name a client sees: the loaded contract's own spelling when it used an alias."""
         if self.duck is not None:

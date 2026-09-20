@@ -217,6 +217,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Main CI could not parse, the lint gate was already red, and the nightly jobs died
+  compiling cairo.** `#1` left conflict markers in `.github/workflows/ci.yml` and dropped
+  `RobotSession._call` / `_gate` while leaving the call sites, so ruff and mypy would have
+  failed the moment the workflow parsed. The same merge added `quackd[emotional]` without
+  locking it; `uv sync --extra dev` then re-resolved every extra, including
+  `reachy-mini`'s `pygobject`, and failed building `pycairo` on a runner with no cairo
+  headers. The methods are restored, `architecture.md` lists the `affective` transcript
+  event, the lock includes the extra, and CI syncs `--locked`.
+  ToddlerBot `stand` now finishes when the commanded slew arrives, not when the observed
+  pose matches to `1e-3` (a MuJoCo body never does), and the contract deadman check reads
+  health from the watcher instead of the closed socket. The face-down Microduck test
+  asserts `heading()` and the recovered pose, not a build-dependent `pose()` yaw at
+  gimbal lock.
 - **The physics backend crashed, hung and misreported, on paths its tests never reached.**
   Reading the state of a duck lying on its back raised a `ValueError` out of every
   `get_state()`, because the tilt's `acos` was clamped on one side only: the reading a fall is

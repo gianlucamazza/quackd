@@ -78,7 +78,7 @@ jobs:
           enable-cache: true
 
       - name: Sync quackd
-        run: uv sync --python 3.11 --extra dev
+        run: uv sync --locked --python 3.11 --extra dev
 
       - name: Install what the sim path actually imports
         # Never `pip install .` on upstream: its build backend compiles a Dynamixel pybind11

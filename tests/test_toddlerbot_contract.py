@@ -231,10 +231,12 @@ async def test_a_client_that_goes_quiet_trips_the_deadman_on_real_physics() -> N
         state = await watcher.get_state()
         assert state.extras["deadman_tripped"] is True, daemon.say_why()
         assert state.extras["loop_hz"] > 40.0, daemon.say_why()
-        await watcher.close()
-        health = await link.request("bot.health")
+        # `link` is the quiet client: its writer is already closed, so health has to
+        # come from the watcher. Asking the dead socket was ConnectionResetError.
+        health = await watcher.request("bot.health")
         assert isinstance(health, dict)
         assert health.get("loop_hz", 0) > 40.0, "it is still running the loop, not stopped"
+        await watcher.close()
         assert daemon.alive(), "and the daemon is still alive rather than having exited"
         await link.close()
 
