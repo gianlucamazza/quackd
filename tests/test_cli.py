@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from quackd.agent.transcript import Transcript
@@ -309,6 +310,28 @@ def test_run_hello_world_on_mock(tmp_path: Path) -> None:
     assert len(run_dirs) == 1 and (run_dirs[0] / "transcript.jsonl").exists()
 
 
+def test_emotional_state_without_extra_hints_install(tmp_path: Path) -> None:
+    """Default CI installs no emotional extra; the CLI must keep the honest install hint."""
+    import importlib.util
+
+    if importlib.util.find_spec("emotional_memory") is not None:
+        pytest.skip("emotional-memory is installed")
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "hello-world",
+            "--provider",
+            "fake",
+            "--emotional-state",
+            "--runs-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "quackd[emotional]" in result.output
+
+
 def test_emotional_context_requires_state(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
@@ -327,6 +350,7 @@ def test_emotional_context_requires_state(tmp_path: Path) -> None:
 
 
 def test_emotional_context_is_explicitly_visible_in_run_artifacts(tmp_path: Path) -> None:
+    pytest.importorskip("emotional_memory")
     runs_dir = tmp_path / "runs"
     result = runner.invoke(
         app,

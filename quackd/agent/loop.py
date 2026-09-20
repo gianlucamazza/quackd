@@ -142,6 +142,8 @@ class AgentLoop:
         )
         world = getattr(cfg.transport, "world", None)
         self._targeted = getattr(world, "profile", None) == "targeted-v1"
+        if self._targeted:
+            cfg.transport.clock.add_tick_hook(self._record_profile_tick)  # type: ignore[attr-defined]
         self.budget = Budget(self.fm.budgets, now=cfg.transport.now)
         self.registry = cfg.registry or default_registry()
         self.executor = Executor(
@@ -314,10 +316,6 @@ class AgentLoop:
         connect_started = time.perf_counter()
         connected = await cfg.transport.connect()
         connect_s = round(time.perf_counter() - connect_started, 3)
-        if self._targeted:
-            clock = getattr(cfg.transport, "clock", None)
-            if clock is not None:
-                clock.add_tick_hook(self._record_profile_tick)
         manifest = connected if isinstance(connected, RobotManifest) else None
         if manifest is not None:
             if cfg.registry is None:
@@ -408,6 +406,12 @@ class AgentLoop:
                     raise Aborted(
                         str(self.heartbeat.failure) if self.heartbeat.failure else "kill switch"
                     )
+                if self._targeted:
+                    # The person keeps walking only while sim time advances. walk_to already
+                    # stopped at 0.5 m, so without a dwell the next approach is a no-op and
+                    # follow-me never accumulates three moving legs with the person visible.
+                    await cfg.transport.stop()
+                    await cfg.transport.sleep(2.0)
                 observe_started = time.perf_counter()
                 obs, _ = await self._observe(last_verb, last_result)
                 if self.history and self.history[-1].decision is not None:
