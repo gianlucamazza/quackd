@@ -18,6 +18,9 @@ file per robot. Override it with `--emotional-dir`. `--no-memory` and `--dry-run
 state in memory only. An appraisal engine can be injected by library users; its failure
 falls back to the deterministic event mapping and never aborts a robot run.
 
+CI runs the affective benchmark only in the job that installs `quackd[emotional]`; the
+default dependency job remains independent of the optional extra.
+
 The affective layer is advisory. It cannot add verbs, widen an allowlist, change budgets,
 skip confirmation, or issue motor commands. MCP exposes the current snapshot in
 `robot_list` when started with `--emotional-state`.

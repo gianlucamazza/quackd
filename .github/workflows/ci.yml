@@ -26,6 +26,12 @@ jobs:
         python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
+      - name: Install system dependencies for Python packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev pkg-config
+      - name: Install system dependencies for Python packages (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cairo pkg-config
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -46,7 +52,6 @@ jobs:
         # a glob for an external command, so this would hand quackd the literal `ducks/*.duck`.
         shell: bash
         run: uv run quackd validate ducks/*.duck
-<<<<<<< HEAD
 
   physics:
     name: physics · mujoco + osmesa
@@ -93,24 +98,7 @@ jobs:
         # this job fetches nothing. The nightly `microduck-assets` job runs them, as a user
         # would, into a runner that is then destroyed.
         run: uv run pytest tests/test_sim3d.py tests/test_acceptance_mujoco.py -m "not real_duck"
-      - name: Affective benchmark matrix
-        run: uv run python benchmarks/affective_runtime.py --output "${{ runner.temp }}/quackd-affective-benchmark.json"
-      - name: Upload affective benchmark
-        uses: actions/upload-artifact@v4
-        with:
-          name: affective-benchmark-py${{ matrix.python }}
-          path: ${{ runner.temp }}/quackd-affective-benchmark.json
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
-=======
->>>>>>> f546143 (feat(affective): add optional emotional runtime state)
-=======
-=======
->>>>>>> 2e44bab (fix(ci): keep optional benchmark out of base job)
->>>>>>> 4e119a4 (fix(ci): keep optional benchmark out of base job)
   emotional:
     name: emotional · py${{ matrix.python }} · ubuntu
     runs-on: ubuntu-latest
@@ -120,6 +108,8 @@ jobs:
         python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
+      - name: Install system dependencies for Python packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev pkg-config
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -136,4 +126,10 @@ jobs:
           QUACKD_STRICT_SEEDS: "1"
       - name: Validate starter ducks
         run: uv run quackd validate ducks/*.duck
-
+      - name: Affective benchmark matrix
+        run: uv run python benchmarks/affective_runtime.py --output "${{ runner.temp }}/quackd-affective-benchmark.json"
+      - name: Upload affective benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: affective-benchmark-py${{ matrix.python }}
+          path: ${{ runner.temp }}/quackd-affective-benchmark.json

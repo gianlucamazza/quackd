@@ -189,6 +189,7 @@ class FakeOpenAI:
             return response
 
         self.chat = NS(completions=NS(create=create))
+        self.responses = FakeResponses()
 
 
 class FakeResponses:
@@ -508,20 +509,24 @@ async def test_openai_reads_reasoning_from_either_field(field: str) -> None:
     response = openai_response("walk", "{}")
     setattr(response.choices[0].message, field, "  I should walk  ")
     response.usage.completion_tokens_details = NS(reasoning_tokens=44)
-    turn = await OpenAIProvider(client=FakeOpenAI(response)).step("S", history()[:1], TOOLS)
+    turn = await OpenAIProvider(model="gpt-5", client=FakeOpenAI(response)).step(
+        "S", history()[:1], TOOLS
+    )
     assert turn.thinking == "I should walk" and turn.usage.reasoning_tokens == 44
 
 
 async def test_openai_without_reasoning_reports_none() -> None:
     client = FakeOpenAI(openai_response("walk", "{}"))
-    turn = await OpenAIProvider(client=client).step("S", history()[:1], TOOLS)
+    turn = await OpenAIProvider(model="gpt-5", client=client).step("S", history()[:1], TOOLS)
     assert turn.thinking is None and turn.usage.reasoning_tokens == 0
 
 
 async def test_openai_ignores_a_non_string_reasoning_field() -> None:
     response = openai_response("walk", "{}")
     response.choices[0].message.reasoning = {"summary": "an object, not text"}
-    turn = await OpenAIProvider(client=FakeOpenAI(response)).step("S", history()[:1], TOOLS)
+    turn = await OpenAIProvider(model="gpt-5", client=FakeOpenAI(response)).step(
+        "S", history()[:1], TOOLS
+    )
     assert turn.thinking is None
 
 
@@ -616,7 +621,8 @@ def test_gemini_thoughts_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> N
     "build",
     [
         pytest.param(
-            lambda: OpenAIProvider(client=FakeOpenAI(NS(choices=[], usage=None))), id="openai"
+            lambda: OpenAIProvider(model="gpt-5", client=FakeOpenAI(NS(choices=[], usage=None))),
+            id="openai",
         ),
         pytest.param(
             lambda: AnthropicProvider(
