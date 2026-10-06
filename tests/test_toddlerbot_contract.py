@@ -27,6 +27,7 @@ import sys
 import threading
 
 import pytest
+
 from quackd.adapters.toddlerbot import ToddlerBotAdapter
 from quackd.adapters.toddlerbot.bridge import ToddlerBotBridge
 from quackd.transport.base import Intent
