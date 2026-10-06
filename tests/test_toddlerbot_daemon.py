@@ -198,6 +198,56 @@ def test_a_daemon_that_has_never_read_the_robot_commands_nothing() -> None:
     assert d.sim.writes == 0, "nothing was commanded before the robot was ever read"
 
 
+def test_apply_mujoco_home_sets_qpos_and_forwards() -> None:
+    """The MuJoCo builder must put the body on its home keyframe or seeding never starts."""
+
+    class StubSim:
+        def __init__(self) -> None:
+            self.home_qpos = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+            self.qpos = None
+            self.forwarded = False
+            self.target_motor_pos = np.zeros(4, dtype=np.float32)
+
+        def set_qpos(self, qpos: object) -> None:
+            self.qpos = np.asarray(qpos, dtype=np.float32).copy()
+
+        def forward(self) -> None:
+            self.forwarded = True
+
+    sim = StubSim()
+    robot = D.FakeRobot(nu=4)
+    assert D.apply_mujoco_home(sim, robot) is True
+    assert sim.qpos is not None and np.allclose(sim.qpos, sim.home_qpos)
+    assert sim.forwarded is True
+    assert len(sim.target_motor_pos) == 4
+
+
+def test_all_zero_obs_never_seeds_and_trips_reject_guard() -> None:
+    """The MuJoCo init deadlock: all-zeros looks like a dropped read, so never seed."""
+    d = _daemon()
+    n = len(d.order)  # type: ignore[attr-defined]
+    zeros = np.zeros(n, np.float32)
+
+    def zero_obs() -> object:
+        return type(
+            "Obs",
+            (),
+            {"motor_pos": zeros, "motor_vel": zeros.copy(), "rot": None},
+        )()
+
+    d.sim.get_observation = zero_obs  # type: ignore[method-assign]
+    for _ in range(D.SEED_REJECT_LIMIT + 5):
+        d.touch()  # type: ignore[attr-defined]
+        d.tick()  # type: ignore[attr-defined]
+    assert not d.seeded  # type: ignore[attr-defined]
+    assert d.safe.rejected >= D.SEED_REJECT_LIMIT  # type: ignore[attr-defined]
+    assert d.sim.writes == 0  # type: ignore[attr-defined]
+    assert d._seed_stuck_logged is True  # type: ignore[attr-defined]
+    st = d.state()  # type: ignore[attr-defined]
+    assert st["seeded"] is False
+    assert st["rejected_reads"] >= D.SEED_REJECT_LIMIT
+
+
 # ── 3. the safe pose, because no reset exists anywhere upstream ────────────────────────
 
 

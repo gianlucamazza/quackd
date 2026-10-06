@@ -176,8 +176,17 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
                 settled = True
                 break
             await asyncio.sleep(0.1)
-        assert moved, f"stand never reported moving\n{daemon.say_why()}"
-        assert settled, f"stand never finished\n{daemon.say_why()}"
+        final = (await link.get_state()).extras
+        assert moved, (
+            f"stand never reported moving "
+            f"seeded={final.get('seeded')} rejected={final.get('rejected_reads')}\n"
+            f"{daemon.say_why()}"
+        )
+        assert settled, (
+            f"stand never finished "
+            f"seeded={final.get('seeded')} rejected={final.get('rejected_reads')}\n"
+            f"{daemon.say_why()}"
+        )
 
         after = dict((await link.get_state()).extras["joints"])
         assert before.keys() == after.keys()
