@@ -1208,9 +1208,7 @@ def apply_mujoco_home(sim: Any, robot: Any | None = None) -> bool:
         try:
             angles = robot.default_motor_angles
             order = robot.motor_ordering
-            sim.target_motor_pos = np.array(
-                [float(angles[k]) for k in order], dtype=np.float32
-            )
+            sim.target_motor_pos = np.array([float(angles[k]) for k in order], dtype=np.float32)
         except Exception:
             # Defaults are optional: home qpos alone is enough to seed.
             pass
