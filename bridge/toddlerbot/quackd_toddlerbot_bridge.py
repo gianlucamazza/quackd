@@ -170,6 +170,7 @@ COMMAND_METHODS = frozenset(
         "bot.look",
         "bot.command",
         "bot.grip",
+        "bot.contract_perturb",
     }
 )
 """The methods that drive the robot, and the only ones that feed the deadman.
@@ -753,6 +754,38 @@ class Daemon:
 
     # -- what the socket asks it ----------------------------------------------------
 
+    def perturb_off_home(self, offset: float = 0.3) -> dict[str, Any]:
+        """Displace a few motors off home so `stand` has a real slew (MuJoCo contract).
+
+        Sets `qpos` via upstream `set_motor_angles` + `forward`, and holds the command
+        target at the same offset so `extras["joints"]` (the commanded pose) reflects it.
+        """
+        names = perturb_motor_names(self.order)
+        if len(names) < 3:
+            return {
+                "accepted": False,
+                "reason": f"need ≥3 motors to perturb; got {names!r}",
+            }
+        if not hasattr(self.sim, "set_motor_angles"):
+            return {
+                "accepted": False,
+                "reason": "this body cannot set motor qpos (need MuJoCo set_motor_angles)",
+            }
+        with self.lock:
+            pose = np.asarray(self.target, dtype=np.float32).copy()
+            for n, name in enumerate(names):
+                i = self.order.index(name)
+                sign = 1.0 if n % 2 == 0 else -1.0
+                pose[i] = float(np.clip(float(pose[i]) + sign * offset, self.lo[i], self.hi[i]))
+            angles = {k: float(pose[i]) for i, k in enumerate(self.order)}
+            self.sim.set_motor_angles(angles)
+            self.sim.forward()
+            if hasattr(self.sim, "target_motor_pos"):
+                self.sim.target_motor_pos = pose.copy()
+            self.target = pose
+            self.command.hold(pose.copy())
+        return {"accepted": True, "motors": names, "offset_rad": offset}
+
     def state(self) -> dict[str, Any]:
         with self.lock:
             return {
@@ -881,6 +914,12 @@ class Handler(socketserver.StreamRequestHandler):
             with d.lock:
                 d.command.stand()
             return {"accepted": True}, authed
+        if method == "bot.contract_perturb":
+            # Contract-only leave-home: no public verb; the test calls this RPC directly.
+            if d.fallen:
+                return {"accepted": False, "reason": "the robot has fallen"}, authed
+            offset = float(params.get("offset", 0.3))
+            return d.perturb_off_home(offset), authed
         if method == "bot.perform":
             name = str(params.get("motion", ""))
             frames = d.motion_library.get(name)
@@ -1196,6 +1235,19 @@ def build_walk_policy(ckpt: str, robot: Any, init_pos: Any, root: str) -> tuple[
 
 
 # ── wiring it up ────────────────────────────────────────────────────────────────────────
+
+
+def perturb_motor_names(order: list[str], *, want: int = 4) -> list[str]:
+    """Pick a few named motors for a deterministic leave-home offset (contract path).
+
+    Prefers leg/arm joints when the names say so; otherwise takes the first non-neck,
+    non-gripper motors. Never depends on motion-library order.
+    """
+    prefers = ("hip", "knee", "shoulder", "elbow")
+    named = [k for k in order if any(p in k for p in prefers)]
+    if len(named) >= 3:
+        return named[:want]
+    return [k for k in order if "neck" not in k and "gripper" not in k][:want]
 
 
 def apply_mujoco_home(sim: Any, robot: Any | None = None) -> bool:

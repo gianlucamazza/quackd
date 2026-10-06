@@ -27,7 +27,6 @@ import sys
 import threading
 
 import pytest
-
 from quackd.adapters.toddlerbot import ToddlerBotAdapter
 from quackd.adapters.toddlerbot.bridge import ToddlerBotBridge
 from quackd.transport.base import Intent
@@ -191,27 +190,25 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
     and then stopped moving them.
 
     After the home-keyframe seed the body already sits at `default_motor_angles`, which is
-    also what `stand` targets — so the test first leaves home via a keyframe motion, then
-    proves `stand` commands a real slew back.
+    also what `stand` targets — so the test first perturbs a few named joints off home
+    (deterministic qpos offset, no motion-library order), then proves `stand` commands a
+    real slew back.
     """
     home_tol = 0.2  # rad; MuJoCo will not hold the command to 1e-3
+    offset = 0.3  # rad; clears the 1e-3 slew threshold with margin, inside typical limits
     with _Daemon() as daemon:
         link = await _connect(daemon)
         home = dict((await link.get_state()).extras["joints"])
         assert home, f"no joints in state\n{daemon.say_why()}"
 
-        # Deterministic leave-home: a non-hold keyframe the workflow sparse-checks out.
-        leave = next((m for m in link.motions if m != "hold"), None)
-        assert leave, (
-            f"need a non-hold motion to leave home; got {link.motions!r}\n{daemon.say_why()}"
-        )
-        assert (await link.send_intent(Intent.do(f"motion:{leave}"))).accepted
-        await _wait_move_then_settle(link, daemon, limit_s=60.0)
-
+        # True (a): direct sim qpos offset on a few named joints, then mj_forward.
+        result = await link.request("bot.contract_perturb", {"offset": offset})
+        assert result.get("accepted"), f"contract perturb refused: {result!r}\n{daemon.say_why()}"
         before = dict((await link.get_state()).extras["joints"])
-        away = [k for k in home if abs(before[k] - home[k]) > 0.05]
-        assert away, (
-            f"{leave!r} left the body at home; stand would have nothing to slew\n{daemon.say_why()}"
+        max_away = max(abs(before[k] - home[k]) for k in home)
+        assert max_away > 0.2, (
+            f"perturb left body near home (max |q-home|={max_away:.4f}); "
+            f"stand would have nothing to slew\n{daemon.say_why()}"
         )
 
         assert (await link.send_intent(Intent.do("stand"))).accepted
