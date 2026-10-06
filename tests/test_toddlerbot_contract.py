@@ -27,7 +27,6 @@ import sys
 import threading
 
 import pytest
-
 from quackd.adapters.toddlerbot import ToddlerBotAdapter
 from quackd.adapters.toddlerbot.bridge import ToddlerBotBridge
 from quackd.transport.base import Intent
@@ -203,8 +202,7 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
         # Deterministic leave-home: a non-hold keyframe the workflow sparse-checks out.
         leave = next((m for m in link.motions if m != "hold"), None)
         assert leave, (
-            f"need a non-hold motion to leave home; got {link.motions!r}\n"
-            f"{daemon.say_why()}"
+            f"need a non-hold motion to leave home; got {link.motions!r}\n{daemon.say_why()}"
         )
         assert (await link.send_intent(Intent.do(f"motion:{leave}"))).accepted
         await _wait_move_then_settle(link, daemon, limit_s=60.0)
@@ -212,8 +210,7 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
         before = dict((await link.get_state()).extras["joints"])
         away = [k for k in home if abs(before[k] - home[k]) > 0.05]
         assert away, (
-            f"{leave!r} left the body at home; stand would have nothing to slew\n"
-            f"{daemon.say_why()}"
+            f"{leave!r} left the body at home; stand would have nothing to slew\n{daemon.say_why()}"
         )
 
         assert (await link.send_intent(Intent.do("stand"))).accepted
@@ -225,8 +222,7 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
         assert changed, f"the slew commanded no joint at all\n{daemon.say_why()}"
         drifted = [k for k in home if abs(after[k] - home[k]) > home_tol]
         assert not drifted, (
-            f"stand did not return to home within {home_tol} rad: {drifted}\n"
-            f"{daemon.say_why()}"
+            f"stand did not return to home within {home_tol} rad: {drifted}\n{daemon.say_why()}"
         )
 
         await link.stop()

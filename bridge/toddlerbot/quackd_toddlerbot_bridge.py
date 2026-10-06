@@ -885,7 +885,10 @@ class Handler(socketserver.StreamRequestHandler):
             name = str(params.get("motion", ""))
             frames = d.motion_library.get(name)
             if not frames:
-                return {"accepted": False, "reason": f"no motion named {name!r}"}, authed
+                return {
+                    "accepted": False,
+                    "reason": f"no motion named {name!r}",
+                }, authed
             if d.fallen:
                 return {"accepted": False, "reason": "the robot has fallen"}, authed
             with d.lock:
@@ -911,7 +914,10 @@ class Handler(socketserver.StreamRequestHandler):
             return {"accepted": True}, authed
         if method == "bot.grip":
             if not self.capabilities.get("gripper"):
-                return {"accepted": False, "reason": "this build has no grippers"}, authed
+                return {
+                    "accepted": False,
+                    "reason": "this build has no grippers",
+                }, authed
             side = str(params.get("side", "right"))
             if side not in ("left", "right", "both"):
                 raise _Refused(ERR_REFUSED, f"unknown side {side!r}")
@@ -1100,7 +1106,9 @@ class CameraFeed:
     """
 
     def __init__(self, side: str) -> None:
-        from toddlerbot.sensing.camera import Camera  # late: needs cv2 and a real device
+        from toddlerbot.sensing.camera import (
+            Camera,
+        )  # late: needs cv2 and a real device
 
         self.camera = Camera(side)
         self.lock = threading.Lock()
@@ -1260,7 +1268,9 @@ def build_real(robot_name: str, root: str) -> tuple[Any, Any]:
     one is willing to abandon."""
     os.chdir(root)  # every description path upstream builds is relative
     sys.path.insert(0, root)
-    from toddlerbot.sim.robot import Robot  # late: importable only after the chdir above
+    from toddlerbot.sim.robot import (
+        Robot,
+    )  # late: importable only after the chdir above
 
     robot = Robot(robot_name)
     motors_yml = os.path.join(root, "toddlerbot", "descriptions", robot_name, "motors.yml")
