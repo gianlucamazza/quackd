@@ -202,7 +202,10 @@ async def test_stand_settles_on_a_body_that_pushes_back() -> None:
 
         # Deterministic leave-home: a non-hold keyframe the workflow sparse-checks out.
         leave = next((m for m in link.motions if m != "hold"), None)
-        assert leave, f"need a non-hold motion to leave home; got {link.motions!r}\n{daemon.say_why()}"
+        assert leave, (
+            f"need a non-hold motion to leave home; got {link.motions!r}\n"
+            f"{daemon.say_why()}"
+        )
         assert (await link.send_intent(Intent.do(f"motion:{leave}"))).accepted
         await _wait_move_then_settle(link, daemon, limit_s=60.0)
 
