@@ -115,6 +115,13 @@ FAULT_LIMIT = 10
 CONTROL_THREAD = "quackd-control"
 """The only thread whose death is the robot's problem."""
 DROP_LIMIT = 5
+SEED_REJECT_LIMIT = 25
+"""Rejected all-zeros reads before an unseeded daemon is declared stuck.
+
+At fifty hertz this is half a second of every observation looking like a dropped
+bulk read. On MuJoCo that means the body was never put on its home keyframe, so
+the loop will never seed and stand will never finish — surface it loudly.
+"""
 FRAME_DWELL_LIMIT = 100
 """Ticks to spend trying to reach one keyframe before giving up on it. A frame outside the
 joint limits can never be reached, and a motion that stalls forever is worse than one that
@@ -163,6 +170,7 @@ COMMAND_METHODS = frozenset(
         "bot.look",
         "bot.command",
         "bot.grip",
+        "bot.contract_perturb",
     }
 )
 """The methods that drive the robot, and the only ones that feed the deadman.
@@ -412,6 +420,7 @@ class Daemon:
         #: (the home pose), and writing a guess to a servo bus is a full-scale jump from
         #: wherever the robot actually is. Nothing is commanded before this is true.
         self.seeded = False
+        self._seed_stuck_logged = False
         if fake:
             # So --fake exercises perform end to end. On a robot these frames come from
             # upstream's keyframe files and nothing here is synthesised.
@@ -540,6 +549,13 @@ class Daemon:
                 self.deadman_tripped = False
             if not self.seeded:
                 # No reading yet, so no idea where the robot is, so nothing is commanded.
+                if self.safe.rejected >= SEED_REJECT_LIMIT and not self._seed_stuck_logged:
+                    log.error(
+                        "still unseeded after %d rejected reads (all-zeros obs?); "
+                        "MuJoCo must apply the home keyframe before the loop starts",
+                        self.safe.rejected,
+                    )
+                    self._seed_stuck_logged = True
                 return self.target
             wanted = self.plan(dt)
             wanted = self._with_neck(wanted)
@@ -738,6 +754,38 @@ class Daemon:
 
     # -- what the socket asks it ----------------------------------------------------
 
+    def perturb_off_home(self, offset: float = 0.3) -> dict[str, Any]:
+        """Displace a few motors off home so `stand` has a real slew (MuJoCo contract).
+
+        Sets `qpos` via upstream `set_motor_angles` + `forward`, and holds the command
+        target at the same offset so `extras["joints"]` (the commanded pose) reflects it.
+        """
+        names = perturb_motor_names(self.order)
+        if len(names) < 3:
+            return {
+                "accepted": False,
+                "reason": f"need ≥3 motors to perturb; got {names!r}",
+            }
+        if not hasattr(self.sim, "set_motor_angles"):
+            return {
+                "accepted": False,
+                "reason": "this body cannot set motor qpos (need MuJoCo set_motor_angles)",
+            }
+        with self.lock:
+            pose = np.asarray(self.target, dtype=np.float32).copy()
+            for n, name in enumerate(names):
+                i = self.order.index(name)
+                sign = 1.0 if n % 2 == 0 else -1.0
+                pose[i] = float(np.clip(float(pose[i]) + sign * offset, self.lo[i], self.hi[i]))
+            angles = {k: float(pose[i]) for i, k in enumerate(self.order)}
+            self.sim.set_motor_angles(angles)
+            self.sim.forward()
+            if hasattr(self.sim, "target_motor_pos"):
+                self.sim.target_motor_pos = pose.copy()
+            self.target = pose
+            self.command.hold(pose.copy())
+        return {"accepted": True, "motors": names, "offset_rad": offset}
+
     def state(self) -> dict[str, Any]:
         with self.lock:
             return {
@@ -763,6 +811,7 @@ class Daemon:
                 },
                 "holding": {},
                 "calibrated": self.calibrated,
+                "seeded": self.seeded,
                 "moving": self.command.busy,
                 "loop_hz": round(self.loop_hz, 1),
                 "deadman_tripped": self.deadman_tripped,
@@ -843,10 +892,17 @@ class Handler(socketserver.StreamRequestHandler):
                 reason = f"the control loop faulted: {d.fault}"
             elif d.fallen:
                 reason = "the robot has fallen"
+            elif not d.seeded and d.safe.rejected >= SEED_REJECT_LIMIT:
+                reason = (
+                    f"still unseeded after {d.safe.rejected} rejected reads "
+                    "(all-zeros observation sentinel)"
+                )
             return {
                 "ok": reason is None,
                 "reason": reason,
                 "loop_hz": round(d.loop_hz, 1),
+                "seeded": d.seeded,
+                "rejected_reads": d.safe.rejected,
             }, authed
         if method == "bot.stop":
             with d.lock:
@@ -858,11 +914,20 @@ class Handler(socketserver.StreamRequestHandler):
             with d.lock:
                 d.command.stand()
             return {"accepted": True}, authed
+        if method == "bot.contract_perturb":
+            # Contract-only leave-home: no public verb; the test calls this RPC directly.
+            if d.fallen:
+                return {"accepted": False, "reason": "the robot has fallen"}, authed
+            offset = float(params.get("offset", 0.3))
+            return d.perturb_off_home(offset), authed
         if method == "bot.perform":
             name = str(params.get("motion", ""))
             frames = d.motion_library.get(name)
             if not frames:
-                return {"accepted": False, "reason": f"no motion named {name!r}"}, authed
+                return {
+                    "accepted": False,
+                    "reason": f"no motion named {name!r}",
+                }, authed
             if d.fallen:
                 return {"accepted": False, "reason": "the robot has fallen"}, authed
             with d.lock:
@@ -888,7 +953,10 @@ class Handler(socketserver.StreamRequestHandler):
             return {"accepted": True}, authed
         if method == "bot.grip":
             if not self.capabilities.get("gripper"):
-                return {"accepted": False, "reason": "this build has no grippers"}, authed
+                return {
+                    "accepted": False,
+                    "reason": "this build has no grippers",
+                }, authed
             side = str(params.get("side", "right"))
             if side not in ("left", "right", "both"):
                 raise _Refused(ERR_REFUSED, f"unknown side {side!r}")
@@ -1077,7 +1145,9 @@ class CameraFeed:
     """
 
     def __init__(self, side: str) -> None:
-        from toddlerbot.sensing.camera import Camera  # late: needs cv2 and a real device
+        from toddlerbot.sensing.camera import (
+            Camera,
+        )  # late: needs cv2 and a real device
 
         self.camera = Camera(side)
         self.lock = threading.Lock()
@@ -1167,6 +1237,44 @@ def build_walk_policy(ckpt: str, robot: Any, init_pos: Any, root: str) -> tuple[
 # ── wiring it up ────────────────────────────────────────────────────────────────────────
 
 
+def perturb_motor_names(order: list[str], *, want: int = 4) -> list[str]:
+    """Pick a few named motors for a deterministic leave-home offset (contract path).
+
+    Prefers leg/arm joints when the names say so; otherwise takes the first non-neck,
+    non-gripper motors. Never depends on motion-library order.
+    """
+    prefers = ("hip", "knee", "shoulder", "elbow")
+    named = [k for k in order if any(p in k for p in prefers)]
+    if len(named) >= 3:
+        return named[:want]
+    return [k for k in order if "neck" not in k and "gripper" not in k][:want]
+
+
+def apply_mujoco_home(sim: Any, robot: Any | None = None) -> bool:
+    """Put the MuJoCo body on its home keyframe before the control loop starts.
+
+    Upstream's `MuJoCoSim` loads `home_qpos` from the model keyframe but never applies it.
+    A fresh `MjData` is all zeros, which `looks_like_a_dropped_read` refuses, so the daemon
+    never seeds and `bot.stand` stays busy forever. Applying home + `forward()` makes the
+    first observation a real pose the loop can seed from.
+    """
+    home = getattr(sim, "home_qpos", None)
+    if home is None:
+        log.warning("MuJoCo sim has no home_qpos; first observation may be all zeros")
+        return False
+    sim.set_qpos(np.asarray(home, dtype=np.float32).copy())
+    sim.forward()
+    if robot is not None:
+        try:
+            angles = robot.default_motor_angles
+            order = robot.motor_ordering
+            sim.target_motor_pos = np.array([float(angles[k]) for k in order], dtype=np.float32)
+        except Exception:
+            # Defaults are optional: home qpos alone is enough to seed.
+            pass
+    return True
+
+
 def build_mujoco(robot_name: str, root: str) -> tuple[Any, Any]:
     """Construct upstream's Robot and its MuJoCo body, headless.
 
@@ -1186,6 +1294,9 @@ def build_mujoco(robot_name: str, root: str) -> tuple[Any, Any]:
 
     And the working directory has to be the checkout root, because the model path and
     every path `Robot` reads are relative and it offers no way to override them.
+
+    After construct, the home keyframe is applied (`set_qpos` + `forward`). Without that
+    the all-zeros dropped-read detector never lets the daemon seed.
     """
     os.chdir(root)
     sys.path.insert(0, root)
@@ -1196,7 +1307,9 @@ def build_mujoco(robot_name: str, root: str) -> tuple[Any, Any]:
     # A simulated body has no assembly for a zero to be offset by, so the calibration
     # the real path refuses to run without does not apply and must not block this one.
     robot.quackd_calibrated = True
-    return robot, MuJoCoSim(robot)
+    sim = MuJoCoSim(robot)
+    apply_mujoco_home(sim, robot)
+    return robot, sim
 
 
 def build_real(robot_name: str, root: str) -> tuple[Any, Any]:
@@ -1207,7 +1320,9 @@ def build_real(robot_name: str, root: str) -> tuple[Any, Any]:
     one is willing to abandon."""
     os.chdir(root)  # every description path upstream builds is relative
     sys.path.insert(0, root)
-    from toddlerbot.sim.robot import Robot  # late: importable only after the chdir above
+    from toddlerbot.sim.robot import (
+        Robot,
+    )  # late: importable only after the chdir above
 
     robot = Robot(robot_name)
     motors_yml = os.path.join(root, "toddlerbot", "descriptions", robot_name, "motors.yml")

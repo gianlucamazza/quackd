@@ -156,33 +156,73 @@ async def test_the_loop_runs_at_fifty_hertz_against_real_physics() -> None:
         await link.close()
 
 
+async def _wait_move_then_settle(
+    link: ToddlerBotBridge, daemon: _Daemon, *, limit_s: float
+) -> dict:
+    """Poll until moving flips true then false, or time out with a rich assert."""
+    moved = False
+    settled = False
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + limit_s
+    while loop.time() < deadline:
+        extras = (await link.get_state()).extras
+        moved = moved or bool(extras["moving"])
+        if moved and not extras["moving"]:
+            settled = True
+            break
+        await asyncio.sleep(0.1)
+    final = (await link.get_state()).extras
+    assert moved, (
+        f"never reported moving "
+        f"seeded={final.get('seeded')} rejected={final.get('rejected_reads')}\n"
+        f"{daemon.say_why()}"
+    )
+    assert settled, (
+        f"never finished "
+        f"seeded={final.get('seeded')} rejected={final.get('rejected_reads')}\n"
+        f"{daemon.say_why()}"
+    )
+    return final
+
+
 async def test_stand_settles_on_a_body_that_pushes_back() -> None:
     """The fake body holds exactly what it is told. This one does not, so `stand` finishing
-    means the slew actually moved thirty joints under gravity and the PD gains upstream
-    ships, and then stopped moving them."""
+    means the slew actually moved joints under gravity and the PD gains upstream ships,
+    and then stopped moving them.
+
+    After the home-keyframe seed the body already sits at `default_motor_angles`, which is
+    also what `stand` targets — so the test first perturbs a few named joints off home
+    (deterministic qpos offset, no motion-library order), then proves `stand` commands a
+    real slew back.
+    """
+    home_tol = 0.2  # rad; MuJoCo will not hold the command to 1e-3
+    offset = 0.3  # rad; clears the 1e-3 slew threshold with margin, inside typical limits
     with _Daemon() as daemon:
         link = await _connect(daemon)
-        before = dict((await link.get_state()).extras["joints"])
-        assert (await link.send_intent(Intent.do("stand"))).accepted
+        home = dict((await link.get_state()).extras["joints"])
+        assert home, f"no joints in state\n{daemon.say_why()}"
 
-        moved = False
-        settled = False
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + 25.0
-        while loop.time() < deadline:
-            extras = (await link.get_state()).extras
-            moved = moved or bool(extras["moving"])
-            if moved and not extras["moving"]:
-                settled = True
-                break
-            await asyncio.sleep(0.1)
-        assert moved, f"stand never reported moving\n{daemon.say_why()}"
-        assert settled, f"stand never finished\n{daemon.say_why()}"
+        # True (a): direct sim qpos offset on a few named joints, then mj_forward.
+        result = await link.request("bot.contract_perturb", {"offset": offset})
+        assert result.get("accepted"), f"contract perturb refused: {result!r}\n{daemon.say_why()}"
+        before = dict((await link.get_state()).extras["joints"])
+        max_away = max(abs(before[k] - home[k]) for k in home)
+        assert max_away > 0.2, (
+            f"perturb left body near home (max |q-home|={max_away:.4f}); "
+            f"stand would have nothing to slew\n{daemon.say_why()}"
+        )
+
+        assert (await link.send_intent(Intent.do("stand"))).accepted
+        await _wait_move_then_settle(link, daemon, limit_s=40.0)
 
         after = dict((await link.get_state()).extras["joints"])
-        assert before.keys() == after.keys()
+        assert before.keys() == after.keys() == home.keys()
         changed = [k for k in before if abs(after[k] - before[k]) > 1e-3]
         assert changed, f"the slew commanded no joint at all\n{daemon.say_why()}"
+        drifted = [k for k in home if abs(after[k] - home[k]) > home_tol]
+        assert not drifted, (
+            f"stand did not return to home within {home_tol} rad: {drifted}\n{daemon.say_why()}"
+        )
 
         await link.stop()
         assert not (await link.get_state()).extras["deadman_tripped"]
