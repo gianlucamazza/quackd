@@ -58,6 +58,8 @@ reachy = ["reachy-mini>=1.10,<2"]
 # LAN: zeroconf discovery and the MQTT flock bus (docs/lan.md). Never imported by default.
 lan = ["zeroconf>=0.132", "paho-mqtt>=2,<3"]
 # LeRobot needs Python 3.12 and pulls torch; the marker keeps the lock solvable on 3.11.
+# Its published metadata still caps torch at <2.12 and setuptools at <82; [tool.uv]
+# override-dependencies lift those so the extras can take the patched releases.
 lerobot = ["lerobot>=0.6; python_version >= '3.12'"]
 rosbridge = ["roslibpy>=2,<3"]
 # XLeRobot is not an installable package: its own install is copying files into a lerobot
@@ -97,6 +99,30 @@ Homepage = "https://github.com/rokbenko/quackd"
 Repository = "https://github.com/rokbenko/quackd"
 Issues = "https://github.com/rokbenko/quackd/issues"
 Changelog = "https://github.com/rokbenko/quackd/blob/main/CHANGELOG.md"
+
+# lerobot 0.6.x (the latest on PyPI) still declares torch>=2.7,<2.12 and
+# setuptools>=71,<82. Those upper bounds are why Dependabot's uv security
+# updates for torch 2.13 (GHSA-rrmf-rvhw-rf47) and setuptools 83
+# (GHSA-h35f-9h28-mq5c) have failed with dependency_file_not_resolvable
+# since 2026-10-11. The overrides drop only those caps; torch stays an
+# extra (lerobot, yolo) and is not in the default install. CPU wheels are
+# selected via [tool.uv.sources] so `uv lock` is portable in a plain
+# environment: no CUDA index, no host-specific paths.
+[tool.uv]
+override-dependencies = [
+  "torch>=2.13",
+  "torchvision>=0.28",
+  "setuptools>=83",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
 
 [tool.hatch.version]
 path = "quackd/__init__.py"
