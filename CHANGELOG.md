@@ -217,6 +217,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dependabot could not patch `torch` or `setuptools`.** `lerobot` 0.6.x still
+  declares `torch<2.12` and `setuptools<82`, so the uv security updates for
+  `torch` 2.13 (GHSA-rrmf-rvhw-rf47) and `setuptools` 83 (GHSA-h35f-9h28-mq5c)
+  failed to resolve. `[tool.uv]` now overrides those upper bounds, pins torch
+  extras to the CPU wheel index so `uv lock` works from scratch without CUDA,
+  and groups uv security updates in Dependabot. The lock takes `torch` 2.14.1
+  (CPU) and `setuptools` 84.0.0. The default install still does not pull torch.
 - **Main CI could not parse, the lint gate was already red, and the nightly jobs died
   compiling cairo.** `#1` left conflict markers in `.github/workflows/ci.yml` and dropped
   `RobotSession._call` / `_gate` while leaving the call sites, so ruff and mypy would have
